@@ -26,4 +26,16 @@ public class Unit extends BaseEntity {
 
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
+
+    @Column(name = "unit_type", length = 50)
+    private String unitType; // WEIGHT, DIMENSION, QUANTITY, VOLUME, PACKAGING
+
+    @Column(name = "conversion_factor", precision = 12, scale = 4)
+    private java.math.BigDecimal conversionFactor;
+
+    @Column(name = "base_unit_code", length = 50)
+    private String baseUnitCode;
+
+    @Column(name = "precision_decimals", columnDefinition = "int default 0")
+    private Integer precisionDecimals = 0;
 }
