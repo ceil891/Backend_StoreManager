@@ -1,0 +1,92 @@
+spring:
+  application:
+    name: storemanager
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smart_retail_db
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: Asia/Ho_Chi_Minh
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 5MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: smartretail.contact@gmail.com
+    password: vpuvrueaygzbigtb
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com:
+      smartretail:
+        backend: DEBUG
+    org:
+      springframework:
+        security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+app:
+  jwtSecret: SmartRetailProject2026_SecureKeyForJWT_MustBeAtLeast64CharactersLong_For_HS512_Security
+  jwtExpirationInMs: 86400000
+  base-url: http://localhost:8080
+  registration-token-expiration: 86400000
+
+jwt:
+  secret: SmartRetailProject2026_SecureKeyForJWT_MustBeAtLeast64CharactersLong_For_HS512_Security
+  expiration: 86400000
+  access-token-expiration: 3600000
+  refresh-token-expiration: 604800000
+
+cloudinary:
+  cloud-name: ddjd3bkh2
+  api-key: 594541298539529
+  api-secret: 9RZap99fEpt7mm_jf7z0FZMNUik
+
+google:
+  sheets:
+    enabled: true
+    applicationName: SmartRetail
+    spreadsheet:
+      id: 1kqIwL_PL_cEkouE9EQiIuXu-fDebcrRd2I_w1TnDyc8
+  drive:
+    folder:
+      id: D:\\Backend9\\src\\main\\resources\\gg-sheet-489707-0d444187388e.json
+  credentials:
+    file:
+      path: classpath:gg-sheet-489707-0d444187388e.json

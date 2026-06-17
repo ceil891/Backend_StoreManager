@@ -28,19 +28,19 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-            .authorizeHttpRequests(auth -> auth
-                // Mọi request đều cho phép — kiểm soát qua @PreAuthorize ở Controller
-                .anyRequest().permitAll()
-            )
-            // Đăng ký JWT filter: chạy trước UsernamePasswordAuthenticationFilter
-            // Nếu có token hợp lệ → set username vào SecurityContext
-            // Nếu không có token → vẫn cho qua (vì permitAll)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .authorizeHttpRequests(auth -> auth
+                        // Mọi request đều cho phép — kiểm soát qua @PreAuthorize ở Controller
+                        .anyRequest().permitAll()
+                )
+                // Đăng ký JWT filter: chạy trước UsernamePasswordAuthenticationFilter
+                // Nếu có token hợp lệ → set username vào SecurityContext
+                // Nếu không có token → vẫn cho qua (vì permitAll)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
