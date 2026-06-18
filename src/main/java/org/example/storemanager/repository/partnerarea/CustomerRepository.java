@@ -10,14 +10,17 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
-    // Tìm kiếm khách hàng theo tên hoặc SĐT
+    // 1. Tìm kiếm khách hàng theo tên hoặc SĐT
     @Query("SELECT c FROM Customer c WHERE c.isActive = true AND " +
             "(LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR c.phone LIKE %:keyword%)")
     Page<Customer> searchCustomers(String keyword, Pageable pageable);
 
-    // Lấy danh sách đang hoạt động
+    // 2. Lấy danh sách đang hoạt động (isActive = true)
     Page<Customer> findByIsActiveTrue(Pageable pageable);
 
-    // Kiểm tra trùng SĐT
+    // 3. PHƯƠNG THỨC BỊ THIẾU: Dùng để lấy danh sách khách hàng chưa bị xóa mềm (isDeleted = false)
+    Page<Customer> findByIsDeletedFalse(Pageable pageable);
+
+    // 4. Kiểm tra trùng SĐT
     boolean existsByPhone(String phone);
 }

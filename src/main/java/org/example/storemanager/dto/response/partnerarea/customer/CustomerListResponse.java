@@ -1,11 +1,10 @@
 package org.example.storemanager.dto.response.partnerarea.customer;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 @Builder
-@AllArgsConstructor
-@NoArgsConstructor
 public class CustomerListResponse {
     private Long id;
     private String name;

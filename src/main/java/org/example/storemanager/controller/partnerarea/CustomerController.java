@@ -2,13 +2,13 @@ package org.example.storemanager.controller.partnerarea;
 
 import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustomerRequest;
 import org.example.storemanager.dto.request.partnerarea.customerdto.UpdateCustomerRequest;
-
-import org.example.storemanager.service.partnerarea.CustomerService;
-// Import các DTO request/response của bạn...
+import org.example.storemanager.dto.response.ApiResponse;
+import org.example.storemanager.service.partnerarea.customer.CustomerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/partnerarea/customers")
@@ -17,62 +17,54 @@ public class CustomerController {
 
     private final CustomerService customerService;
 
-    // 1. GET /: Danh sách
     @GetMapping
-    public ResponseEntity<?> getAllCustomers(
+    public ResponseEntity<ApiResponse<?>> getAllCustomers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Long groupId) {
-        return ResponseEntity.ok(customerService.getAllCustomers(page, size, keyword));
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.getAllCustomers(page, size, keyword), "Lấy danh sách thành công"));
     }
 
-    // 2. GET /{id}: Xem chi tiết
     @GetMapping("/{id}")
-    public ResponseEntity<?> getCustomerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(customerService.getCustomerById(id));
+    public ResponseEntity<ApiResponse<?>> getCustomerDetail(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerById(id), "Lấy chi tiết thành công"));
     }
 
-    // 3. POST /: Thêm mới
     @PostMapping
-    public ResponseEntity<?> createCustomer(@RequestBody CreateCustomerRequest request) {
-        return ResponseEntity.ok(customerService.createCustomer(request));
+    public ResponseEntity<ApiResponse<?>> createCustomer(@RequestBody CreateCustomerRequest request) {
+        return ResponseEntity.status(201).body(ApiResponse.success(customerService.createCustomer(request), "Tạo mới thành công"));
     }
 
-    // 4. PUT /{id}: Cập nhật
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateCustomer(@PathVariable Long id, @RequestBody UpdateCustomerRequest request) {
-        return ResponseEntity.ok(customerService.updateCustomer(id, request));
+    public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @RequestBody UpdateCustomerRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, request), "Cập nhật thành công"));
     }
 
-    // 5. DELETE /{id}: Xóa
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteCustomer(@PathVariable Long id) {
-        customerService.deleteCustomer(id);
-        return ResponseEntity.ok("Deleted successfully");
+    public ResponseEntity<ApiResponse<?>> deleteCustomer(@PathVariable Long id) {
+        var data = customerService.deleteCustomer(id);
+        return ResponseEntity.ok(ApiResponse.success(data, "Xóa thành công"));
     }
 
-    // 6. POST /import: Import Excel
     @PostMapping("/import")
-    public ResponseEntity<?> importCustomers(@RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(customerService.importCustomers(file));
+    public ResponseEntity<ApiResponse<?>> importCustomers(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.importCustomers(file), "Import thành công"));
     }
 
-    // 7. GET /export: Xuất Excel
     @GetMapping("/export")
-    public ResponseEntity<?> exportCustomers() {
-        return ResponseEntity.ok(customerService.exportCustomers());
+    public ResponseEntity<byte[]> exportCustomers() {
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=customers.xlsx")
+                .body(customerService.exportCustomers());
     }
 
-    // 8. GET /{id}/sales-history: Lịch sử mua hàng
     @GetMapping("/{id}/sales-history")
-    public ResponseEntity<?> getSalesHistory(@PathVariable Long id) {
-        return ResponseEntity.ok(customerService.getSalesHistory(id));
+    public ResponseEntity<ApiResponse<?>> getSalesHistory(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.getSalesHistory(id), "Lấy lịch sử thành công"));
     }
 
-    // 9. GET /{id}/debts: Công nợ
     @GetMapping("/{id}/debts")
-    public ResponseEntity<?> getCustomerDebts(@PathVariable Long id) {
-        return ResponseEntity.ok(customerService.getCustomerDebts(id));
+    public ResponseEntity<ApiResponse<?>> getCustomerDebts(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerDebts(id), "Lấy công nợ thành công"));
     }
 }

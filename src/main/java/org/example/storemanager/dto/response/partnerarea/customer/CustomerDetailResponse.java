@@ -1,11 +1,11 @@
 package org.example.storemanager.dto.response.partnerarea.customer;
 
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
-@AllArgsConstructor
-@NoArgsConstructor
 public class CustomerDetailResponse {
     private Long id;
     private String customerCode;
@@ -16,4 +16,10 @@ public class CustomerDetailResponse {
     private String taxCode;
     private String groupName;
     private String areaName;
+    private LocalDateTime createdAt;
+    private String createdBy;
+    private LocalDateTime updatedAt;
+    private String updatedBy;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 }
