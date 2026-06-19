@@ -5,7 +5,14 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+        @Index(name = "idx_user_username", columnList = "username"),
+        @Index(name = "idx_user_email", columnList = "email"),
+        @Index(name = "idx_user_phone", columnList = "phone"),
+        @Index(name = "idx_user_status", columnList = "status"),
+        @Index(name = "idx_user_role_id", columnList = "role_id"),
+        @Index(name = "idx_user_branch_id", columnList = "branch_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
