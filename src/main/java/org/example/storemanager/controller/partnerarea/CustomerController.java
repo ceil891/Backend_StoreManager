@@ -1,22 +1,28 @@
 package org.example.storemanager.controller.partnerarea;
 
+import lombok.RequiredArgsConstructor;
 import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustomerRequest;
 import org.example.storemanager.dto.request.partnerarea.customerdto.UpdateCustomerRequest;
 import org.example.storemanager.dto.response.ApiResponse;
 import org.example.storemanager.service.partnerarea.customer.CustomerService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/partnerarea/customers")
 @RequiredArgsConstructor
 public class CustomerController {
-
     private final CustomerService customerService;
 
+    // API Tạo mới (Hỗ trợ file upload)
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<?>> create(
+            @ModelAttribute CreateCustomerRequest req) { // Cực kỳ quan trọng
+        return ResponseEntity.status(201)
+                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo thành công"));
+    }
     @GetMapping
     public ResponseEntity<ApiResponse<?>> getAllCustomers(
             @RequestParam(defaultValue = "0") int page,

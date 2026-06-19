@@ -5,6 +5,7 @@ import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustom
 import org.example.storemanager.dto.request.partnerarea.customerdto.UpdateCustomerRequest;
 import org.example.storemanager.dto.response.partnerarea.customer.*;
 import org.example.storemanager.entity.partnerarea.Customer;
+import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.repository.partnerarea.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
@@ -14,7 +15,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.example.storemanager.service.common.CloudinaryService;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.UUID;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final CloudinaryService cloudinaryService;
 
     private String getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -36,16 +38,34 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @LogActivity(actionType = "CREATE", entityName = "Customer", entityClass = Customer.class)
     public CreateCustomerResponse createCustomer(CreateCustomerRequest req) {
-        Customer c = new Customer();
-        BeanUtils.copyProperties(req, c);
+        if (customerRepository.existsByPhone(req.getPhone())) {
+            throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
+        }
+        if (customerRepository.existsByEmail(req.getEmail())) {
+            throw new DuplicateResourceException("Customer", "email", req.getEmail());
+        }
 
-        // Xử lý các logic tự động
+        Customer c = new Customer();
+        c.setName(req.getName());
+        c.setPhone(req.getPhone());
+        c.setEmail(req.getEmail());
+        c.setAddress(req.getAddress());
+        c.setTaxCode(req.getTaxCode());
+
+        // Xử lý Cloudinary
+        if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
+            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
+        }
+
         c.setCustomerCode("CUS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
-        c.setCreatedBy(getCurrentUser()); // Hàm lấy User mình đã viết ở trên
+        c.setCreatedBy(getCurrentUser());
+        c.setIsActive(true);
+        c.setPoints(0.0);
+        c.setTotalSpend(0.0);
+        c.setMembershipRank("Đồng");
 
         customerRepository.save(c);
 
-        // Trả về DTO full thông tin
         return CreateCustomerResponse.builder()
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())
@@ -54,6 +74,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .email(c.getEmail())
                 .address(c.getAddress())
                 .taxCode(c.getTaxCode())
+                .avatarUrl(c.getAvatarUrl())
                 .message("Tạo khách hàng thành công")
                 .createdAt(c.getCreatedAt())
                 .createdBy(c.getCreatedBy())
@@ -66,14 +87,22 @@ public class CustomerServiceImpl implements CustomerService {
         Customer c = customerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng ID: " + id));
 
-        BeanUtils.copyProperties(req, c);
+        // Copy properties nhưng bỏ qua trường avatar
+        BeanUtils.copyProperties(req, c, "avatar");
+
+        // Cập nhật ảnh mới nếu có
+        if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
+            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
+        }
+
         c.setUpdatedBy(getCurrentUser());
         customerRepository.save(c);
 
         return UpdateCustomerResponse.builder()
                 .id(c.getId())
                 .message("Cập nhật thành công")
-                .updatedAt(c.getUpdatedAt())                .updatedBy(c.getUpdatedBy())
+                .updatedAt(c.getUpdatedAt())
+                .updatedBy(c.getUpdatedBy())
                 .build();
     }
 
@@ -83,14 +112,11 @@ public class CustomerServiceImpl implements CustomerService {
         Customer c = customerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng"));
 
-        // Đánh dấu xóa mềm
         c.setIsDeleted(true);
         c.setDeletedAt(LocalDateTime.now());
-        c.setDeletedBy(getCurrentUser()); // Hàm lấy user hiện tại bạn đã viết
-
+        c.setDeletedBy(getCurrentUser());
         customerRepository.save(c);
 
-        // Trả về DTO mới (Gọn gàng giống hệt Update)
         return DeleteCustomerResponse.builder()
                 .id(c.getId())
                 .message("Xóa thành công")
@@ -108,49 +134,47 @@ public class CustomerServiceImpl implements CustomerService {
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())
                 .name(c.getName())
+                .phone(c.getPhone())
+                .email(c.getEmail())
+                .address(c.getAddress())
+                .taxCode(c.getTaxCode())
+                .note(c.getNote())
+                .points(c.getPoints())
+                .totalSpend(c.getTotalSpend())
+                .membershipRank(c.getMembershipRank())
+                .status(c.getIsActive())
+                .avatarUrl(c.getAvatarUrl())
                 .createdAt(c.getCreatedAt())
                 .createdBy(c.getCreatedBy())
                 .updatedAt(c.getUpdatedAt())
                 .updatedBy(c.getUpdatedBy())
-                .deletedAt(c.getDeletedAt())
-                .deletedBy(c.getDeletedBy())
                 .build();
     }
 
     @Override
     public Page<CustomerListResponse> getAllCustomers(int page, int size, String keyword) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
-        // Chỉ lấy khách hàng chưa bị xóa mềm
+
         Page<Customer> customers = (keyword != null && !keyword.isEmpty())
                 ? customerRepository.searchCustomers(keyword, pageable)
                 : customerRepository.findByIsDeletedFalse(pageable);
 
         return customers.map(c -> CustomerListResponse.builder()
                 .id(c.getId())
+                .customerCode(c.getCustomerCode())
                 .name(c.getName())
                 .phone(c.getPhone())
+                .email(c.getEmail())
+                .address(c.getAddress())
+                .taxCode(c.getTaxCode())
+                .membershipRank(c.getMembershipRank())
+                .status(c.getIsActive())
+                .avatarUrl(c.getAvatarUrl())
                 .build());
     }
 
-    @Override
-    public List<SalesHistoryResponse> getSalesHistory(Long id) {
-        // Logic thực tế: Gọi OrderRepository để lấy lịch sử đơn hàng theo ID
-        return Collections.emptyList();
-    }
-
-    @Override
-    public List<DebtResponse> getCustomerDebts(Long id) {
-        // Logic thực tế: Gọi DebtRepository để lấy công nợ
-        return Collections.emptyList();
-    }
-
-    @Override
-    public String importCustomers(MultipartFile file) {
-        return "Tính năng Import đã sẵn sàng để tích hợp logic đọc file";
-    }
-
-    @Override
-    public byte[] exportCustomers() {
-        return new byte[0];
-    }
+    @Override public List<SalesHistoryResponse> getSalesHistory(Long id) { return Collections.emptyList(); }
+    @Override public List<DebtResponse> getCustomerDebts(Long id) { return Collections.emptyList(); }
+    @Override public String importCustomers(MultipartFile file) { return "OK"; }
+    @Override public byte[] exportCustomers() { return new byte[0]; }
 }

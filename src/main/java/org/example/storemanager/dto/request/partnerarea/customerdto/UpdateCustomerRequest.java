@@ -1,6 +1,7 @@
 package org.example.storemanager.dto.request.partnerarea.customerdto;
 
 import lombok.Data;
+import org.springframework.web.multipart.MultipartFile;
 
 @Data
 public class UpdateCustomerRequest {
@@ -11,5 +12,6 @@ public class UpdateCustomerRequest {
     private String taxCode;
     private Long groupId;
     private Long areaId;
-    private Boolean isActive; // Cho phép cập nhật trạng thái hoạt động
+    private Boolean isActive;
+    private MultipartFile avatar;// Cho phép cập nhật trạng thái hoạt động
 }

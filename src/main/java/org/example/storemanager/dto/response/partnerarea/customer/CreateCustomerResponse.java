@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 @Builder
 public class CreateCustomerResponse {
     private Long id;
+    private String avatarUrl;
     private String customerCode;
     private String name;
     private String phone;

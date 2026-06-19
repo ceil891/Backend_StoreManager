@@ -3,6 +3,7 @@ package org.example.storemanager.dto.request.partnerarea.customerdto;
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Email;
+import org.springframework.web.multipart.MultipartFile;
 
 @Data
 public class CreateCustomerRequest {
@@ -18,4 +19,5 @@ public class CreateCustomerRequest {
     private String taxCode;
     private Long groupId; // ID của nhóm khách hàng
     private Long areaId;  // ID của khu vực
+    private MultipartFile avatar;
 }
