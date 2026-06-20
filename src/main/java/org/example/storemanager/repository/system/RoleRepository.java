@@ -8,7 +8,13 @@ import java.util.Optional;
 
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
-    Optional<Role> findByRoleName(String roleName);
+
+    Optional<Role> findByIdAndIsDeletedFalse(Long id);
 
     boolean existsByRoleName(String roleName);
+
+    boolean existsByRoleNameAndIsDeletedFalse(String roleName);
+
+    // Xử lý check duplicate khi update tên Role
+    boolean existsByRoleNameAndIdNotAndIsDeletedFalse(String roleName, Long id);
 }
