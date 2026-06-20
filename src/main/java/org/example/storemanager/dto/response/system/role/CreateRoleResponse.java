@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -13,4 +15,6 @@ public class CreateRoleResponse {
     private Long id;
     private String roleName;
     private String description;
+    private LocalDateTime createdAt;
+    private String createdBy;
 }

@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -13,4 +15,6 @@ public class DeletePermissionResponse {
     private Long id;
     private String permissionCode;
     private Boolean isDeleted;
+    private LocalDateTime deletedAt;
+    private String deletedBy;
 }
