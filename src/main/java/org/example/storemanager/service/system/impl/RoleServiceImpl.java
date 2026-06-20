@@ -6,10 +6,7 @@ import org.example.storemanager.dto.request.system.role.AssignPermissionsRequest
 import org.example.storemanager.dto.request.system.role.CreateRoleRequest;
 import org.example.storemanager.dto.request.system.role.UpdateRoleRequest;
 import org.example.storemanager.dto.response.common.PageResponse;
-import org.example.storemanager.dto.response.system.role.CreateRoleResponse;
-import org.example.storemanager.dto.response.system.role.UpdateRoleResponse;
-import org.example.storemanager.dto.response.system.role.DeleteRoleResponse;
-import org.example.storemanager.dto.response.system.role.RoleResponse;
+import org.example.storemanager.dto.response.system.role.*;
 import org.example.storemanager.entity.system.Permission;
 import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.entity.system.RolePermission;
@@ -31,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -62,7 +60,7 @@ public class RoleServiceImpl implements RoleService {
         role.setCreatedBy(username);
         role.setCreatedAt(LocalDateTime.now()); // Đảm bảo có giá trị ngay
 
-        // 2. Lưu và hứng lại đối tượng đã persist (nếu cần lấy ID/Time từ DB)
+        // 2. Lưu và hứng lại đối tượng đã persist
         Role savedRole = roleRepository.save(role);
 
         // 3. Map chính xác đối tượng đã lưu
@@ -83,6 +81,7 @@ public class RoleServiceImpl implements RoleService {
         role.setRoleName(request.getRoleName());
         role.setDescription(request.getDescription());
         role.setUpdatedBy(getCurrentUsername());
+        role.setUpdatedAt(LocalDateTime.now());
 
         Role updatedRole = roleRepository.save(role);
         return mapToUpdateResponse(updatedRole);
@@ -97,6 +96,7 @@ public class RoleServiceImpl implements RoleService {
 
         role.setIsActive(isActive);
         role.setUpdatedBy(getCurrentUsername());
+        role.setUpdatedAt(LocalDateTime.now());
 
         Role updatedRole = roleRepository.save(role);
         return mapToUpdateResponse(updatedRole);
@@ -123,6 +123,7 @@ public class RoleServiceImpl implements RoleService {
         role.setDeletedAt(LocalDateTime.now());
         role.setDeletedBy(username);
         role.setUpdatedBy(username);
+        role.setUpdatedAt(LocalDateTime.now());
 
         Role deletedRole = roleRepository.save(role);
 
@@ -148,7 +149,7 @@ public class RoleServiceImpl implements RoleService {
     public List<RoleResponse> getAllRoles(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
-        // Lưu ý: Bạn cần khai báo hàm findAllRolesIncludeDeleted trong RoleRepository
+
         Page<Role> pageResult = roleRepository.findAllRolesIncludeDeleted(search, isActive, includeDeleted, pageable);
 
         return pageResult.getContent().stream()
@@ -180,38 +181,48 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional
     @LogActivity(actionType = "ASSIGN_PERMISSIONS", entityName = "Role", entityClass = Role.class)
-    public void assignPermissions(Long roleId, AssignPermissionsRequest request) {
+    public AssignPermissionsResponse assignPermissions(Long roleId, AssignPermissionsRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", roleId));
 
-        // 1. Chặn phân quyền nếu đã bị xóa mềm
         if (Boolean.TRUE.equals(role.getIsDeleted())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Không thể phân quyền cho vai trò đã bị xóa.");
         }
 
         rolePermissionRepository.deleteByRoleId(roleId);
 
-        List<RolePermission> rolePermissions = request.getPermissionIds().stream()
-                .map(permissionId -> {
-                    Permission permission = permissionRepository.findById(permissionId)
-                            .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", permissionId));
-                    return RolePermission.builder()
-                            .role(role)
-                            .permission(permission)
-                            .build();
-                }).collect(Collectors.toList());
+        List<RolePermission> rolePermissions = new ArrayList<>();
+        if (request.getPermissionIds() != null && !request.getPermissionIds().isEmpty()) {
+            rolePermissions = request.getPermissionIds().stream()
+                    .map(permissionId -> {
+                        Permission permission = permissionRepository.findById(permissionId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", permissionId));
+                        return RolePermission.builder()
+                                .role(role)
+                                .permission(permission)
+                                .build();
+                    }).collect(Collectors.toList());
 
-        rolePermissionRepository.saveAll(rolePermissions);
+            rolePermissionRepository.saveAll(rolePermissions);
+        }
 
+        // Cập nhật thông tin Audit cho Role gánh phân quyền này
         role.setUpdatedBy(getCurrentUsername());
-        roleRepository.save(role);
+        role.setUpdatedAt(LocalDateTime.now());
+        Role updatedRole = roleRepository.save(role);
+
+        return AssignPermissionsResponse.builder()
+                .roleId(updatedRole.getId())
+                .permissionIds(request.getPermissionIds() != null ? request.getPermissionIds() : new ArrayList<>())
+                .updatedBy(updatedRole.getUpdatedBy())
+                .updatedAt(updatedRole.getUpdatedAt())
+                .build();
     }
 
-    // 2. API mới: Xóa phân quyền cụ thể
     @Override
     @Transactional
     @LogActivity(actionType = "REMOVE_PERMISSIONS", entityName = "Role", entityClass = Role.class)
-    public void removePermissions(Long roleId, AssignPermissionsRequest request) {
+    public RemovePermissionsResponse removePermissions(Long roleId, AssignPermissionsRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", roleId));
 
@@ -219,11 +230,22 @@ public class RoleServiceImpl implements RoleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Không thể sửa phân quyền cho vai trò đã bị xóa.");
         }
 
-        // Xóa những quyền có trong danh sách request truyền vào
-        rolePermissionRepository.deleteByRoleIdAndPermissionIdIn(roleId, request.getPermissionIds());
+        // Bổ sung check an toàn mảng rỗng để tránh lỗi SQL IN()
+        if (request.getPermissionIds() != null && !request.getPermissionIds().isEmpty()) {
+            rolePermissionRepository.deleteByRoleIdAndPermissionIdIn(roleId, request.getPermissionIds());
+        }
 
+        // Cập nhật thông tin Audit
         role.setUpdatedBy(getCurrentUsername());
-        roleRepository.save(role);
+        role.setUpdatedAt(LocalDateTime.now());
+        Role updatedRole = roleRepository.save(role);
+
+        return RemovePermissionsResponse.builder()
+                .roleId(updatedRole.getId())
+                .permissionIds(request.getPermissionIds() != null ? request.getPermissionIds() : new ArrayList<>())
+                .updatedBy(updatedRole.getUpdatedBy())
+                .updatedAt(updatedRole.getUpdatedAt())
+                .build();
     }
 
     private String getCurrentUsername() {

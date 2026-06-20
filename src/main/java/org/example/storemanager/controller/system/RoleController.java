@@ -6,10 +6,7 @@ import org.example.storemanager.dto.request.system.role.AssignPermissionsRequest
 import org.example.storemanager.dto.request.system.role.CreateRoleRequest;
 import org.example.storemanager.dto.request.system.role.UpdateRoleRequest;
 import org.example.storemanager.dto.response.common.ApiResponse;
-import org.example.storemanager.dto.response.system.role.CreateRoleResponse;
-import org.example.storemanager.dto.response.system.role.UpdateRoleResponse;
-import org.example.storemanager.dto.response.system.role.DeleteRoleResponse;
-import org.example.storemanager.dto.response.system.role.RoleResponse;
+import org.example.storemanager.dto.response.system.role.*;
 import org.example.storemanager.service.system.RoleService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -89,20 +86,20 @@ public class RoleController {
     // ========== GÁN QUYỀN (Riêng của Role) ==========
     @PostMapping("/{id}/permissions")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:assign-permissions')")
-    public ResponseEntity<ApiResponse<Void>> assignPermissions(
+    public ResponseEntity<ApiResponse<AssignPermissionsResponse>> assignPermissions(
             @PathVariable Long id,
             @Valid @RequestBody AssignPermissionsRequest request) {
-        roleService.assignPermissions(id, request);
-        return ResponseEntity.ok(ApiResponse.ok("Phân quyền cho vai trò thành công", null));
+        AssignPermissionsResponse response = roleService.assignPermissions(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Phân quyền cho vai trò thành công", response));
     }
 
-    // ========== XÓA GÁN QUYỀN (Riêng của Role) ==========
+    // ========== XÓA BỚT QUYỀN ==========
     @DeleteMapping("/{id}/permissions")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:assign-permissions')")
-    public ResponseEntity<ApiResponse<Void>> removePermissions(
+    public ResponseEntity<ApiResponse<RemovePermissionsResponse>> removePermissions(
             @PathVariable Long id,
             @Valid @RequestBody AssignPermissionsRequest request) {
-        roleService.removePermissions(id, request);
-        return ResponseEntity.ok(ApiResponse.ok("Xóa phân quyền khỏi vai trò thành công", null));
+        RemovePermissionsResponse response = roleService.removePermissions(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa phân quyền khỏi vai trò thành công", response));
     }
 }

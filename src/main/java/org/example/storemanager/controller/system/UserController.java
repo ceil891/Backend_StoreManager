@@ -51,7 +51,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái thành công", response));
     }
 
-    // ========== RESET PASSWORD (Riêng của User) ==========
+    // ========== RESET PASSWORD ==========
     @PutMapping("/{id}/reset-password")
     @PreAuthorize("@securityEvaluator.hasPermission('system:user:reset-password')")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
@@ -82,7 +82,7 @@ public class UserController {
     @PreAuthorize("@securityEvaluator.hasPermission('system:user:view')")
     public ResponseEntity<ApiResponse<?>> getUsers(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) String status, // Của User dùng String status thay vì Boolean isActive
+            @RequestParam(required = false) String status,
             @RequestParam(required = false) Long roleId,
             @RequestParam(required = false) Long branchId,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
