@@ -6,15 +6,12 @@ import org.example.storemanager.dto.request.system.role.AssignPermissionsRequest
 import org.example.storemanager.dto.request.system.role.CreateRoleRequest;
 import org.example.storemanager.dto.request.system.role.UpdateRoleRequest;
 import org.example.storemanager.dto.response.common.ApiResponse;
-import org.example.storemanager.dto.response.common.PageResponse;
 import org.example.storemanager.dto.response.system.role.CreateRoleResponse;
 import org.example.storemanager.dto.response.system.role.UpdateRoleResponse;
 import org.example.storemanager.dto.response.system.role.DeleteRoleResponse;
 import org.example.storemanager.dto.response.system.role.RoleResponse;
 import org.example.storemanager.service.system.RoleService;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,54 +22,87 @@ public class RoleController {
 
     private final RoleService roleService;
 
+    // ========== TẠO MỚI ==========
     @PostMapping
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:create')")
-    public ApiResponse<CreateRoleResponse> createRole(@Valid @RequestBody CreateRoleRequest request) {
-        return ApiResponse.created("Tạo vai trò thành công", roleService.createRole(request));
+    public ResponseEntity<ApiResponse<CreateRoleResponse>> createRole(@Valid @RequestBody CreateRoleRequest request) {
+        CreateRoleResponse response = roleService.createRole(request);
+        return ResponseEntity.status(201).body(ApiResponse.created("Tạo vai trò thành công", response));
     }
 
+    // ========== CẬP NHẬT ==========
     @PutMapping("/{id}")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:update')")
-    public ApiResponse<UpdateRoleResponse> updateRole(@PathVariable Long id, @Valid @RequestBody UpdateRoleRequest request) {
-        return ApiResponse.ok("Cập nhật thông tin vai trò thành công", roleService.updateRole(id, request));
+    public ResponseEntity<ApiResponse<UpdateRoleResponse>> updateRole(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateRoleRequest request) {
+        UpdateRoleResponse response = roleService.updateRole(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật thông tin vai trò thành công", response));
     }
 
+    // ========== CẬP NHẬT TRẠNG THÁI ==========
     @PutMapping("/{id}/status")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:update-status')")
-    public ApiResponse<UpdateRoleResponse> updateStatus(@PathVariable Long id, @RequestParam Boolean isActive) {
-        return ApiResponse.ok("Cập nhật trạng thái vai trò thành công", roleService.updateStatus(id, isActive));
+    public ResponseEntity<ApiResponse<UpdateRoleResponse>> updateStatus(
+            @PathVariable Long id,
+            @RequestParam Boolean isActive) {
+        UpdateRoleResponse response = roleService.updateStatus(id, isActive);
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái vai trò thành công", response));
     }
 
+    // ========== XÓA MỀM ==========
     @DeleteMapping("/{id}")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:delete')")
-    public ApiResponse<DeleteRoleResponse> deleteRole(@PathVariable Long id) {
-        return ApiResponse.ok("Xóa vai trò thành công", roleService.deleteRole(id));
+    public ResponseEntity<ApiResponse<DeleteRoleResponse>> deleteRole(@PathVariable Long id) {
+        DeleteRoleResponse response = roleService.deleteRole(id);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa vai trò thành công", response));
     }
 
+    // ========== XEM CHI TIẾT THEO ID ==========
     @GetMapping("/{id}")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:view')")
-    public ApiResponse<RoleResponse> getRoleById(@PathVariable Long id) {
-        return ApiResponse.ok(roleService.getRoleById(id));
+    public ResponseEntity<ApiResponse<RoleResponse>> getRoleById(@PathVariable Long id) {
+        RoleResponse response = roleService.getRoleById(id);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    // ========== DANH SÁCH (phân trang hoặc tất cả) ==========
     @GetMapping
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:view')")
-    public ApiResponse<PageResponse<RoleResponse>> getAllRoles(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
+    public ResponseEntity<ApiResponse<?>> getRoles(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(defaultValue = "false") boolean includeDeleted,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "id,desc") String sort) {
 
-        String[] sortParams = sort.split(",");
-        Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortParams[0]));
-
-        return ApiResponse.ok(roleService.getAllRoles(pageable));
+        if (page != null && size != null) {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    roleService.getRolesPaginated(search, isActive, page, size, sort, includeDeleted)));
+        } else {
+            return ResponseEntity.ok(ApiResponse.ok(
+                    roleService.getAllRoles(search, isActive, sort, includeDeleted)));
+        }
     }
 
+    // ========== GÁN QUYỀN (Riêng của Role) ==========
     @PostMapping("/{id}/permissions")
     @PreAuthorize("@securityEvaluator.hasPermission('system:role:assign-permissions')")
-    public ApiResponse<Void> assignPermissions(@PathVariable Long id, @Valid @RequestBody AssignPermissionsRequest request) {
+    public ResponseEntity<ApiResponse<Void>> assignPermissions(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignPermissionsRequest request) {
         roleService.assignPermissions(id, request);
-        return ApiResponse.ok("Phân quyền cho vai trò thành công");
+        return ResponseEntity.ok(ApiResponse.ok("Phân quyền cho vai trò thành công", null));
+    }
+
+    // ========== XÓA GÁN QUYỀN (Riêng của Role) ==========
+    @DeleteMapping("/{id}/permissions")
+    @PreAuthorize("@securityEvaluator.hasPermission('system:role:assign-permissions')")
+    public ResponseEntity<ApiResponse<Void>> removePermissions(
+            @PathVariable Long id,
+            @Valid @RequestBody AssignPermissionsRequest request) {
+        roleService.removePermissions(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa phân quyền khỏi vai trò thành công", null));
     }
 }

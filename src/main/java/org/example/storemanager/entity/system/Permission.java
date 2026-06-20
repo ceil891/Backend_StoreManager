@@ -22,6 +22,9 @@ public class Permission extends BaseEntity {
     @Column(nullable = false, length = 50)
     private String module;
 
+    @Column(name = "is_active")
+    private Boolean isActive;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 }

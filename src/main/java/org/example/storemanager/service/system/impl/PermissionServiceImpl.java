@@ -16,7 +16,9 @@ import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.system.PermissionRepository;
 import org.example.storemanager.service.system.PermissionService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -47,18 +49,14 @@ public class PermissionServiceImpl implements PermissionService {
                 .permissionCode(request.getPermissionCode())
                 .module(request.getModule())
                 .description(request.getDescription())
+                .isActive(true)
                 .build();
 
         permission.setIsDeleted(false);
         permission.setCreatedBy(getCurrentUsername());
 
-        permissionRepository.save(permission);
-
-        return CreatePermissionResponse.builder()
-                .id(permission.getId())
-                .permissionCode(permission.getPermissionCode())
-                .module(permission.getModule())
-                .build();
+        Permission savedPermission = permissionRepository.save(permission);
+        return mapToCreateResponse(savedPermission);
     }
 
     @Override
@@ -72,13 +70,22 @@ public class PermissionServiceImpl implements PermissionService {
         permission.setDescription(request.getDescription());
         permission.setUpdatedBy(getCurrentUsername());
 
-        permissionRepository.save(permission);
+        Permission updatedPermission = permissionRepository.save(permission);
+        return mapToUpdateResponse(updatedPermission);
+    }
 
-        return UpdatePermissionResponse.builder()
-                .id(permission.getId())
-                .permissionCode(permission.getPermissionCode())
-                .module(permission.getModule())
-                .build();
+    @Override
+    @Transactional
+    @LogActivity(actionType = "UPDATE_STATUS", entityName = "Permission", entityClass = Permission.class)
+    public UpdatePermissionResponse updateStatus(Long id, Boolean isActive) {
+        Permission permission = permissionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
+
+        permission.setIsActive(isActive);
+        permission.setUpdatedBy(getCurrentUsername());
+
+        Permission updatedPermission = permissionRepository.save(permission);
+        return mapToUpdateResponse(updatedPermission);
     }
 
     @Override
@@ -88,18 +95,29 @@ public class PermissionServiceImpl implements PermissionService {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
 
+        if (Boolean.TRUE.equals(permission.getIsActive())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa quyền '" + permission.getPermissionCode() + "' vì quyền này vẫn đang HOẠT ĐỘNG. " +
+                            "Vui lòng tắt hoạt động trước, sau đó mới có thể xóa."
+            );
+        }
+
         String username = getCurrentUsername();
         permission.setIsDeleted(true);
+        permission.setIsActive(false);
         permission.setDeletedAt(LocalDateTime.now());
         permission.setDeletedBy(username);
         permission.setUpdatedBy(username);
 
-        permissionRepository.save(permission);
+        Permission deletedPermission = permissionRepository.save(permission);
 
         return DeletePermissionResponse.builder()
-                .id(permission.getId())
-                .permissionCode(permission.getPermissionCode())
-                .isDeleted(true)
+                .id(deletedPermission.getId())
+                .permissionCode(deletedPermission.getPermissionCode())
+                .isDeleted(deletedPermission.getIsDeleted())
+                .deletedBy(deletedPermission.getDeletedBy())
+                .deletedAt(deletedPermission.getDeletedAt() != null ? deletedPermission.getDeletedAt() : LocalDateTime.now())
                 .build();
     }
 
@@ -113,19 +131,35 @@ public class PermissionServiceImpl implements PermissionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<PermissionResponse> getAllPermissions(Pageable pageable) {
-        Page<Permission> permissionPage = permissionRepository.findAll(pageable);
-        List<PermissionResponse> content = permissionPage.getContent().stream()
+    public List<PermissionResponse> getAllPermissions(String search, Boolean isActive, String sort, boolean includeDeleted) {
+        Sort sorting = parseSort(sort);
+        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
+        // Lưu ý: Cần khai báo findAllPermissionsIncludeDeleted trong PermissionRepository
+        Page<Permission> pageResult = permissionRepository.findAllPermissionsIncludeDeleted(search, isActive, includeDeleted, pageable);
+
+        return pageResult.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PermissionResponse> getPermissionsPaginated(String search, Boolean isActive, int page, int size, String sort, boolean includeDeleted) {
+        Sort sorting = parseSort(sort);
+        Pageable pageable = PageRequest.of(page, size, sorting);
+        Page<Permission> pageResult = permissionRepository.findAllPermissionsIncludeDeleted(search, isActive, includeDeleted, pageable);
+
+        List<PermissionResponse> content = pageResult.getContent().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
 
         return PageResponse.<PermissionResponse>builder()
                 .content(content)
-                .page(permissionPage.getNumber())
-                .size(permissionPage.getSize())
-                .totalElements(permissionPage.getTotalElements())
-                .totalPages(permissionPage.getTotalPages())
-                .last(permissionPage.isLast())
+                .page(pageResult.getNumber())
+                .size(pageResult.getSize())
+                .totalElements(pageResult.getTotalElements())
+                .totalPages(pageResult.getTotalPages())
+                .last(pageResult.isLast())
                 .build();
     }
 
@@ -154,12 +188,52 @@ public class PermissionServiceImpl implements PermissionService {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập hoặc token không hợp lệ");
     }
 
+    private Sort parseSort(String sortParam) {
+        if (sortParam == null || sortParam.isEmpty()) {
+            return Sort.by("id").descending();
+        }
+        String[] parts = sortParam.split(",");
+        String property = parts[0];
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (parts.length > 1 && "desc".equalsIgnoreCase(parts[1])) {
+            direction = Sort.Direction.DESC;
+        }
+        return Sort.by(direction, property);
+    }
+
     private PermissionResponse mapToResponse(Permission permission) {
         return PermissionResponse.builder()
                 .id(permission.getId())
                 .permissionCode(permission.getPermissionCode())
                 .module(permission.getModule())
                 .description(permission.getDescription())
+                .isActive(permission.getIsActive())
+                .createdAt(permission.getCreatedAt())
+                .createdBy(permission.getCreatedBy())
+                .updatedAt(permission.getUpdatedAt())
+                .updatedBy(permission.getUpdatedBy())
+                .isDeleted(permission.getIsDeleted())
+                .build();
+    }
+
+    private CreatePermissionResponse mapToCreateResponse(Permission permission) {
+        return CreatePermissionResponse.builder()
+                .id(permission.getId())
+                .permissionCode(permission.getPermissionCode())
+                .module(permission.getModule())
+                .createdBy(permission.getCreatedBy())
+                .createdAt(permission.getCreatedAt() != null ? permission.getCreatedAt() : LocalDateTime.now())
+                .build();
+    }
+
+    private UpdatePermissionResponse mapToUpdateResponse(Permission permission) {
+        return UpdatePermissionResponse.builder()
+                .id(permission.getId())
+                .permissionCode(permission.getPermissionCode())
+                .module(permission.getModule())
+                .isActive(permission.getIsActive())
+                .updatedBy(permission.getUpdatedBy())
+                .updatedAt(permission.getUpdatedAt() != null ? permission.getUpdatedAt() : LocalDateTime.now())
                 .build();
     }
 }

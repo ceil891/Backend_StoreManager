@@ -33,7 +33,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "(:includeDeleted = true OR u.isDeleted = false) AND " +
             "(:status IS NULL OR u.status = :status) AND " +
             "(:roleId IS NULL OR u.role.id = :roleId) AND " +
-            // Đã mở comment dòng dưới đây để fix lỗi
             "(:branchId IS NULL OR u.branch.id = :branchId) AND " +
             "(:search IS NULL OR :search = '' OR " +
             "LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR " +

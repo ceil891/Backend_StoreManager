@@ -15,6 +15,7 @@ public class UpdatePermissionResponse {
     private Long id;
     private String permissionCode;
     private String module;
+    private Boolean isActive;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

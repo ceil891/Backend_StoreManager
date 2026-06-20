@@ -8,14 +8,24 @@ import org.example.storemanager.dto.response.system.user.CreateUserResponse;
 import org.example.storemanager.dto.response.system.user.DeleteUserResponse;
 import org.example.storemanager.dto.response.system.user.UpdateUserResponse;
 import org.example.storemanager.dto.response.system.user.UserResponse;
-import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 public interface UserService {
+
     CreateUserResponse createUser(CreateUserRequest request);
+
     UpdateUserResponse updateUser(Long id, UpdateUserRequest request);
-    UpdateUserResponse updateStatus(Long id, String status);
+
     DeleteUserResponse deleteUser(Long id);
+
+    UpdateUserResponse updateStatus(Long id, String status);
+
     UserResponse getUserById(Long id);
-    PageResponse<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, Pageable pageable);
+
+    List<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, String sort, boolean includeDeleted);
+
+    PageResponse<UserResponse> getUsersPaginated(String search, String status, Long roleId, Long branchId, int page, int size, String sort, boolean includeDeleted);
+
     void resetPassword(Long id, ResetPasswordRequest request);
 }

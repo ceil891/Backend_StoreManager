@@ -25,5 +25,8 @@ public class UserResponse {
     private String branchName;
 
     private LocalDateTime createdAt;
+    private String createdBy;
+    private LocalDateTime updatedAt;
+    private String updatedBy;
     private Boolean isDeleted;
 }

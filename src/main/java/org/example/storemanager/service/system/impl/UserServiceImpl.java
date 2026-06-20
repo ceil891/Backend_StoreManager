@@ -20,7 +20,9 @@ import org.example.storemanager.repository.system.RoleRepository;
 import org.example.storemanager.repository.system.UserRepository;
 import org.example.storemanager.service.system.UserService;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,7 +47,6 @@ public class UserServiceImpl implements UserService {
     @Transactional
     @LogActivity(actionType = "CREATE", entityName = "User", entityClass = User.class)
     public CreateUserResponse createUser(CreateUserRequest request) {
-        // Check duplicate kết hợp điều kiện chưa bị xóa mềm
         if (userRepository.existsByUsernameAndIsDeletedFalse(request.getUsername())) {
             throw new DuplicateResourceException("User", "username", request.getUsername());
         }
@@ -62,17 +63,11 @@ public class UserServiceImpl implements UserService {
         user.setRole(role);
         user.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE");
 
-        // Auditing
         user.setIsDeleted(false);
         user.setCreatedBy(getCurrentUsername());
 
-        userRepository.save(user);
-
-        return CreateUserResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .build();
+        User savedUser = userRepository.save(user);
+        return mapToCreateResponse(savedUser);
     }
 
     @Override
@@ -91,17 +86,10 @@ public class UserServiceImpl implements UserService {
         user.setFullName(request.getFullName());
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
-
-        // Auditing
         user.setUpdatedBy(getCurrentUsername());
 
-        userRepository.save(user);
-
-        return UpdateUserResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .status(user.getStatus())
-                .build();
+        User updatedUser = userRepository.save(user);
+        return mapToUpdateResponse(updatedUser);
     }
 
     @Override
@@ -118,13 +106,8 @@ public class UserServiceImpl implements UserService {
         user.setStatus(status.toUpperCase());
         user.setUpdatedBy(getCurrentUsername());
 
-        userRepository.save(user);
-
-        return UpdateUserResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .status(user.getStatus())
-                .build();
+        User updatedUser = userRepository.save(user);
+        return mapToUpdateResponse(updatedUser);
     }
 
     @Override
@@ -148,22 +131,28 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
 
         if ("ACTIVE".equalsIgnoreCase(user.getStatus())) {
-            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Không thể xóa tài khoản đang hoạt động. Vui lòng ngưng hoạt động trước khi xóa.");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa tài khoản '" + user.getUsername() + "' vì tài khoản này vẫn đang HOẠT ĐỘNG. " +
+                            "Vui lòng chuyển trạng thái thành TERMINATED hoặc SUSPENDED trước khi xóa."
+            );
         }
 
         String username = getCurrentUsername();
         user.setIsDeleted(true);
-        user.setStatus("TERMINATED"); // Vô hiệu hóa triệt để khi xóa mềm
+        user.setStatus("TERMINATED");
         user.setDeletedAt(LocalDateTime.now());
         user.setDeletedBy(username);
         user.setUpdatedBy(username);
 
-        userRepository.save(user);
+        User deletedUser = userRepository.save(user);
 
         return DeleteUserResponse.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .isDeleted(true)
+                .id(deletedUser.getId())
+                .username(deletedUser.getUsername())
+                .isDeleted(deletedUser.getIsDeleted())
+                .deletedBy(deletedUser.getDeletedBy())
+                .deletedAt(deletedUser.getDeletedAt() != null ? deletedUser.getDeletedAt() : LocalDateTime.now())
                 .build();
     }
 
@@ -177,21 +166,34 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, Pageable pageable) {
-        // NOTE: Bạn cần định nghĩa hàm này trong UserRepository (dùng @Query hoặc Specification)
-        Page<User> userPage = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, false, pageable);
+    public List<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, String sort, boolean includeDeleted) {
+        Sort sorting = parseSort(sort);
+        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
+        Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
 
-        List<UserResponse> content = userPage.getContent().stream()
+        return pageResult.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<UserResponse> getUsersPaginated(String search, String status, Long roleId, Long branchId, int page, int size, String sort, boolean includeDeleted) {
+        Sort sorting = parseSort(sort);
+        Pageable pageable = PageRequest.of(page, size, sorting);
+        Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
+
+        List<UserResponse> content = pageResult.getContent().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
 
         return PageResponse.<UserResponse>builder()
                 .content(content)
-                .page(userPage.getNumber())
-                .size(userPage.getSize())
-                .totalElements(userPage.getTotalElements())
-                .totalPages(userPage.getTotalPages())
-                .last(userPage.isLast())
+                .page(pageResult.getNumber())
+                .size(pageResult.getSize())
+                .totalElements(pageResult.getTotalElements())
+                .totalPages(pageResult.getTotalPages())
+                .last(pageResult.isLast())
                 .build();
     }
 
@@ -201,6 +203,19 @@ public class UserServiceImpl implements UserService {
             return auth.getName();
         }
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập hoặc token không hợp lệ");
+    }
+
+    private Sort parseSort(String sortParam) {
+        if (sortParam == null || sortParam.isEmpty()) {
+            return Sort.by("id").descending();
+        }
+        String[] parts = sortParam.split(",");
+        String property = parts[0];
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (parts.length > 1 && "desc".equalsIgnoreCase(parts[1])) {
+            direction = Sort.Direction.DESC;
+        }
+        return Sort.by(direction, property);
     }
 
     private UserResponse mapToResponse(User user) {
@@ -214,7 +229,30 @@ public class UserServiceImpl implements UserService {
                 .roleId(user.getRole() != null ? user.getRole().getId() : null)
                 .roleName(user.getRole() != null ? user.getRole().getRoleName() : null)
                 .createdAt(user.getCreatedAt())
+                .createdBy(user.getCreatedBy())
+                .updatedAt(user.getUpdatedAt())
+                .updatedBy(user.getUpdatedBy())
                 .isDeleted(user.getIsDeleted())
+                .build();
+    }
+
+    private CreateUserResponse mapToCreateResponse(User user) {
+        return CreateUserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .createdBy(user.getCreatedBy())
+                .createdAt(user.getCreatedAt() != null ? user.getCreatedAt() : LocalDateTime.now())
+                .build();
+    }
+
+    private UpdateUserResponse mapToUpdateResponse(User user) {
+        return UpdateUserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .status(user.getStatus())
+                .updatedBy(user.getUpdatedBy())
+                .updatedAt(user.getUpdatedAt() != null ? user.getUpdatedAt() : LocalDateTime.now())
                 .build();
     }
 }

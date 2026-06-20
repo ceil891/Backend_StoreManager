@@ -17,5 +17,8 @@ public class RoleResponse {
     private String description;
     private Boolean isActive;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private LocalDateTime updatedAt;
+    private String updatedBy;
     private Boolean isDeleted;
 }
