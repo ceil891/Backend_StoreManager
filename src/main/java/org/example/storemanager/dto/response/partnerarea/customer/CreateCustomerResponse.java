@@ -8,14 +8,17 @@ import java.time.LocalDateTime;
 @Builder
 public class CreateCustomerResponse {
     private Long id;
-    private String avatarUrl;
     private String customerCode;
     private String name;
     private String phone;
     private String email;
     private String address;
-    private String taxCode;
-    private String message;
+    private String avatarUrl;
+    private String membershipRank;
+    private Double points;
+    private Double totalSpend;
     private LocalDateTime createdAt;
     private String createdBy;
+    private String message;
+    private String status;
 }

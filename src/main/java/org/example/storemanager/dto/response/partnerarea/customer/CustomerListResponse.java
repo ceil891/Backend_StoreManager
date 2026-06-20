@@ -16,8 +16,7 @@ public class CustomerListResponse {
     private String phone;
     private String email;
     private String membershipRank;
-    private Boolean status;
     private String avatarUrl;
     private String address;
-    private String taxCode;
+    private String status;
 }

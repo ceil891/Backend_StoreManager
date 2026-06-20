@@ -18,17 +18,13 @@ public class CustomerDetailResponse {
     private String phone;
     private String email;
     private String address;
-    private String taxCode;
-    private String note;
     private Double points;
     private Double totalSpend;
     private String membershipRank;
-    private Boolean status;
     private String avatarUrl;
     private LocalDateTime createdAt;
     private String createdBy;
-    private LocalDateTime updatedAt;
-    private String updatedBy;
     private LocalDateTime deletedAt;
     private String deletedBy;
+    private String status;
 }

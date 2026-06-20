@@ -1,125 +1,148 @@
 package org.example.storemanager.service.partnerarea.customer;
 
-import org.example.storemanager.config.LogActivity;
+import lombok.RequiredArgsConstructor;
 import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustomerRequest;
 import org.example.storemanager.dto.request.partnerarea.customerdto.UpdateCustomerRequest;
 import org.example.storemanager.dto.response.partnerarea.customer.*;
 import org.example.storemanager.entity.partnerarea.Customer;
 import org.example.storemanager.exception.DuplicateResourceException;
+import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.partnerarea.CustomerRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.BeanUtils;
-import org.springframework.data.domain.*;
-import org.springframework.security.core.Authentication;
+import org.example.storemanager.service.common.CloudinaryService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.example.storemanager.service.common.CloudinaryService;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Transactional
+@RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CloudinaryService cloudinaryService;
 
-    private String getCurrentUser() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal()))
-                ? auth.getName() : "System";
+    private String getCurrentUsername() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) ? auth.getName() : "SYSTEM";
     }
 
     @Override
-    @LogActivity(actionType = "CREATE", entityName = "Customer", entityClass = Customer.class)
     public CreateCustomerResponse createCustomer(CreateCustomerRequest req) {
-        if (customerRepository.existsByPhone(req.getPhone())) {
-            throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
-        }
-        if (customerRepository.existsByEmail(req.getEmail())) {
-            throw new DuplicateResourceException("Customer", "email", req.getEmail());
-        }
+        if (customerRepository.existsByPhone(req.getPhone())) throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
 
         Customer c = new Customer();
+        c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
         c.setName(req.getName());
         c.setPhone(req.getPhone());
         c.setEmail(req.getEmail());
         c.setAddress(req.getAddress());
-        c.setTaxCode(req.getTaxCode());
-
-        // Xử lý Cloudinary
-        if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
-            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
-        }
-
-        c.setCustomerCode("CUS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
-        c.setCreatedBy(getCurrentUser());
         c.setIsActive(true);
         c.setPoints(0.0);
         c.setTotalSpend(0.0);
         c.setMembershipRank("Đồng");
+        c.setCreatedBy(getCurrentUsername());
 
-        customerRepository.save(c);
+        if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
+            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
+        }
+        Customer saved = customerRepository.save(c);
 
         return CreateCustomerResponse.builder()
-                .id(c.getId())
-                .customerCode(c.getCustomerCode())
-                .name(c.getName())
-                .phone(c.getPhone())
-                .email(c.getEmail())
-                .address(c.getAddress())
-                .taxCode(c.getTaxCode())
-                .avatarUrl(c.getAvatarUrl())
-                .message("Tạo khách hàng thành công")
-                .createdAt(c.getCreatedAt())
-                .createdBy(c.getCreatedBy())
-                .build();
+                .id(saved.getId())
+                .customerCode(saved.getCustomerCode())
+                .name(saved.getName())
+                .phone(saved.getPhone())
+                .email(saved.getEmail())
+                .address(saved.getAddress())
+                .avatarUrl(saved.getAvatarUrl())
+                .status(saved.getIsActive() ? "Hoạt động" : "Không hoạt động")
+                .membershipRank(saved.getMembershipRank())
+                .points(saved.getPoints())
+                .totalSpend(saved.getTotalSpend())
+                .createdAt(saved.getCreatedAt())
+                .createdBy(saved.getCreatedBy())
+                .message("Tạo thành công").build();
     }
 
     @Override
-    @LogActivity(actionType = "UPDATE", entityName = "Customer", entityClass = Customer.class)
     public UpdateCustomerResponse updateCustomer(Long id, UpdateCustomerRequest req) {
-        Customer c = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng ID: " + id));
+        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
-        // Copy properties nhưng bỏ qua trường avatar
-        BeanUtils.copyProperties(req, c, "avatar");
+        // Cập nhật các trường
+        c.setName(req.getName());
+        c.setPhone(req.getPhone());
+        c.setEmail(req.getEmail());
+        c.setAddress(req.getAddress());
+        if (req.getIsActive() != null) c.setIsActive(Boolean.valueOf(req.getIsActive()));
 
-        // Cập nhật ảnh mới nếu có
+        c.setUpdatedBy(getCurrentUsername());
+        c.setUpdatedAt(LocalDateTime.now());
+        c.setMembershipRank("Đồng");
+
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
         }
 
-        c.setUpdatedBy(getCurrentUser());
-        customerRepository.save(c);
+        Customer saved = customerRepository.save(c); // Lưu xong rồi mới lấy object saved để trả về
 
         return UpdateCustomerResponse.builder()
-                .id(c.getId())
+                .id(saved.getId())
+                .name(saved.getName())
+                .phone(saved.getPhone())
+                .email(saved.getEmail())
+                .address(saved.getAddress())
+                .avatarUrl(saved.getAvatarUrl())
+                .membershipRank(saved.getMembershipRank())
+                .updatedAt(saved.getUpdatedAt())
+                .updatedBy(saved.getUpdatedBy())
+                .status(saved.getIsActive() ? "Hoạt động" : "Không hoạt động")
                 .message("Cập nhật thành công")
-                .updatedAt(c.getUpdatedAt())
-                .updatedBy(c.getUpdatedBy())
                 .build();
     }
 
     @Override
-    @LogActivity(actionType = "DELETE", entityName = "Customer", entityClass = Customer.class)
+    public UpdateCustomerResponse updateStatus(Long id, Boolean isActive) {
+        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        c.setIsActive(isActive);
+        c.setUpdatedAt(LocalDateTime.now());
+        customerRepository.save(c);
+        return UpdateCustomerResponse.builder().id(c.getId())
+                .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động").message("Cập nhật trạng thái thành công").build();
+    }
+
+    @Override
     public DeleteCustomerResponse deleteCustomer(Long id) {
         Customer c = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng"));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
-        c.setIsDeleted(true);
+        // Nếu khách đã bị xóa rồi thì không cần xóa nữa (tùy chọn)
+        if (Boolean.TRUE.equals(c.getIsDeleted())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khách hàng này đã bị xóa rồi!");
+        }
+
+        // Thực hiện xóa mềm:
+        c.setIsDeleted(true);      // Đánh dấu đã xóa
+        c.setIsActive(false);      // Chuyển trạng thái sang Không hoạt động
+
+        // Ghi nhận thông tin người xóa (để nó không bị null)
         c.setDeletedAt(LocalDateTime.now());
-        c.setDeletedBy(getCurrentUser());
+        c.setDeletedBy(getCurrentUsername());
+
         customerRepository.save(c);
 
         return DeleteCustomerResponse.builder()
                 .id(c.getId())
-                .message("Xóa thành công")
+                .message("Tài khoản khách hàng đã được chuyển sang trạng thái không hoạt động")
                 .deletedAt(c.getDeletedAt())
                 .deletedBy(c.getDeletedBy())
                 .build();
@@ -127,9 +150,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CustomerDetailResponse getCustomerById(Long id) {
-        Customer c = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy khách hàng"));
-
+        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
         return CustomerDetailResponse.builder()
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())
@@ -137,40 +158,22 @@ public class CustomerServiceImpl implements CustomerService {
                 .phone(c.getPhone())
                 .email(c.getEmail())
                 .address(c.getAddress())
-                .taxCode(c.getTaxCode())
-                .note(c.getNote())
+                .avatarUrl(c.getAvatarUrl())
+                .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động")
+                .membershipRank(c.getMembershipRank())
                 .points(c.getPoints())
                 .totalSpend(c.getTotalSpend())
-                .membershipRank(c.getMembershipRank())
-                .status(c.getIsActive())
-                .avatarUrl(c.getAvatarUrl())
-                .createdAt(c.getCreatedAt())
                 .createdBy(c.getCreatedBy())
-                .updatedAt(c.getUpdatedAt())
-                .updatedBy(c.getUpdatedBy())
-                .build();
+                .createdAt(c.getCreatedAt())
+                .deletedAt(c.getDeletedAt())
+                .deletedBy(c.getDeletedBy()).build();
     }
 
     @Override
     public Page<CustomerListResponse> getAllCustomers(int page, int size, String keyword) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("name").ascending());
-
-        Page<Customer> customers = (keyword != null && !keyword.isEmpty())
-                ? customerRepository.searchCustomers(keyword, pageable)
-                : customerRepository.findByIsDeletedFalse(pageable);
-
-        return customers.map(c -> CustomerListResponse.builder()
-                .id(c.getId())
-                .customerCode(c.getCustomerCode())
-                .name(c.getName())
-                .phone(c.getPhone())
-                .email(c.getEmail())
-                .address(c.getAddress())
-                .taxCode(c.getTaxCode())
-                .membershipRank(c.getMembershipRank())
-                .status(c.getIsActive())
-                .avatarUrl(c.getAvatarUrl())
-                .build());
+        return customerRepository.findByIsDeletedFalse(PageRequest.of(page, size)).map(c ->
+                CustomerListResponse.builder().id(c.getId()).name(c.getName()).phone(c.getPhone())
+                        .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động").avatarUrl(c.getAvatarUrl()).build());
     }
 
     @Override public List<SalesHistoryResponse> getSalesHistory(Long id) { return Collections.emptyList(); }

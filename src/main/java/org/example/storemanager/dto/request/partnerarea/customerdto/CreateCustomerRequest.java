@@ -16,8 +16,8 @@ public class CreateCustomerRequest {
     private String email;
 
     private String address;
-    private String taxCode;
     private Long groupId; // ID của nhóm khách hàng
     private Long areaId;  // ID của khu vực
     private MultipartFile avatar;
+    private Boolean isActive;
 }

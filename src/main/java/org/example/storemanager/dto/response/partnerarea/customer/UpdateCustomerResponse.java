@@ -8,7 +8,14 @@ import java.time.LocalDateTime;
 @Builder
 public class UpdateCustomerResponse {
     private Long id;
+    private String name;
+    private String phone;
+    private String email;
+    private String address;
+    private String avatarUrl;
+    private String membershipRank;
     private String message;
     private LocalDateTime updatedAt;
     private String updatedBy;
+    private String status;
 }

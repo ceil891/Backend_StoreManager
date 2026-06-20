@@ -14,20 +14,29 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/partnerarea/customers")
 @RequiredArgsConstructor
 public class CustomerController {
+
     private final CustomerService customerService;
 
-    // API Tạo mới (Hỗ trợ file upload)
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<?>> create(
-            @ModelAttribute CreateCustomerRequest req) { // Cực kỳ quan trọng
+    public ResponseEntity<ApiResponse<?>> createCustomer(@ModelAttribute CreateCustomerRequest req) {
         return ResponseEntity.status(201)
-                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo thành công"));
+                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
     }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @ModelAttribute UpdateCustomerRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<?>> updateStatus(@PathVariable Long id, @RequestParam Boolean isActive) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.updateStatus(id, isActive), "Cập nhật trạng thái thành công"));
+    }
+
     @GetMapping
-    public ResponseEntity<ApiResponse<?>> getAllCustomers(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String keyword) {
+    public ResponseEntity<ApiResponse<?>> getAllCustomers(@RequestParam(defaultValue = "0") int page,
+                                                          @RequestParam(defaultValue = "10") int size,
+                                                          @RequestParam(required = false) String keyword) {
         return ResponseEntity.ok(ApiResponse.success(customerService.getAllCustomers(page, size, keyword), "Lấy danh sách thành công"));
     }
 
@@ -36,41 +45,18 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerById(id), "Lấy chi tiết thành công"));
     }
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<?>> createCustomer(@RequestBody CreateCustomerRequest request) {
-        return ResponseEntity.status(201).body(ApiResponse.success(customerService.createCustomer(request), "Tạo mới thành công"));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @RequestBody UpdateCustomerRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, request), "Cập nhật thành công"));
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> deleteCustomer(@PathVariable Long id) {
-        var data = customerService.deleteCustomer(id);
-        return ResponseEntity.ok(ApiResponse.success(data, "Xóa thành công"));
-    }
-
-    @PostMapping("/import")
-    public ResponseEntity<ApiResponse<?>> importCustomers(@RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.importCustomers(file), "Import thành công"));
-    }
-
-    @GetMapping("/export")
-    public ResponseEntity<byte[]> exportCustomers() {
-        return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=customers.xlsx")
-                .body(customerService.exportCustomers());
-    }
-
-    @GetMapping("/{id}/sales-history")
-    public ResponseEntity<ApiResponse<?>> getSalesHistory(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.getSalesHistory(id), "Lấy lịch sử thành công"));
+        return ResponseEntity.ok(ApiResponse.success(customerService.deleteCustomer(id), "Xóa thành công"));
     }
 
     @GetMapping("/{id}/debts")
-    public ResponseEntity<ApiResponse<?>> getCustomerDebts(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerDebts(id), "Lấy công nợ thành công"));
+    public ResponseEntity<?> getDebts(@PathVariable Long id) {
+        return ResponseEntity.ok(customerService.getCustomerDebts(id));
+    }
+
+    @GetMapping("/{id}/sales-history")
+    public ResponseEntity<?> getSalesHistory(@PathVariable Long id) {
+        return ResponseEntity.ok(customerService.getSalesHistory(id));
     }
 }

@@ -12,6 +12,6 @@ public class UpdateCustomerRequest {
     private String taxCode;
     private Long groupId;
     private Long areaId;
-    private Boolean isActive;
+    private String isActive;
     private MultipartFile avatar;// Cho phép cập nhật trạng thái hoạt động
 }
