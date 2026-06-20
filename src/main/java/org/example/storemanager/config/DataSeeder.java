@@ -4,10 +4,13 @@ import lombok.RequiredArgsConstructor;
 import org.example.storemanager.entity.system.Permission;
 import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.entity.system.RolePermission;
+import org.example.storemanager.entity.system.User;
 import org.example.storemanager.repository.system.PermissionRepository;
 import org.example.storemanager.repository.system.RolePermissionRepository;
 import org.example.storemanager.repository.system.RoleRepository;
+import org.example.storemanager.repository.system.UserRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -20,6 +23,8 @@ public class DataSeeder implements CommandLineRunner {
     private final PermissionRepository permissionRepository;
     private final RoleRepository roleRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) throws Exception {
@@ -50,13 +55,17 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         // 2. Khởi tạo thực thể SUPER_ADMIN và tự động liên kết toàn bộ quyền hệ thống
+        Role superAdminRole = null;
         if (!roleRepository.existsByRoleName("SUPER_ADMIN")) {
-            Role superAdminRole = Role.builder()
+            superAdminRole = Role.builder()
                     .roleName("SUPER_ADMIN")
                     .description("Vai trò quản trị tối cao của toàn bộ hệ thống")
                     .isActive(true)
                     .build();
-            roleRepository.save(superAdminRole);
+            // Dùng setter thay vì builder cho các trường của BaseEntity
+            superAdminRole.setIsDeleted(false);
+
+            superAdminRole = roleRepository.save(superAdminRole);
 
             List<Permission> allPermissions = permissionRepository.findAll();
             List<RolePermission> defaultAssignments = new ArrayList<>();
@@ -68,16 +77,39 @@ public class DataSeeder implements CommandLineRunner {
                         .build());
             }
             rolePermissionRepository.saveAll(defaultAssignments);
+        } else {
+            // Lấy role ra nếu đã tồn tại để gán cho User
+            superAdminRole = roleRepository.findByRoleName("SUPER_ADMIN").orElse(null);
+        }
+
+        // 3. TẠO TÀI KHOẢN ADMIN MẶC ĐỊNH
+        if (superAdminRole != null && !userRepository.existsByUsername("admin")) {
+            User adminUser = User.builder()
+                    .username("admin")
+                    .password(passwordEncoder.encode("admin123"))
+                    .fullName("Quản trị viên hệ thống")
+                    .email("admin@storemanager.com")
+                    .phone("0999999999")
+                    .status("ACTIVE")
+                    .role(superAdminRole)
+                    .build();
+            // Dùng setter thay vì builder cho trường kế thừa
+            adminUser.setIsDeleted(false);
+
+            userRepository.save(adminUser);
         }
     }
 
     private void addIfAbsent(String code, String module, String desc, List<Permission> list) {
         if (!permissionRepository.existsByPermissionCode(code)) {
-            list.add(Permission.builder()
+            Permission perm = Permission.builder()
                     .permissionCode(code)
                     .module(module)
                     .description(desc)
-                    .build());
+                    .build();
+            // Dùng setter thay vì builder
+            perm.setIsDeleted(false);
+            list.add(perm);
         }
     }
 }

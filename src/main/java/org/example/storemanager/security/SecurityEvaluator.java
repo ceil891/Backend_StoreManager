@@ -1,21 +1,27 @@
 package org.example.storemanager.security;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Component("securityEvaluator")
 public class SecurityEvaluator {
 
-    /**
-     * Placeholder method for dynamic authorization checking.
-     * You can easily extend this method to check current user permissions
-     * stored in Database, Redis, or Spring Security Authorities.
-     *
-     * @param permission the permission key, e.g. "catalog:product:view"
-     * @return true if permitted, false otherwise
-     */
     public boolean hasPermission(String permission) {
-        // Placeholder implementation: return true for development mode.
-        // Replace this with actual database/role checking logic later.
+        // 1. LẤY THÔNG TIN ĐĂNG NHẬP HIỆN TẠI TỪ SECURITY CONTEXT
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        // 2. NẾU CHƯA CÓ TOKEN HOẶC LÀ ANONYMOUS -> CHẶN NGAY LẬP TỨC
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return false;
+        }
+
+        // 3. LOGIC CHECK QUYỀN THỰC TẾ SẼ VIẾT Ở ĐÂY
+        // Ví dụ:
+        // String username = (String) auth.getPrincipal();
+        // Lấy User từ DB -> Lấy Role -> Lấy List Permission -> So sánh với chuỗi 'permission' truyền vào
+
+        // Tạm thời trả về true cho tài khoản đã có Token
         return true;
     }
 }

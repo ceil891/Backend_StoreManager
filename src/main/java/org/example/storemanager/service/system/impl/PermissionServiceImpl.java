@@ -17,9 +17,14 @@ import org.example.storemanager.repository.system.PermissionRepository;
 import org.example.storemanager.service.system.PermissionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,7 +39,7 @@ public class PermissionServiceImpl implements PermissionService {
     @Transactional
     @LogActivity(actionType = "CREATE", entityName = "Permission", entityClass = Permission.class)
     public CreatePermissionResponse createPermission(CreatePermissionRequest request) {
-        if (permissionRepository.existsByPermissionCode(request.getPermissionCode())) {
+        if (permissionRepository.existsByPermissionCodeAndIsDeletedFalse(request.getPermissionCode())) {
             throw new DuplicateResourceException("Permission", "permissionCode", request.getPermissionCode());
         }
 
@@ -43,6 +48,9 @@ public class PermissionServiceImpl implements PermissionService {
                 .module(request.getModule())
                 .description(request.getDescription())
                 .build();
+
+        permission.setIsDeleted(false);
+        permission.setCreatedBy(getCurrentUsername());
 
         permissionRepository.save(permission);
 
@@ -62,6 +70,7 @@ public class PermissionServiceImpl implements PermissionService {
 
         permission.setModule(request.getModule());
         permission.setDescription(request.getDescription());
+        permission.setUpdatedBy(getCurrentUsername());
 
         permissionRepository.save(permission);
 
@@ -79,7 +88,12 @@ public class PermissionServiceImpl implements PermissionService {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
 
+        String username = getCurrentUsername();
         permission.setIsDeleted(true);
+        permission.setDeletedAt(LocalDateTime.now());
+        permission.setDeletedBy(username);
+        permission.setUpdatedBy(username);
+
         permissionRepository.save(permission);
 
         return DeletePermissionResponse.builder()
@@ -90,6 +104,7 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PermissionResponse getPermissionById(Long id) {
         Permission permission = permissionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Permission", "id", id));
@@ -97,6 +112,7 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageResponse<PermissionResponse> getAllPermissions(Pageable pageable) {
         Page<Permission> permissionPage = permissionRepository.findAll(pageable);
         List<PermissionResponse> content = permissionPage.getContent().stream()
@@ -114,6 +130,7 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<GroupedPermissionResponse> getGroupedPermissions() {
         List<Permission> permissions = permissionRepository.findByIsDeletedFalse();
 
@@ -127,6 +144,14 @@ public class PermissionServiceImpl implements PermissionService {
                         .permissions(entry.getValue())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    private String getCurrentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+            return auth.getName();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập hoặc token không hợp lệ");
     }
 
     private PermissionResponse mapToResponse(Permission permission) {

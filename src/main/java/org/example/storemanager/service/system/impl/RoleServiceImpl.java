@@ -13,6 +13,8 @@ import org.example.storemanager.dto.response.system.role.RoleResponse;
 import org.example.storemanager.entity.system.Permission;
 import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.entity.system.RolePermission;
+import org.example.storemanager.enums.ErrorCode;
+import org.example.storemanager.exception.BusinessException;
 import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.system.PermissionRepository;
@@ -21,9 +23,14 @@ import org.example.storemanager.repository.system.RoleRepository;
 import org.example.storemanager.service.system.RoleService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,7 +46,8 @@ public class RoleServiceImpl implements RoleService {
     @Transactional
     @LogActivity(actionType = "CREATE", entityName = "Role", entityClass = Role.class)
     public CreateRoleResponse createRole(CreateRoleRequest request) {
-        if (roleRepository.existsByRoleName(request.getRoleName())) {
+        // Đã sửa thành check có IsDeletedFalse
+        if (roleRepository.existsByRoleNameAndIsDeletedFalse(request.getRoleName())) {
             throw new DuplicateResourceException("Role", "roleName", request.getRoleName());
         }
 
@@ -48,6 +56,10 @@ public class RoleServiceImpl implements RoleService {
                 .description(request.getDescription())
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
+
+        // Thêm Auditing
+        role.setIsDeleted(false);
+        role.setCreatedBy(getCurrentUsername());
 
         roleRepository.save(role);
 
@@ -65,8 +77,14 @@ public class RoleServiceImpl implements RoleService {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
 
+        // Thêm Check trùng lặp khi update
+        if (roleRepository.existsByRoleNameAndIdNotAndIsDeletedFalse(request.getRoleName(), id)) {
+            throw new DuplicateResourceException("Role", "roleName", request.getRoleName());
+        }
+
         role.setRoleName(request.getRoleName());
         role.setDescription(request.getDescription());
+        role.setUpdatedBy(getCurrentUsername()); // Auditing
 
         roleRepository.save(role);
 
@@ -85,6 +103,7 @@ public class RoleServiceImpl implements RoleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
 
         role.setIsActive(isActive);
+        role.setUpdatedBy(getCurrentUsername()); // Auditing
         roleRepository.save(role);
 
         return UpdateRoleResponse.builder()
@@ -101,7 +120,18 @@ public class RoleServiceImpl implements RoleService {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
 
+        // Thêm chặn xóa nếu đang hoạt động
+        if (Boolean.TRUE.equals(role.getIsActive())) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Không thể xóa Role đang hoạt động. Vui lòng ngưng hoạt động trước.");
+        }
+
+        String username = getCurrentUsername();
         role.setIsDeleted(true);
+        role.setIsActive(false); // Vô hiệu hóa
+        role.setDeletedAt(LocalDateTime.now());
+        role.setDeletedBy(username);
+        role.setUpdatedBy(username);
+
         roleRepository.save(role);
 
         return DeleteRoleResponse.builder()
@@ -112,6 +142,7 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    @Transactional(readOnly = true) // Thêm Read Only
     public RoleResponse getRoleById(Long id) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
@@ -126,6 +157,7 @@ public class RoleServiceImpl implements RoleService {
     }
 
     @Override
+    @Transactional(readOnly = true) // Thêm Read Only
     public PageResponse<RoleResponse> getAllRoles(Pageable pageable) {
         Page<Role> rolePage = roleRepository.findAll(pageable);
         List<RoleResponse> content = rolePage.getContent().stream()
@@ -169,5 +201,16 @@ public class RoleServiceImpl implements RoleService {
                 }).collect(Collectors.toList());
 
         rolePermissionRepository.saveAll(rolePermissions);
+        role.setUpdatedBy(getCurrentUsername()); // Auditing
+        roleRepository.save(role);
+    }
+
+    // Hàm lấy username phục vụ Auditing
+    private String getCurrentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+            return auth.getName();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập hoặc token không hợp lệ");
     }
 }
