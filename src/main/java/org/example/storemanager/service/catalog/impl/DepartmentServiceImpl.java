@@ -3,6 +3,7 @@ package org.example.storemanager.service.catalog.impl;
 import org.example.storemanager.config.LogActivity;
 import org.example.storemanager.dto.request.catalog.department.CreateDepartmentRequest;
 import org.example.storemanager.dto.request.catalog.department.UpdateDepartmentRequest;
+import org.example.storemanager.dto.response.catalog.department.MapDepartmentResponse;
 import org.example.storemanager.dto.response.catalog.department.CreateDepartmentResponse;
 import org.example.storemanager.dto.response.catalog.department.DeleteDepartmentResponse;
 import org.example.storemanager.dto.response.catalog.department.UpdateDepartmentResponse;
@@ -92,7 +93,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (Boolean.TRUE.equals(department.getIsActive())) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Không thể xóa ngành hàng '" + department.getDeptCode() + "' vì ngành hàng này vẫn đang HOẠT ĐỘNG. " +
+                "Không thể xóa ngành hàng '" + department.getDeptCode() + "' vì ngành hàng này vẫn đang hoạt động . " +
                 "Vui lòng tắt hoạt động trước, sau đó mới có thể xóa."
             );
         }
@@ -137,27 +138,41 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DepartmentResponse> getAllDepartments(String search, Boolean isActive, String sort, boolean includeDeleted) {
+    public List<MapDepartmentResponse> getAllDepartments(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<Department> page = departmentRepository.findAllDepartmentsIncludeDeleted(search, isActive, includeDeleted, pageable);
         return page.getContent().stream()
-                .map(this::mapToResponse)
+                .map(this::mapToResponseAll)
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<DepartmentResponse> getDepartmentsPaginated(String search, Boolean isActive, int page, int size, String sort, boolean includeDeleted) {
+    public PageResponse<MapDepartmentResponse> getDepartmentsPaginated(
+            String search,
+            Boolean isActive,
+            int page,
+            int size,
+            String sort,
+            boolean includeDeleted) {
+
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
-        Page<Department> pageResult = departmentRepository.findAllDepartmentsIncludeDeleted(search, isActive, includeDeleted, pageable);
 
-        List<DepartmentResponse> content = pageResult.getContent().stream()
-                .map(this::mapToResponse)
+        Page<Department> pageResult =
+                departmentRepository.findAllDepartmentsIncludeDeleted(
+                        search,
+                        isActive,
+                        includeDeleted,
+                        pageable);
+
+        List<MapDepartmentResponse> content = pageResult.getContent()
+                .stream()
+                .map(this::mapToResponseAll)
                 .collect(Collectors.toList());
 
-        return PageResponse.<DepartmentResponse>builder()
+        return PageResponse.<MapDepartmentResponse>builder()
                 .content(content)
                 .page(pageResult.getNumber())
                 .size(pageResult.getSize())
@@ -193,6 +208,16 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private DepartmentResponse mapToResponse(Department department) {
         return DepartmentResponse.builder()
+                .id(department.getId())
+                .deptCode(department.getDeptCode())
+                .deptName(department.getDeptName())
+                .description(department.getDescription())
+                .isActive(department.getIsActive())
+                .createdAt(department.getCreatedAt())
+                .build();
+    }
+    private MapDepartmentResponse mapToResponseAll(Department department) {
+        return MapDepartmentResponse.builder()
                 .id(department.getId())
                 .deptCode(department.getDeptCode())
                 .deptName(department.getDeptName())

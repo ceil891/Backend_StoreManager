@@ -4,17 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.example.storemanager.dto.response.catalog.department.DepartmentResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
-
-import org.example.storemanager.dto.response.catalog.department.DepartmentResponse;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CategoriesResponse {
+public class MapCategoriesResponse {
     private Long id;
     private String categoryCode;
     private String categoryName;
@@ -24,7 +23,5 @@ public class CategoriesResponse {
     private Long parentId;
     private Boolean isDeleted;
     private LocalDateTime createdAt;
-    private String createdBy;
-
-    private List<CategoriesResponse> children;
+    private List<MapCategoriesResponse> children;
 }
