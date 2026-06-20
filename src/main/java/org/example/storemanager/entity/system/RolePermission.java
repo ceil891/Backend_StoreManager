@@ -5,7 +5,10 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 
 @Entity
-@Table(name = "role_permissions")
+@Table(name = "role_permissions", indexes = {
+        @Index(name = "idx_rp_role_id", columnList = "role_id"),
+        @Index(name = "idx_rp_permission_id", columnList = "permission_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
