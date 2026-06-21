@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
@@ -264,6 +265,23 @@ public class GlobalExceptionHandler {
         log.warn("IllegalArgument: {} | Path: {}", ex.getMessage(), request.getRequestURI());
 
         return buildResponse(ErrorCode.VALIDATION_ERROR, ex.getMessage(), request);
+    }
+
+    // ==================== Response Status Exception (Bắt lỗi khi xóa mềm bị chặn) ====================
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(
+            ResponseStatusException ex, HttpServletRequest request) {
+
+        log.warn("ResponseStatusException: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        ApiResponse<Void> response = ApiResponse.fail(
+                ex.getStatusCode().value(),
+                HttpStatus.valueOf(ex.getStatusCode().value()).name(), // Sẽ ra chữ "CONFLICT"
+                ex.getReason(), // Lấy đúng đoạn text "Không thể xóa quyền..."
+                request.getRequestURI()
+        );
+        return new ResponseEntity<>(response, ex.getStatusCode());
     }
 
     // ==================== Fallback ====================
