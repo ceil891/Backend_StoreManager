@@ -28,8 +28,9 @@ public class ProductCategory extends BaseEntity {
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
-    @Column(name = "department", length = 100)
-    private String department;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
 
     @Column(name = "manager", length = 100)
     private String manager;

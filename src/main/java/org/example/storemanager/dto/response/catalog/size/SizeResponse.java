@@ -1,4 +1,4 @@
-package org.example.storemanager.dto.response.catalog.department;
+package org.example.storemanager.dto.response.catalog.size;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,12 +10,11 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DepartmentResponse {
+public class SizeResponse {
     private Long id;
-    private String deptCode;
-    private String deptName;
+    private String sizeCode;
+    private String sizeName;
     private String description;
     private Boolean isActive;
     private LocalDateTime createdAt;
-
-    }
+}
