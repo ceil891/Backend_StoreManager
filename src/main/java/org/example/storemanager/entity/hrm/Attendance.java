@@ -32,6 +32,9 @@ public class Attendance extends BaseEntity {
     @Column(nullable = false, length = 30)
     private String status; // PRESENT, LATE, ABSENT, HALF_DAY
 
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
