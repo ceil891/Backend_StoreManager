@@ -23,4 +23,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     // 3. Các hàm bổ trợ
     boolean existsByPhone(String phone);
     boolean existsByEmail(String email);
+    // Thêm vào CustomerRepository.java
+    boolean existsByEmailAndIdNot(String email, Long id);
+    boolean existsByPhoneAndIdNot(String phone, Long id);
 }

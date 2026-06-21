@@ -26,5 +26,5 @@ public class CustomerDetailResponse {
     private String createdBy;
     private LocalDateTime deletedAt;
     private String deletedBy;
-    private String status;
+    private Boolean isActive;
 }

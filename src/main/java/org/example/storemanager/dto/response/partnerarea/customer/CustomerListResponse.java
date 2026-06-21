@@ -18,5 +18,5 @@ public class CustomerListResponse {
     private String membershipRank;
     private String avatarUrl;
     private String address;
-    private String status;
+    private Boolean isActive;
 }

@@ -11,13 +11,12 @@ import org.example.storemanager.repository.partnerarea.CustomerRepository;
 import org.example.storemanager.service.common.CloudinaryService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-
+import org.springframework.http.HttpStatus;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -38,7 +37,12 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CreateCustomerResponse createCustomer(CreateCustomerRequest req) {
-        if (customerRepository.existsByPhone(req.getPhone())) throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
+        if (customerRepository.existsByPhone(req.getPhone()))
+            throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
+
+        if (req.getEmail() != null && customerRepository.existsByEmail(req.getEmail())) {
+            throw new DuplicateResourceException("Customer", "email", req.getEmail());
+        }
 
         Customer c = new Customer();
         c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
@@ -55,7 +59,9 @@ public class CustomerServiceImpl implements CustomerService {
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
         }
+
         Customer saved = customerRepository.save(c);
+        Customer refreshed = customerRepository.findById(saved.getId()).orElse(saved);
 
         return CreateCustomerResponse.builder()
                 .id(saved.getId())
@@ -64,9 +70,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .phone(saved.getPhone())
                 .email(saved.getEmail())
                 .address(saved.getAddress())
-                .avatarUrl(saved.getAvatarUrl())
-                .status(saved.getIsActive() ? "Hoạt động" : "Không hoạt động")
-                .membershipRank(saved.getMembershipRank())
+                .avatarUrl(refreshed.getAvatarUrl())
+                .isActive(c.getIsActive())                .membershipRank(saved.getMembershipRank())
                 .points(saved.getPoints())
                 .totalSpend(saved.getTotalSpend())
                 .createdAt(saved.getCreatedAt())
@@ -78,12 +83,11 @@ public class CustomerServiceImpl implements CustomerService {
     public UpdateCustomerResponse updateCustomer(Long id, UpdateCustomerRequest req) {
         Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
-        // Cập nhật các trường
         c.setName(req.getName());
         c.setPhone(req.getPhone());
         c.setEmail(req.getEmail());
         c.setAddress(req.getAddress());
-        if (req.getIsActive() != null) c.setIsActive(Boolean.valueOf(req.getIsActive()));
+        if (req.getIsActive() != null) c.setIsActive(req.getIsActive());
 
         c.setUpdatedBy(getCurrentUsername());
         c.setUpdatedAt(LocalDateTime.now());
@@ -92,8 +96,7 @@ public class CustomerServiceImpl implements CustomerService {
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
         }
-
-        Customer saved = customerRepository.save(c); // Lưu xong rồi mới lấy object saved để trả về
+        Customer saved = customerRepository.save(c);
 
         return UpdateCustomerResponse.builder()
                 .id(saved.getId())
@@ -105,7 +108,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .membershipRank(saved.getMembershipRank())
                 .updatedAt(saved.getUpdatedAt())
                 .updatedBy(saved.getUpdatedBy())
-                .status(saved.getIsActive() ? "Hoạt động" : "Không hoạt động")
+                .isActive(saved.getIsActive())
                 .message("Cập nhật thành công")
                 .build();
     }
@@ -116,25 +119,22 @@ public class CustomerServiceImpl implements CustomerService {
         c.setIsActive(isActive);
         c.setUpdatedAt(LocalDateTime.now());
         customerRepository.save(c);
-        return UpdateCustomerResponse.builder().id(c.getId())
-                .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động").message("Cập nhật trạng thái thành công").build();
+        return UpdateCustomerResponse.builder()
+                .id(c.getId())
+                .isActive(c.getIsActive())
+                .message("Cập nhật trạng thái thành công").build();
     }
 
     @Override
     public DeleteCustomerResponse deleteCustomer(Long id) {
-        Customer c = customerRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
-        // Nếu khách đã bị xóa rồi thì không cần xóa nữa (tùy chọn)
         if (Boolean.TRUE.equals(c.getIsDeleted())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khách hàng này đã bị xóa rồi!");
         }
 
-        // Thực hiện xóa mềm:
-        c.setIsDeleted(true);      // Đánh dấu đã xóa
-        c.setIsActive(false);      // Chuyển trạng thái sang Không hoạt động
-
-        // Ghi nhận thông tin người xóa (để nó không bị null)
+        c.setIsDeleted(true);
+        c.setIsActive(false);
         c.setDeletedAt(LocalDateTime.now());
         c.setDeletedBy(getCurrentUsername());
 
@@ -159,7 +159,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .email(c.getEmail())
                 .address(c.getAddress())
                 .avatarUrl(c.getAvatarUrl())
-                .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động")
+                .isActive(c.getIsActive())
                 .membershipRank(c.getMembershipRank())
                 .points(c.getPoints())
                 .totalSpend(c.getTotalSpend())
@@ -172,8 +172,12 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public Page<CustomerListResponse> getAllCustomers(int page, int size, String keyword) {
         return customerRepository.findByIsDeletedFalse(PageRequest.of(page, size)).map(c ->
-                CustomerListResponse.builder().id(c.getId()).name(c.getName()).phone(c.getPhone())
-                        .status(c.getIsActive() ? "Hoạt động" : "Không hoạt động").avatarUrl(c.getAvatarUrl()).build());
+                CustomerListResponse.builder()
+                        .id(c.getId())
+                        .name(c.getName())
+                        .phone(c.getPhone())
+                        .isActive(c.getIsActive())
+                        .avatarUrl(c.getAvatarUrl()).build());
     }
 
     @Override public List<SalesHistoryResponse> getSalesHistory(Long id) { return Collections.emptyList(); }
