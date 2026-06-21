@@ -15,6 +15,7 @@ public class UpdateRoleResponse {
     private Long id;
     private String roleName;
     private Boolean isActive;
+    private String description;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

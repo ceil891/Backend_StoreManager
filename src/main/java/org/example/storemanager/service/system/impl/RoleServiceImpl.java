@@ -10,6 +10,8 @@ import org.example.storemanager.dto.response.system.role.*;
 import org.example.storemanager.entity.system.Permission;
 import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.entity.system.RolePermission;
+import org.example.storemanager.enums.ErrorCode;
+import org.example.storemanager.exception.BusinessException;
 import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.system.PermissionRepository;
@@ -269,6 +271,30 @@ public class RoleServiceImpl implements RoleService {
         return Sort.by(direction, property);
     }
 
+    @Override
+    @Transactional
+    @LogActivity(actionType = "RESTORE", entityName = "Role", entityClass = Role.class)
+    public RoleResponse restoreRole(Long id) {
+        // Tìm kiếm thực thể bao gồm cả bản ghi đã bị xóa mềm
+        Role role = roleRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "id", id));
+
+        if (Boolean.FALSE.equals(role.getIsDeleted())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Vai trò này hiện không nằm trong trạng thái đã xóa");
+        }
+
+        // Đảo ngược trạng thái xóa mềm
+        role.setIsDeleted(false);
+        role.setIsActive(true);
+        role.setDeletedAt(null);
+        role.setDeletedBy(null);
+        role.setUpdatedBy(getCurrentUsername());
+        role.setUpdatedAt(LocalDateTime.now());
+
+        Role restoredRole = roleRepository.save(role);
+        return mapToResponse(restoredRole);
+    }
+
     private RoleResponse mapToResponse(Role role) {
         return RoleResponse.builder()
                 .id(role.getId())
@@ -288,6 +314,7 @@ public class RoleServiceImpl implements RoleService {
                 .id(role.getId())
                 .roleName(role.getRoleName())
                 .description(role.getDescription())
+                .isActive(role.getIsActive())
                 .createdBy(role.getCreatedBy())
                 .createdAt(role.getCreatedAt() != null ? role.getCreatedAt() : LocalDateTime.now())
                 .build();
@@ -297,6 +324,7 @@ public class RoleServiceImpl implements RoleService {
         return UpdateRoleResponse.builder()
                 .id(role.getId())
                 .roleName(role.getRoleName())
+                .description(role.getDescription())
                 .isActive(role.getIsActive())
                 .updatedBy(role.getUpdatedBy())
                 .updatedAt(role.getUpdatedAt() != null ? role.getUpdatedAt() : LocalDateTime.now())

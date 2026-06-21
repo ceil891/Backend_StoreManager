@@ -218,6 +218,30 @@ public class UserServiceImpl implements UserService {
         return Sort.by(direction, property);
     }
 
+    @Override
+    @Transactional
+    @LogActivity(actionType = "RESTORE", entityName = "User", entityClass = User.class)
+    public UserResponse restoreUser(Long id) {
+        // Tìm kiếm thực thể bao gồm cả bản ghi đã bị xóa mềm
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+
+        if (Boolean.FALSE.equals(user.getIsDeleted())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Tài khoản này hiện không nằm trong trạng thái đã xóa");
+        }
+
+        // Trả trạng thái tài khoản về ACTIVE
+        user.setIsDeleted(false);
+        user.setStatus("ACTIVE");
+        user.setDeletedAt(null);
+        user.setDeletedBy(null);
+        user.setUpdatedBy(getCurrentUsername());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        User restoredUser = userRepository.save(user);
+        return mapToResponse(restoredUser);
+    }
+
     private UserResponse mapToResponse(User user) {
         return UserResponse.builder()
                 .id(user.getId())
@@ -241,6 +265,9 @@ public class UserServiceImpl implements UserService {
                 .id(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .status(user.getStatus())
                 .createdBy(user.getCreatedBy())
                 .createdAt(user.getCreatedAt() != null ? user.getCreatedAt() : LocalDateTime.now())
                 .build();
@@ -250,6 +277,10 @@ public class UserServiceImpl implements UserService {
         return UpdateUserResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .status(user.getStatus())
                 .status(user.getStatus())
                 .updatedBy(user.getUpdatedBy())
                 .updatedAt(user.getUpdatedAt() != null ? user.getUpdatedAt() : LocalDateTime.now())

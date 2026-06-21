@@ -28,4 +28,6 @@ public interface UserService {
     PageResponse<UserResponse> getUsersPaginated(String search, String status, Long roleId, Long branchId, int page, int size, String sort, boolean includeDeleted);
 
     void resetPassword(Long id, ResetPasswordRequest request);
+
+    UserResponse restoreUser(Long id);
 }

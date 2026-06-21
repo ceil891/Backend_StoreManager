@@ -9,27 +9,23 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface PermissionRepository extends JpaRepository<Permission, Long> {
 
-    Optional<Permission> findByIdAndIsDeletedFalse(Long id);
-
+    // Hàm kiểm tra xem mã quyền đã tồn tại chưa (dùng cho DataSeeder)
     boolean existsByPermissionCode(String permissionCode);
 
-    boolean existsByPermissionCodeAndIsDeletedFalse(String permissionCode);
+    // BỔ SUNG HÀM NÀY ĐỂ SỬA LỖI findAllByIsDeletedFalse
+    List<Permission> findAllByIsDeletedFalse();
 
-    // Lấy danh sách permission chưa bị xóa để nhóm theo module
-    List<Permission> findByIsDeletedFalse();
-
+    // Bổ sung hàm tìm kiếm, lọc và phân trang (dành cho getAllPermissions và getPermissionsPaginated)
     @Query("SELECT p FROM Permission p WHERE " +
-            "(:includeDeleted = true OR p.isDeleted = false) AND " +
-            "(:isActive IS NULL OR p.isActive = :isActive) AND " +
-            "(:search IS NULL OR :search = '' OR " +
-            "LOWER(p.permissionCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(p.module) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(:search IS NULL OR LOWER(p.permissionCode) LIKE LOWER(CONCAT('%', :search, '%')) " +
+            "OR LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%')) " +
+            "OR LOWER(p.module) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+            "AND (:isActive IS NULL OR p.isActive = :isActive) " +
+            "AND (:includeDeleted = TRUE OR p.isDeleted = FALSE)")
     Page<Permission> findAllPermissionsIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

@@ -15,6 +15,7 @@ public class CreateRoleResponse {
     private Long id;
     private String roleName;
     private String description;
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private String createdBy;
 }

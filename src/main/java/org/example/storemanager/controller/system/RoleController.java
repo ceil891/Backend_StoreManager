@@ -102,4 +102,12 @@ public class RoleController {
         RemovePermissionsResponse response = roleService.removePermissions(id, request);
         return ResponseEntity.ok(ApiResponse.ok("Xóa phân quyền khỏi vai trò thành công", response));
     }
+
+    // ========== KHÔI PHỤC (RESTORE) ==========
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("@securityEvaluator.hasPermission('system:role:restore')")
+    public ResponseEntity<ApiResponse<RoleResponse>> restoreRole(@PathVariable Long id) {
+        RoleResponse response = roleService.restoreRole(id);
+        return ResponseEntity.ok(ApiResponse.ok("Khôi phục vai trò thành công", response));
+    }
 }

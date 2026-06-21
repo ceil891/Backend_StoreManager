@@ -98,4 +98,12 @@ public class UserController {
                     userService.getAllUsers(search, status, roleId, branchId, sort, includeDeleted)));
         }
     }
+
+    // ========== KHÔI PHỤC (RESTORE) ==========
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("@securityEvaluator.hasPermission('system:user:restore')")
+    public ResponseEntity<ApiResponse<UserResponse>> restoreUser(@PathVariable Long id) {
+        UserResponse response = userService.restoreUser(id);
+        return ResponseEntity.ok(ApiResponse.ok("Khôi phục tài khoản người dùng thành công", response));
+    }
 }

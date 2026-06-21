@@ -28,5 +28,7 @@ public interface RoleService {
 
     RemovePermissionsResponse removePermissions(Long roleId, AssignPermissionsRequest request);
 
+    RoleResponse restoreRole(Long id);
+
 
 }
