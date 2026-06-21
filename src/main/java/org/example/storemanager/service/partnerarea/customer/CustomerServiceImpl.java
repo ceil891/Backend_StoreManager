@@ -61,21 +61,23 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         Customer saved = customerRepository.save(c);
+        // Lấy lại từ DB để chắc chắn có dữ liệu mới nhất
         Customer refreshed = customerRepository.findById(saved.getId()).orElse(saved);
 
         return CreateCustomerResponse.builder()
-                .id(saved.getId())
-                .customerCode(saved.getCustomerCode())
-                .name(saved.getName())
-                .phone(saved.getPhone())
-                .email(saved.getEmail())
-                .address(saved.getAddress())
+                .id(refreshed.getId())
+                .customerCode(refreshed.getCustomerCode())
+                .name(refreshed.getName())
+                .phone(refreshed.getPhone())
+                .email(refreshed.getEmail())
+                .address(refreshed.getAddress())
                 .avatarUrl(refreshed.getAvatarUrl())
-                .isActive(c.getIsActive())                .membershipRank(saved.getMembershipRank())
-                .points(saved.getPoints())
-                .totalSpend(saved.getTotalSpend())
-                .createdAt(saved.getCreatedAt())
-                .createdBy(saved.getCreatedBy())
+                .isActive(refreshed.getIsActive())
+                .membershipRank(refreshed.getMembershipRank())
+                .points(refreshed.getPoints())
+                .totalSpend(refreshed.getTotalSpend())
+                .createdAt(refreshed.getCreatedAt())
+                .createdBy(refreshed.getCreatedBy())
                 .message("Tạo thành công").build();
     }
 
@@ -150,7 +152,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CustomerDetailResponse getCustomerById(Long id) {
-        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
         return CustomerDetailResponse.builder()
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())

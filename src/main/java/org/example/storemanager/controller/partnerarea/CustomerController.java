@@ -34,12 +34,17 @@ public class CustomerController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<?>> getAllCustomers(@RequestParam(defaultValue = "0") int page,
-                                                          @RequestParam(defaultValue = "10") int size,
-                                                          @RequestParam(required = false) String keyword) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.getAllCustomers(page, size, keyword), "Lấy danh sách thành công"));
-    }
+    public ResponseEntity<ApiResponse<?>> getAllCustomers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
 
+        // Gọi service và trả về kết quả
+        return ResponseEntity.ok(ApiResponse.success(
+                customerService.getAllCustomers(page, size, keyword),
+                "Lấy danh sách thành công"
+        ));
+    }
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> getCustomerDetail(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerById(id), "Lấy chi tiết thành công"));
