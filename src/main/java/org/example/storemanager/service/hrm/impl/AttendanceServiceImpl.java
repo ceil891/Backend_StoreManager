@@ -1,7 +1,10 @@
 package org.example.storemanager.service.hrm.impl;
 
 import org.example.storemanager.config.LogActivity;
-import org.example.storemanager.dto.request.hrm.attendance.*;
+import org.example.storemanager.dto.request.hrm.attendance.CheckInRequest;
+import org.example.storemanager.dto.request.hrm.attendance.CheckOutRequest;
+import org.example.storemanager.dto.request.hrm.attendance.CreateAttendanceRequest;
+import org.example.storemanager.dto.request.hrm.attendance.UpdateAttendanceRequest;
 import org.example.storemanager.dto.response.common.PageResponse;
 import org.example.storemanager.dto.response.hrm.attendance.*;
 import org.example.storemanager.entity.hrm.Attendance;
@@ -263,48 +266,6 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .overtimeHours(overtimeHours)
                 .details(details)
                 .build();
-    }
-
-    @Override
-    @LogActivity(actionType = "ADJUST", entityName = "Attendance", entityClass = Attendance.class)
-    public AttendanceResponse adjustAttendance(AdjustAttendanceRequest request) {
-        Attendance attendance;
-        if (request.getAttendanceId() != null) {
-            attendance = attendanceRepository.findByIdAndIsDeletedFalse(request.getAttendanceId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Attendance", "id", request.getAttendanceId()));
-        } else if (request.getUserId() != null && request.getWorkDate() != null) {
-            attendance = attendanceRepository.findByUserIdAndWorkDateAndIsDeletedFalse(request.getUserId(), request.getWorkDate())
-                    .orElseGet(() -> {
-                        Attendance newRecord = Attendance.builder()
-                                .user(resolveUser(request.getUserId()))
-                                .workDate(request.getWorkDate())
-                                .status(AttendanceStatus.ABSENT.name())
-                                .build();
-                        newRecord.setIsDeleted(false);
-                        newRecord.setCreatedBy(HrmServiceSupport.getCurrentUsername());
-                        return newRecord;
-                    });
-        } else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần attendanceId hoặc (userId + workDate)");
-        }
-
-        if (request.getRequestedCheckInTime() != null) {
-            attendance.setCheckInTime(request.getRequestedCheckInTime());
-        }
-        if (request.getRequestedCheckOutTime() != null) {
-            attendance.setCheckOutTime(request.getRequestedCheckOutTime());
-        }
-        if (attendance.getCheckInTime() != null) {
-            attendance.setStatus(attendance.getCheckInTime().toLocalTime().isAfter(STANDARD_START)
-                    ? AttendanceStatus.LATE.name()
-                    : AttendanceStatus.PRESENT.name());
-        }
-
-        String adjustNote = "[Yêu cầu chỉnh sửa] " + request.getReason();
-        attendance.setNote(attendance.getNote() != null ? attendance.getNote() + "\n" + adjustNote : adjustNote);
-        attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
-
-        return mapToResponse(attendanceRepository.save(attendance));
     }
 
     private User resolveUser(Long userId) {

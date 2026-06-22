@@ -2,6 +2,7 @@ package org.example.storemanager.dto.response.hrm.attendance;
 
 import lombok.Builder;
 import lombok.Data;
+import org.example.storemanager.dto.response.hrm.attendance.AttendanceResponse;
 
 import java.math.BigDecimal;
 import java.util.List;

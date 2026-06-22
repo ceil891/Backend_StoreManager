@@ -1,7 +1,10 @@
 package org.example.storemanager.controller.hrm;
 
 import jakarta.validation.Valid;
-import org.example.storemanager.dto.request.hrm.attendance.*;
+import org.example.storemanager.dto.request.hrm.attendance.CheckInRequest;
+import org.example.storemanager.dto.request.hrm.attendance.CheckOutRequest;
+import org.example.storemanager.dto.request.hrm.attendance.CreateAttendanceRequest;
+import org.example.storemanager.dto.request.hrm.attendance.UpdateAttendanceRequest;
 import org.example.storemanager.dto.response.common.ApiResponse;
 import org.example.storemanager.dto.response.hrm.attendance.*;
 import org.example.storemanager.service.hrm.AttendanceService;
