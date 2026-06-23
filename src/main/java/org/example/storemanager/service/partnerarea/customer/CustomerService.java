@@ -18,7 +18,8 @@ public interface CustomerService {
 
     // --- Các thao tác Truy vấn ---
     CustomerDetailResponse getCustomerById(Long id);
-    Page<CustomerListResponse> getAllCustomers(int page, int size, String keyword);
+
+    Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive);
 
     // --- Các báo cáo & Tiện ích ---
     List<SalesHistoryResponse> getSalesHistory(Long id);

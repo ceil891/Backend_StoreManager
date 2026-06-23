@@ -1,4 +1,4 @@
-package org.example.storemanager.service.partnerarea.customer;
+package org.example.storemanager.service.partnerarea.customer.Impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustomerRequest;
@@ -9,8 +9,10 @@ import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.partnerarea.CustomerRepository;
 import org.example.storemanager.service.common.CloudinaryService;
+import org.example.storemanager.service.partnerarea.customer.CustomerService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -173,14 +175,30 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
-    public Page<CustomerListResponse> getAllCustomers(int page, int size, String keyword) {
-        return customerRepository.findByIsDeletedFalse(PageRequest.of(page, size)).map(c ->
-                CustomerListResponse.builder()
-                        .id(c.getId())
-                        .name(c.getName())
-                        .phone(c.getPhone())
-                        .isActive(c.getIsActive())
-                        .avatarUrl(c.getAvatarUrl()).build());
+    public Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive) {
+        Pageable pageable = PageRequest.of(page, size);
+
+        // 1. Nếu không lọc (null): Lấy tất cả trừ những cái đã xóa hẳn (is_deleted = true)
+        if (isActive == null) {
+            return customerRepository.findByIsDeletedFalse(pageable)
+                    .map(this::mapToListResponse);
+        }
+        // 2. Nếu có lọc: Chỉ cần lọc theo isActive là được
+        else {
+            return customerRepository.findByIsActive(isActive, pageable)
+                    .map(this::mapToListResponse);
+        }
+    }
+
+    // Thêm hàm map này để code gọn hơn
+    private CustomerListResponse mapToListResponse(Customer c) {
+        return CustomerListResponse.builder()
+                .id(c.getId())
+                .name(c.getName())
+                .phone(c.getPhone())
+                .isActive(c.getIsActive())
+                .avatarUrl(c.getAvatarUrl())
+                .build();
     }
 
     @Override public List<SalesHistoryResponse> getSalesHistory(Long id) { return Collections.emptyList(); }

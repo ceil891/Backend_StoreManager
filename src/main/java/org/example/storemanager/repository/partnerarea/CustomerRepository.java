@@ -16,9 +16,12 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Query("SELECT c FROM Customer c WHERE c.isActive = true AND " +
             "(LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR c.phone LIKE %:keyword%)")
     Page<Customer> searchCustomers(@Param("keyword") String keyword, Pageable pageable);
-
+    // Chỉ lọc trạng thái hoạt động, không quan tâm bị xóa hay chưa
+    Page<Customer> findByIsActive(Boolean isActive, Pageable pageable);
     // 2. Tìm kiếm khách hàng chưa bị xóa mềm
     Page<Customer> findByIsDeletedFalse(Pageable pageable);
+
+    Page<Customer> findByIsActiveAndIsDeletedFalse(Boolean isActive, Pageable pageable);
 
     // 3. Các hàm bổ trợ
     boolean existsByPhone(String phone);
