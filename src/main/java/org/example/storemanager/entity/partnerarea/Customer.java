@@ -34,6 +34,21 @@ public class Customer extends BaseEntity {
     @Column(name = "tax_code", length = 50)
     private String taxCode;
 
+    @Column(name = "avatar_url")
+    private String avatarUrl; // Lưu link ảnh (hoặc path file)
+
+    @Column(name = "membership_rank", length = 20)
+    private String membershipRank; // Đồng, Bạc, Vàng, Kim cương
+
+    @Column(name = "points")
+    private Double points = 0.0; // Điểm tích lũy
+
+    @Column(name = "total_spend")
+    private Double totalSpend = 0.0; // Tổng chi tiêu
+
+    @Column(columnDefinition = "TEXT")
+    private String note; // Ghi chú CSKH
+
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 

@@ -1,6 +1,5 @@
 package org.example.storemanager.service.catalog.impl;
 
-import org.example.storemanager.config.LogActivity;
 import org.example.storemanager.dto.request.catalog.unit.CreateUnitRequest;
 import org.example.storemanager.dto.request.catalog.unit.UpdateUnitRequest;
 import org.example.storemanager.dto.response.catalog.unit.CreateUnitResponse;
@@ -41,7 +40,6 @@ public class UnitServiceImpl implements UnitService {
     }
 
     @Override
-    @LogActivity(actionType = "CREATE", entityName = "Unit", entityClass = Unit.class)
     public CreateUnitResponse createUnit(CreateUnitRequest request) {
         if (unitRepository.existsByUnitCodeAndIsDeletedFalse(request.getUnitCode())) {
             throw new DuplicateResourceException("Unit", "unitCode", request.getUnitCode());
@@ -66,7 +64,6 @@ public class UnitServiceImpl implements UnitService {
     }
 
     @Override
-    @LogActivity(actionType = "UPDATE", entityName = "Unit", entityClass = Unit.class)
     public UpdateUnitResponse updateUnit(Long id, UpdateUnitRequest request) {
         Unit unit = unitRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", id));
@@ -94,7 +91,6 @@ public class UnitServiceImpl implements UnitService {
     }
 
     @Override
-    @LogActivity(actionType = "DELETE", entityName = "Unit", entityClass = Unit.class)
     public DeleteUnitResponse deleteUnit(Long id) {
         Unit unit = unitRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", id));
@@ -125,7 +121,6 @@ public class UnitServiceImpl implements UnitService {
     }
 
     @Override
-    @LogActivity(actionType = "UPDATE_STATUS", entityName = "Unit", entityClass = Unit.class)
     public UpdateUnitResponse updateStatus(Long id, Boolean isActive) {
         Unit unit = unitRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", id));
