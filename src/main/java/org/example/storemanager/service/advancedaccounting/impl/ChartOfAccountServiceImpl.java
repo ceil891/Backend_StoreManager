@@ -9,6 +9,7 @@ import org.example.storemanager.repository.advancedaccounting.ChartOfAccountRepo
 import org.example.storemanager.service.advancedaccounting.ChartOfAccountService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,29 +17,39 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @RequiredArgsConstructor
 public class ChartOfAccountServiceImpl implements ChartOfAccountService {
-
     private final ChartOfAccountRepository repository;
 
+    // Hiện thực hóa hàm cũ
     @Override
-    public Page<org.example.storemanager.dto.response.advancedaccounting.AccountResponse> getAll(int page, int size) {
-        return repository.findAll(PageRequest.of(page, size)).map(this::mapToResponse);
+    public Page<AccountResponse> getAll(int page, int size) {
+        // Gọi hàm mới với isActive = null (lấy tất cả)
+        return getAll(null, PageRequest.of(page, size));
+    }
+
+    // Hiện thực hóa hàm mới
+    @Override
+    public Page<AccountResponse> getAll(Boolean isActive, Pageable pageable) {
+        Page<ChartOfAccount> accounts = (isActive == null)
+                ? repository.findAll(pageable)
+                : repository.findByIsActive(isActive, pageable);
+        return accounts.map(this::mapToResponse);
     }
 
     @Override
     public AccountResponse create(CreateAccountRequest req) {
+        ChartOfAccount parent = null;
+        if (req.getParentId() != null) {
+            parent = repository.findById(req.getParentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent Account", "id", req.getParentId()));
+        }
+
         ChartOfAccount account = ChartOfAccount.builder()
                 .accountCode(req.getAccountCode())
                 .accountName(req.getAccountName())
                 .type(req.getType())
-                .isActive(req.getIsActive())
+                .isActive(true)
+                .parent(parent)
                 .build();
-
-        if (req.getParentId() != null) {
-            ChartOfAccount parent = repository.findById(req.getParentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("ChartOfAccount", "id", req.getParentId()));
-            account.setParent(parent);
-        }
-
         return mapToResponse(repository.save(account));
     }
 
@@ -54,7 +65,7 @@ public class ChartOfAccountServiceImpl implements ChartOfAccountService {
 
         if (req.getParentId() != null) {
             ChartOfAccount parent = repository.findById(req.getParentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("ChartOfAccount", "id", req.getParentId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent Account", "id", req.getParentId()));
             account.setParent(parent);
         } else {
             account.setParent(null);
@@ -66,9 +77,8 @@ public class ChartOfAccountServiceImpl implements ChartOfAccountService {
     @Override
     public void delete(Long id) {
         ChartOfAccount account = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("ChartOfAccount", "id", id));
-
-        // Thực hiện xóa mềm
+                .orElseThrow(() -> new ResourceNotFoundException("Account", "id", id));
+        // Xóa mềm: cập nhật trạng thái
         account.setIsActive(false);
         repository.save(account);
     }

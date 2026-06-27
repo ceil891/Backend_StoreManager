@@ -9,8 +9,9 @@ import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface ChartOfAccountRepository extends JpaRepository<ChartOfAccount, Long> {
-    boolean existsByAccountCode(String accountCode);
+    // Phân trang và lọc theo trạng thái
+    Page<ChartOfAccount> findByIsActive(Boolean isActive, Pageable pageable);
 
-    // Tìm các tài khoản cha (parentId is null) để hiển thị danh sách cấp 1
+    // Tìm các tài khoản cha (parentId is null)
     Page<ChartOfAccount> findByParentIsNull(Pageable pageable);
 }
