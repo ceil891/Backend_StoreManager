@@ -15,7 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/branches")
+@RequestMapping("/api/v1/system/branches")
 public class BranchController {
 
     private final BranchService branchService;

@@ -11,6 +11,7 @@ public class DeleteUserResponse {
     private Long id;
     private String username;
     private Boolean isDeleted;
+    private String deletionReason;
     private LocalDateTime deletedAt;
     private String deletedBy;
 }

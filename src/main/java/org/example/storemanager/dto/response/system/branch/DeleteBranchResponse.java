@@ -14,6 +14,7 @@ public class DeleteBranchResponse {
     private Long id;
     private String branchCode;
     private Boolean isDeleted;
+    private String deletionReason;
     private LocalDateTime deletedAt;
     private String deletedBy;
 }

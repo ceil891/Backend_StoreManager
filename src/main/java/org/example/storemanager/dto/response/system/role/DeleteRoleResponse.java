@@ -17,4 +17,5 @@ public class DeleteRoleResponse {
     private Boolean isDeleted;
     private LocalDateTime deletedAt;
     private String deletedBy;
+    private String deletionReason;
 }
