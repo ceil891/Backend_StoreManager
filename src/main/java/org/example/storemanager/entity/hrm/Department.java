@@ -26,4 +26,7 @@ public class Department extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private User manager; // Trưởng phòng / Người quản lý phòng ban
+
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
 }
