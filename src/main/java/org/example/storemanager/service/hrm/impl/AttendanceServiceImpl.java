@@ -14,7 +14,15 @@ import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.hrm.AttendanceRepository;
 import org.example.storemanager.repository.system.UserRepository;
 import org.example.storemanager.service.hrm.AttendanceService;
-import org.example.storemanager.service.hrm.HrmServiceSupport;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.server.ResponseStatusException;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import org.example.storemanager.entity.BaseEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -62,7 +70,7 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         attendance.setIsLocked(Boolean.FALSE.equals(request.getIsActive()));
         attendance.setIsDeleted(false);
-        attendance.setCreatedBy(HrmServiceSupport.getCurrentUsername());
+        attendance.setCreatedBy(getCurrentUsername());
 
         return mapToCreateResponse(attendanceRepository.save(attendance));
     }
@@ -82,7 +90,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         if (request.getIsActive() != null) {
             attendance.setIsLocked(!request.getIsActive());
         }
-        attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+        attendance.setUpdatedBy(getCurrentUsername());
 
         return mapToUpdateResponse(attendanceRepository.save(attendance));
     }
@@ -93,8 +101,8 @@ public class AttendanceServiceImpl implements AttendanceService {
         Attendance attendance = attendanceRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Attendance", "id", id));
 
-        HrmServiceSupport.requireInactiveBeforeDelete(attendance, "attendance-" + id);
-        HrmServiceSupport.applySoftDelete(attendance);
+        requireInactiveBeforeDelete(attendance, "attendance-" + id);
+        applySoftDelete(attendance);
         Attendance deleted = attendanceRepository.save(attendance);
 
         return DeleteAttendanceResponse.builder()
@@ -113,7 +121,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attendance", "id", id));
 
         attendance.setIsLocked(!isActive);
-        attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+        attendance.setUpdatedBy(getCurrentUsername());
         return mapToUpdateResponse(attendanceRepository.save(attendance));
     }
 
@@ -129,7 +137,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Transactional(readOnly = true)
     public List<AttendanceResponse> getAll(String search, Boolean isActive, Long userId, String status,
                                            LocalDate workDateFrom, LocalDate workDateTo, String sort, boolean includeDeleted) {
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, HrmServiceSupport.parseSort(sort, "workDate"));
+        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, parseSort(sort, "workDate"));
         return attendanceRepository.findAllFiltered(search, isActive, userId, status, workDateFrom, workDateTo, includeDeleted, pageable)
                 .getContent().stream().map(this::mapToResponse).collect(Collectors.toList());
     }
@@ -139,7 +147,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     public PageResponse<AttendanceResponse> getPaginated(String search, Boolean isActive, Long userId, String status,
                                                          LocalDate workDateFrom, LocalDate workDateTo,
                                                          int page, int size, String sort, boolean includeDeleted) {
-        Pageable pageable = PageRequest.of(page, size, HrmServiceSupport.parseSort(sort, "workDate"));
+        Pageable pageable = PageRequest.of(page, size, parseSort(sort, "workDate"));
         Page<Attendance> pageResult = attendanceRepository.findAllFiltered(search, isActive, userId, status, workDateFrom, workDateTo, includeDeleted, pageable);
         List<AttendanceResponse> content = pageResult.getContent().stream().map(this::mapToResponse).collect(Collectors.toList());
 
@@ -183,9 +191,9 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         if (attendance.getId() == null) {
             attendance.setIsDeleted(false);
-            attendance.setCreatedBy(HrmServiceSupport.getCurrentUsername());
+            attendance.setCreatedBy(getCurrentUsername());
         } else {
-            attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+            attendance.setUpdatedBy(getCurrentUsername());
         }
 
         return mapToResponse(attendanceRepository.save(attendance));
@@ -208,7 +216,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         }
 
         attendance.setCheckOutTime(LocalDateTime.now());
-        attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+        attendance.setUpdatedBy(getCurrentUsername());
         return mapToResponse(attendanceRepository.save(attendance));
     }
 
@@ -283,7 +291,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .checkOutTime(attendance.getCheckOutTime())
                 .gpsLocation(attendance.getGpsLocation())
                 .status(attendance.getStatus())
-                .isActive(HrmServiceSupport.isActive(attendance.getIsLocked()))
+                .isActive(isActive(attendance.getIsLocked()))
                 .isDeleted(attendance.getIsDeleted())
                 .note(attendance.getNote())
                 .createdAt(attendance.getCreatedAt())
@@ -300,7 +308,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .checkOutTime(attendance.getCheckOutTime())
                 .gpsLocation(attendance.getGpsLocation())
                 .status(attendance.getStatus())
-                .isActive(HrmServiceSupport.isActive(attendance.getIsLocked()))
+                .isActive(isActive(attendance.getIsLocked()))
                 .createdAt(attendance.getCreatedAt())
                 .createdBy(attendance.getCreatedBy())
                 .build();
@@ -315,9 +323,81 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .checkOutTime(attendance.getCheckOutTime())
                 .gpsLocation(attendance.getGpsLocation())
                 .status(attendance.getStatus())
-                .isActive(HrmServiceSupport.isActive(attendance.getIsLocked()))
+                .isActive(isActive(attendance.getIsLocked()))
                 .updatedAt(attendance.getUpdatedAt())
                 .updatedBy(attendance.getUpdatedBy())
                 .build();
     }
+
+    // ---- Hrm support methods (inlined) ----
+    private static String getCurrentUsername() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+            return auth.getName();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Người dùng chưa đăng nhập hoặc token không hợp lệ");
+    }
+
+    private static Sort parseSort(String sortParam, String defaultProperty) {
+        if (sortParam == null || sortParam.isEmpty()) {
+            return Sort.by(defaultProperty).descending();
+        }
+        String[] parts = sortParam.split(",");
+        String property = parts[0];
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (parts.length > 1 && "desc".equalsIgnoreCase(parts[1])) {
+            direction = Sort.Direction.DESC;
+        }
+        return Sort.by(direction, property);
+    }
+
+    private static boolean isActive(Boolean isLocked) {
+        return !Boolean.TRUE.equals(isLocked);
+    }
+
+    private static void applySoftDelete(BaseEntity entity) {
+        String username = getCurrentUsername();
+        entity.setIsDeleted(true);
+        entity.setIsLocked(true);
+        entity.setDeletedAt(LocalDateTime.now());
+        entity.setDeletedBy(username);
+        entity.setUpdatedBy(username);
+    }
+
+    private static void requireInactiveBeforeDelete(BaseEntity entity, String label) {
+        if (isActive(entity.getIsLocked())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa '" + label + "' vì bản ghi vẫn đang HOẠT ĐỘNG. Vui lòng tắt hoạt động trước."
+            );
+        }
+    }
+
+    private static <E extends Enum<E>> String requireEnumName(String value, Class<E> enumClass, String fieldLabel) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldLabel + " không được để trống");
+        }
+        try {
+            return Enum.valueOf(enumClass, value.trim().toUpperCase()).name();
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    fieldLabel + " không hợp lệ. Giá trị cho phép: " + formatAllowedEnumValues(enumClass)
+            );
+        }
+    }
+
+    private static <E extends Enum<E>> String parseOptionalEnumName(String value, Class<E> enumClass, String fieldLabel) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return requireEnumName(value, enumClass, fieldLabel);
+    }
+
+    private static <E extends Enum<E>> String formatAllowedEnumValues(Class<E> enumClass) {
+        return Arrays.stream(enumClass.getEnumConstants())
+                .map(Enum::name)
+                .collect(Collectors.joining(", "));
+    }
 }
+
