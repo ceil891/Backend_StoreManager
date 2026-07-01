@@ -15,8 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-import static org.example.storemanager.service.hrm.HrmServiceSupport.getCurrentUsername;
-
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -115,6 +113,7 @@ public class SupplierServiceImpl implements SupplierService {
                 .accountHolder(req.getAccountHolder())
                 .description(req.getDescription())
                 .isActive(true)
+                .description(req.getDescription())
                 .build();
 
         // 5. Audit
@@ -137,7 +136,8 @@ public class SupplierServiceImpl implements SupplierService {
                 .creditLimit(saved.getCreditLimit())
                 .isActive(saved.getIsActive())
                 .createdAt(saved.getCreatedAt())
-                .createdBy(saved.getCreatedBy()) // Đã thêm vào đây để trả về
+                .createdBy(saved.getCreatedBy())
+                .description(saved.getDescription())
                 .build();
     }
 
@@ -216,13 +216,34 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     public void delete(Long id) {
+        // 1. Tìm nhà cung cấp
         Supplier s = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhà cung cấp"));
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhà cung cấp với ID: " + id));
 
-        s.setIsActive(false);
+        // 2. Kiểm tra: Nếu vẫn đang hoạt động thì không cho xóa
+        if (Boolean.TRUE.equals(s.getIsActive())) {
+            throw new RuntimeException("Không thể xóa: Nhà cung cấp đang ở trạng thái hoạt động (isActive = true). Vui lòng tắt hoạt động trước.");
+        }
+
+        // 3. Tiến hành xóa mềm (Soft Delete)
         s.setIsDeleted(true);
         s.setDeletedBy(getCurrentUsername());
         s.setDeletedAt(LocalDateTime.now());
+
+        // 4. Lưu lại thay đổi
+        repository.save(s);
+    }
+
+    @Override
+    public void updateStatus(Long id) {
+        Supplier s = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhà cung cấp"));
+
+        // Logic tự động đảo trạng thái: Nếu đang true -> false, false -> true
+        s.setIsActive(!s.getIsActive());
+
+        s.setUpdatedBy(getCurrentUsername());
+        s.setUpdatedAt(LocalDateTime.now());
 
         repository.save(s);
     }

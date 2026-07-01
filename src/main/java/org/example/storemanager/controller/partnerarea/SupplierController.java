@@ -54,6 +54,25 @@ public class SupplierController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> delete(@PathVariable Long id) {
         service.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok("Đã khóa thành công", null));
+        return ResponseEntity.ok(ApiResponse.ok("Đã xóa nhà cung cấp thành công", null));
     }
+
+    // Lấy danh sách đang hoạt động
+    @GetMapping("/active")
+    public ResponseEntity<ApiResponse<?>> getActive(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok("Thành công", service.getAll(true, PageRequest.of(page, size))));
+    }
+
+    // Lấy danh sách đã khóa (không hoạt động)
+    @GetMapping("/inactive")
+    public ResponseEntity<ApiResponse<?>> getInactive(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.ok("Thành công", service.getAll(false, PageRequest.of(page, size))));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<?>> updateStatus(@PathVariable Long id) {
+        service.updateStatus(id); // Gọi hàm mới không cần tham số
+        return ResponseEntity.ok(ApiResponse.ok("Đã đảo trạng thái hoạt động thành công", null));
+    }
+
 }

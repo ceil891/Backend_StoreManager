@@ -21,4 +21,5 @@ public class CreateSupplierResponse {
     private Boolean isActive;
     private String createdBy;
     private LocalDateTime createdAt;
+    private String description;
 }
