@@ -75,16 +75,26 @@ public class DepartmentHrmHrmServiceImpl implements DepartmentHrmService {
         Department department = departmentHrmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Department", "id", id));
 
-        if (departmentHrmRepository.existsByDeptCodeAndIdNotAndIsDeletedFalse(request.getDeptCode(), id)) {
+        // Only check deptCode uniqueness if it's being changed and is not null/blank
+        if (request.getDeptCode() != null && !request.getDeptCode().isBlank() &&
+            !department.getDeptCode().equals(request.getDeptCode()) && 
+            departmentHrmRepository.existsByDeptCodeAndIdNotAndIsDeletedFalse(request.getDeptCode(), id)) {
             throw new DuplicateResourceException("Department", "deptCode", request.getDeptCode());
         }
 
-        department.setDeptCode(request.getDeptCode());
-        department.setDeptName(request.getDeptName());
-        department.setDescription(request.getDescription());
-        department.setManager(resolveManager(request.getManagerId()));
+        if (request.getDeptCode() != null && !request.getDeptCode().isBlank()) {
+            department.setDeptCode(request.getDeptCode());
+        }
+        if (request.getDeptName() != null && !request.getDeptName().isBlank()) {
+            department.setDeptName(request.getDeptName());
+        }
+        if (request.getDescription() != null) {
+            department.setDescription(request.getDescription());
+        }
+        if (request.getManagerId() != null) {
+            department.setManager(resolveManager(request.getManagerId()));
+        }
         if (request.getIsActive() != null) {
-            // Attendance pattern: set isLocked based on provided isActive
             department.setIsLocked(!request.getIsActive());
         }
         department.setUpdatedBy(getCurrentUsername());

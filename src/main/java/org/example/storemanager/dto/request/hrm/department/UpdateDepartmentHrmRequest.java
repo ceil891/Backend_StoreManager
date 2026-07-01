@@ -7,12 +7,10 @@ import lombok.Data;
 @Data
 public class UpdateDepartmentHrmRequest {
 
-    @NotBlank(message = "Mã phòng ban không được để trống")
-    @Size(max = 50)
+    @Size(max = 50, message = "Mã phòng ban tối đa 50 ký tự")
     private String deptCode;
 
-    @NotBlank(message = "Tên phòng ban không được để trống")
-    @Size(max = 150)
+    @Size(max = 150, message = "Tên phòng ban tối đa 150 ký tự")
     private String deptName;
 
     private String description;
