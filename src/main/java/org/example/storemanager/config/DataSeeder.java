@@ -56,6 +56,13 @@ public class DataSeeder implements CommandLineRunner {
         // ========== QUYỀN HẠN MODULE PERMISSION ==========
         addIfAbsent("system:permission:view", "System", "Xem danh sách quyền hạn", pendingPermissions);
 
+        // ========== MODULE HRM - DEPARTMENT ==========
+        addIfAbsent("hrm:department:view", "HRM", "Xem danh sách và chi tiết phòng ban", pendingPermissions);
+        addIfAbsent("hrm:department:create", "HRM", "Tạo mới phòng ban", pendingPermissions);
+        addIfAbsent("hrm:department:update", "HRM", "Cập nhật thông tin phòng ban", pendingPermissions);
+        addIfAbsent("hrm:department:update-status", "HRM", "Cập nhật trạng thái phòng ban", pendingPermissions);
+        addIfAbsent("hrm:department:delete", "HRM", "Xóa phòng ban", pendingPermissions);
+
         if (!pendingPermissions.isEmpty()) {
             // FIX LỖI: Dùng saveAllAndFlush để ép JPA đẩy ngay xuống Database
             permissionRepository.saveAllAndFlush(pendingPermissions);
