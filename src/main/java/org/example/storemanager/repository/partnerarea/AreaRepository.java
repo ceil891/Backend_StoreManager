@@ -6,8 +6,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface AreaRepository extends JpaRepository<Area, Long> {
     boolean existsByAreaCode(String areaCode);
-    Page<Area> findByIsActive(Boolean isActive, Pageable pageable);
+
+    List<Area> findByParentId(Long parentId);
+
+    List<Area> findByLevel(Integer level);
 }

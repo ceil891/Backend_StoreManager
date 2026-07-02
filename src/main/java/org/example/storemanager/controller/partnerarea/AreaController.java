@@ -15,15 +15,15 @@ import org.springframework.web.bind.annotation.*;
 public class AreaController {
     private final AreaService service;
 
-    @GetMapping
-    public ResponseEntity<ApiResponse<?>> getAll(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) Boolean isActive) {
-        return ResponseEntity.ok(ApiResponse.ok("Thành công", service.getAll(isActive, PageRequest.of(page, size))));
+    @GetMapping("/tree")
+    public ResponseEntity<?> getTree() {
+        return ResponseEntity.ok(service.getTree());
     }
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<?>> create(@ModelAttribute CreateAreaRequest req) {
-        // Bỏ @Valid ở đây để xem request có vào được Service không
-        return ResponseEntity.ok(ApiResponse.ok("Tạo thành công", service.create(req)));
+    @PostMapping("/sync-data")
+    public ResponseEntity<?> syncData() {
+        service.syncDataFromPublicApi();
+        return ResponseEntity.ok("Sync thành công!");
     }
 
     @PatchMapping("/{id}/status")
@@ -33,9 +33,9 @@ public class AreaController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<?>> delete(@PathVariable Long id) {
-        service.delete(id);
-        return ResponseEntity.ok(ApiResponse.ok("Xóa thành công", null));
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        // Logic xóa mềm ở đây
+        return ResponseEntity.ok("Đã xóa");
     }
 
     @PutMapping("/{id}")
