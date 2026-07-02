@@ -25,4 +25,8 @@ public class Area extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Area parent; // Khóa ngoại trỏ đến khu vực cha
+
+    //Thêm trạng thái của khu vựcc
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
 }
