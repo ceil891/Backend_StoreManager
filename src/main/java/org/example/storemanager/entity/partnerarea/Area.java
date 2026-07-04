@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 
+import java.util.List;
+
 @Entity
 @Table(name = "areas")
 @Data
@@ -22,11 +24,21 @@ public class Area extends BaseEntity {
     @Column(name = "area_level")
     private Integer level; // Cấp bậc: 1 (Quốc gia), 2 (Tỉnh), 3 (Huyện)...
 
+    //Thêm type để lấy địa chỉ chi tiết
+    private String type;
+
+    //sửa lazy thành eager
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Area parent; // Khóa ngoại trỏ đến khu vực cha
 
+    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY) // Tối ưu: chỉ load con khi cần
+    private List<Area> children;
+
     //Thêm trạng thái của khu vựcc
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
+
+    @Builder.Default
+    private Boolean isDeleted = false;
 }

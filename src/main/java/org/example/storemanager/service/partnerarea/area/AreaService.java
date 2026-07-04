@@ -2,22 +2,21 @@ package org.example.storemanager.service.partnerarea.area;
 
 import org.example.storemanager.dto.request.partnerarea.area.CreateAreaRequest;
 import org.example.storemanager.dto.response.partnerarea.area.AreaListResponse;
-import org.example.storemanager.dto.response.partnerarea.area.AreaTreeResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.List;
 
 public interface AreaService {
-    // 1. Quản lý cơ bản
-    AreaListResponse create(CreateAreaRequest req);
-    AreaListResponse update(Long id, CreateAreaRequest req);
-    void updateStatus(Long id); // Bật/Tắt trạng thái
-    void delete(Long id);       // Xóa mềm
-
-    // 2. Tìm kiếm & Hiển thị
-    Page<AreaListResponse> getAll(Boolean isActive, Pageable pageable);
-    List<AreaTreeResponse> getTree();
-
-    // 3. Hệ thống
-    void syncDataFromPublicApi();
+    void syncDataFromPublicApi(); // API 1
+    AreaListResponse create(CreateAreaRequest req); // API 2
+    Page<AreaListResponse> getAll(Pageable pageable, String search, String type); // API 3
+    AreaListResponse getById(Long id); // API 4
+    AreaListResponse update(Long id, CreateAreaRequest req); // API 5
+    AreaListResponse delete(Long id); // API 6
+    AreaListResponse toggleStatus(Long id); // API 7
+    List<AreaListResponse> getTree(); // API 8
+    List<AreaListResponse> getChildren(Long parentId); // API 9
+    List<AreaListResponse> getByType(String type); // API 10
+    List<AreaListResponse> getDropdown(); // API 11
+    boolean exists(String code); // API 12
 }

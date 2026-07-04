@@ -8,14 +8,10 @@ import lombok.Data;
 
 @Data
 public class CreateAreaRequest {
-    // Xóa hết @NotBlank, @Size hoặc bất kỳ annotation nào ở đây
-    private String areaCode;
-
-    @NotBlank(message = "Tên khu vực không được để trống")
-    private String areaName;
-
-    @NotNull(message = "Cấp độ không được để trống")
+    private String code;     // Thay cho areaCode
+    private String name;     // Thay cho areaName
     private Integer level;
-
-    private Long parentId;
+    private String type;     // Thêm trường này (PROVINCE, DISTRICT,...)
+    private Long parentId;   // Để gắn kết cha con
+    private Boolean isActive;
 }
