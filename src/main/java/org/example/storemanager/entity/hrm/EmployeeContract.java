@@ -38,4 +38,34 @@ public class EmployeeContract extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "position_id", nullable = false)
     private Position position;
+
+    @Column(name = "salary")
+    private Double salary;
+
+    @Column(name = "allowance")
+    private Double allowance; // phụ cấp
+
+    @Column(name = "social_insurance_salary")
+    private Double socialInsuranceSalary; // lương tính bảo hiểm xã hội
+
+    @Column(name = "contract_url")
+    private String contractUrl; // URL hợp đồng
+
+    @Column(name = "signing_date")
+    private LocalDate signingDate; // ngày kí hợp đồng
+
+    @Column(name = "working_hours")
+    private Double workingHours; // giờ làm việc
+
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
+
+    @Column(name = "renewal_date")
+    private LocalDate renewalDate; // ngày gia hạn
+
+    @Column(name = "termination_date")
+    private LocalDate terminationDate; // ngày chấm dứt
+
+    @Column(name = "termination_reason", length = 500)
+    private String terminationReason; // lý do chấm dứt
 }
