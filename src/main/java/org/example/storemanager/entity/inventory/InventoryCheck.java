@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.system.Branch;
+import org.example.storemanager.entity.wms.WarehouseZone;
 
 import java.time.LocalDateTime;
 
@@ -28,4 +29,8 @@ public class InventoryCheck extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "warehouse_zone_id")
+    private WarehouseZone warehouseZone;
 }

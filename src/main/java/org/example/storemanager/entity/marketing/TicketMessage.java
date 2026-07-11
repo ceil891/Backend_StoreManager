@@ -32,4 +32,17 @@ public class TicketMessage extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id")
     private User sender; // Nếu là nhân viên nhắn, lưu ID nhân viên
+
+    @Column(length = 500)
+    private String attachment; // File đính kèm
+
+    @Builder.Default
+    @Column(name = "is_read", columnDefinition = "boolean default false")
+    private Boolean isRead = false; // Đã đọc
+
+    @Column(name = "read_at")
+    private LocalDateTime readAt; // Thời gian đọc
+
+    @Column(name = "message_type", length = 20)
+    private String messageType; // TEXT, IMAGE, FILE
 }

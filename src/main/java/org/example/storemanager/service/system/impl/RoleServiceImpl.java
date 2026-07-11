@@ -295,6 +295,16 @@ public class RoleServiceImpl implements RoleService {
         return mapToResponse(restoredRole);
     }
 
+    private java.util.List<String> getRolePermissionCodes(Long roleId) {
+        if (roleId == null) {
+            return new java.util.ArrayList<>();
+        }
+        return rolePermissionRepository.findByRoleId(roleId).stream()
+                .filter(rp -> rp.getPermission() != null && rp.getPermission().getPermissionCode() != null)
+                .map(rp -> rp.getPermission().getPermissionCode())
+                .collect(Collectors.toList());
+    }
+
     private RoleResponse mapToResponse(Role role) {
         return RoleResponse.builder()
                 .id(role.getId())
@@ -306,6 +316,7 @@ public class RoleServiceImpl implements RoleService {
                 .updatedAt(role.getUpdatedAt())
                 .updatedBy(role.getUpdatedBy())
                 .isDeleted(role.getIsDeleted())
+                .permissions(getRolePermissionCodes(role.getId()))
                 .build();
     }
 
@@ -317,6 +328,7 @@ public class RoleServiceImpl implements RoleService {
                 .isActive(role.getIsActive())
                 .createdBy(role.getCreatedBy())
                 .createdAt(role.getCreatedAt() != null ? role.getCreatedAt() : LocalDateTime.now())
+                .permissions(getRolePermissionCodes(role.getId()))
                 .build();
     }
 
@@ -328,6 +340,7 @@ public class RoleServiceImpl implements RoleService {
                 .isActive(role.getIsActive())
                 .updatedBy(role.getUpdatedBy())
                 .updatedAt(role.getUpdatedAt() != null ? role.getUpdatedAt() : LocalDateTime.now())
+                .permissions(getRolePermissionCodes(role.getId()))
                 .build();
     }
 }

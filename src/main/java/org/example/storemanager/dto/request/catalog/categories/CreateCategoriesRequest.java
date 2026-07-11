@@ -19,4 +19,5 @@ public class CreateCategoriesRequest {
     private Long parentId;
     private Boolean isActive = true;
     private Long departmentId;
+    private String imageUrl;
 }

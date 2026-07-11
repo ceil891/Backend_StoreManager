@@ -5,6 +5,8 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.partnerarea.Customer;
 import org.example.storemanager.entity.catalog.Product;
+import java.time.LocalDateTime;
+import org.example.storemanager.entity.system.User;
 
 @Entity
 @Table(name = "customer_feedbacks")
@@ -31,4 +33,28 @@ public class CustomerFeedback extends BaseEntity {
 
     @Column(nullable = false, length = 30)
     private String status; // PENDING (Chờ duyệt), APPROVED (Hiển thị), REJECTED (Ẩn)
+
+    @Column(length = 200)
+    private String title; // Tiêu đề đánh giá
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl; // Hình ảnh
+
+    @Column(columnDefinition = "TEXT")
+    private String reply; // Phản hồi của cửa hàng
+
+    @Column(name = "replied_at")
+    private LocalDateTime repliedAt; // Thời gian phản hồi
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replied_by")
+    private User repliedBy; // Nhân viên phản hồi
+
+    @Builder.Default
+    @Column(name = "is_verified_purchase", columnDefinition = "boolean default false")
+    private Boolean isVerifiedPurchase = false; // Đã mua hàng hay chưa
+
+    @Builder.Default
+    @Column(name = "helpful_count", columnDefinition = "integer default 0")
+    private Integer helpfulCount = 0; // Lượt đánh giá hữu ích
 }

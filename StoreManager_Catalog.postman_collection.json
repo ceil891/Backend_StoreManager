@@ -1,0 +1,760 @@
+{
+  "info": {
+    "name": "StoreManager - Danh mục, Bảng giá & Tồn kho API",
+    "description": "Bộ sưu tập Postman Collection dùng để kiểm thử các API của Sản phẩm (Product), Đơn vị quy đổi (ProductUnit), Bảng giá (PriceList), Gói Combo (Combo) và Tồn kho theo Size/Màu sắc (SizeInventory).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Sản phẩm (Products)",
+      "item": [
+        {
+          "name": "Tạo sản phẩm mới (Create Product)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productCode\": \"PROD-001\",\n  \"name\": \"Áo Thun Nam Cao Cấp\",\n  \"description\": \"Áo thun cotton thoáng mát\",\n  \"basePrice\": 150000.00,\n  \"costPrice\": 90000.00,\n  \"brand\": \"RetailBrand\",\n  \"mainImageUrl\": \"http://example.com/image.jpg\",\n  \"barcode\": \"893000111222\",\n  \"isActive\": true,\n  \"weight\": 0.25,\n  \"reorderPoint\": 10,\n  \"minStock\": 5,\n  \"maxStock\": 100,\n  \"categoryId\": 1,\n  \"baseUnitId\": 1,\n  \"conversionUnits\": [\n    {\n      \"unitId\": 2,\n      \"conversionRate\": 10.00,\n      \"price\": 1400000.00,\n      \"barcode\": \"893000111223\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lấy danh sách sản phẩm (Phân trang / Tìm kiếm)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?search=Áo&categoryId=1&isActive=true&page=0&size=10&sort=id,desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Áo"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                },
+                {
+                  "key": "sort",
+                  "value": "id,desc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết sản phẩm theo ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật thông tin sản phẩm",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productCode\": \"PROD-001\",\n  \"name\": \"Áo Thun Nam Cao Cấp (Updated)\",\n  \"description\": \"Áo thun cotton thoáng mát chất lượng cao\",\n  \"basePrice\": 160000.00,\n  \"costPrice\": 95000.00,\n  \"brand\": \"RetailBrand\",\n  \"mainImageUrl\": \"http://example.com/image_updated.jpg\",\n  \"barcode\": \"893000111222\",\n  \"isActive\": true,\n  \"weight\": 0.25,\n  \"reorderPoint\": 10,\n  \"minStock\": 5,\n  \"maxStock\": 100,\n  \"categoryId\": 1,\n  \"baseUnitId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật trạng thái kích hoạt sản phẩm",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/status?isActive=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "isActive",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Xóa sản phẩm",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Đơn vị quy đổi (Product Units)",
+      "item": [
+        {
+          "name": "Lấy danh sách đơn vị quy đổi của sản phẩm",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/units",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "units"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Thêm đơn vị quy đổi mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitId\": 2,\n  \"conversionRate\": 24.0000,\n  \"price\": 220000.00,\n  \"barcode\": \"893000111224\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/units",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "units"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật đơn vị quy đổi",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitId\": 2,\n  \"conversionRate\": 12.0000,\n  \"price\": 110000.00,\n  \"barcode\": \"893000111225\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/units/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "units",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật trạng thái đơn vị quy đổi",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/units/1/status?isActive=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "units",
+                "1",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "isActive",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Xóa đơn vị quy đổi",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/1/units/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "products",
+                "1",
+                "units",
+                "1"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Bảng giá (Price Lists)",
+      "item": [
+        {
+          "name": "Tạo bảng giá mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listCode\": \"PL-2026\",\n  \"listName\": \"Giá bán lẻ 2026\",\n  \"startDate\": \"2026-01-01T00:00:00\",\n  \"endDate\": \"2026-12-31T23:59:59\",\n  \"branchId\": 1,\n  \"isActive\": true,\n  \"details\": [\n    {\n      \"productId\": 1,\n      \"productUnitId\": 1,\n      \"price\": 148000.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lấy danh sách tất cả bảng giá",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết bảng giá theo ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Truy vấn giá đang áp dụng (Active Price)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists/active?productId=1&productUnitId=1&branchId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists",
+                "active"
+              ],
+              "query": [
+                {
+                  "key": "productId",
+                  "value": "1"
+                },
+                {
+                  "key": "productUnitId",
+                  "value": "1"
+                },
+                {
+                  "key": "branchId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật thông tin bảng giá",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listCode\": \"PL-2026\",\n  \"listName\": \"Giá bán lẻ 2026 (Updated)\",\n  \"startDate\": \"2026-01-01T00:00:00\",\n  \"endDate\": \"2026-12-31T23:59:59\",\n  \"branchId\": 1,\n  \"isActive\": true,\n  \"details\": [\n    {\n      \"productId\": 1,\n      \"productUnitId\": 1,\n      \"price\": 145000.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Xóa bảng giá",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pricelists/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pricelists",
+                "1"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Gói Combo",
+      "item": [
+        {
+          "name": "Tạo Combo mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comboCode\": \"CB-SUMMER\",\n  \"comboName\": \"Combo Mùa Hè Rực Rỡ\",\n  \"barcode\": \"CB888999\",\n  \"description\": \"Combo quần áo mùa hè năng động\",\n  \"comboType\": \"DYNAMIC_VIRTUAL\",\n  \"startDate\": \"2026-06-01T00:00:00\",\n  \"endDate\": \"2026-08-31T23:59:59\",\n  \"price\": 250000.00,\n  \"isActive\": true,\n  \"details\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 1.000,\n      \"unitPriceAtCreation\": 150000.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lấy danh sách Combo (Tìm kiếm & Phân trang)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos?search=Mùa Hè&isActive=true&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Mùa Hè"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết Combo theo ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cập nhật thông tin Combo",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comboCode\": \"CB-SUMMER\",\n  \"comboName\": \"Combo Mùa Hè Rực Rỡ (Updated)\",\n  \"barcode\": \"CB888999\",\n  \"description\": \"Combo quần áo mùa hè năng động chất lượng cao\",\n  \"comboType\": \"DYNAMIC_VIRTUAL\",\n  \"startDate\": \"2026-06-01T00:00:00\",\n  \"endDate\": \"2026-08-31T23:59:59\",\n  \"price\": 270000.00,\n  \"isActive\": true,\n  \"details\": [\n    {\n      \"productId\": 1,\n      \"quantity\": 2.000,\n      \"unitPriceAtCreation\": 150000.00\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos",
+                "1"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trừ tồn kho của Combo ảo (Deduct Stock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseZoneId\": 1,\n  \"quantity\": 5.000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos/1/deduct-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos",
+                "1",
+                "deduct-stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Xóa Combo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/combos/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "combos",
+                "1"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Quản lý tồn kho (Size Inventory)",
+      "item": [
+        {
+          "name": "Tìm kiếm tồn kho chi tiết",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventories/search?branchId=1&warehouseZoneId=1&productId=1&categoryId=1&sizeId=1&colorId=1&search=Áo&page=0&sizePerPage=20&sort=id,desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventories",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "1"
+                },
+                {
+                  "key": "warehouseZoneId",
+                  "value": "1"
+                },
+                {
+                  "key": "productId",
+                  "value": "1"
+                },
+                {
+                  "key": "categoryId",
+                  "value": "1"
+                },
+                {
+                  "key": "sizeId",
+                  "value": "1"
+                },
+                {
+                  "key": "colorId",
+                  "value": "1"
+                },
+                {
+                  "key": "search",
+                  "value": "Áo"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "sizePerPage",
+                  "value": "20"
+                },
+                {
+                  "key": "sort",
+                  "value": "id,desc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lấy danh sách cảnh báo tồn kho thấp",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventories/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventories",
+                "low-stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Điều chỉnh số lượng tồn kho (Adjust Stock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseZoneId\": 1,\n  \"productId\": 1,\n  \"sizeId\": 1,\n  \"colorId\": 1,\n  \"actualQty\": 100.000,\n  \"reason\": \"Kiểm kho định kỳ\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventories/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventories",
+                "adjust"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết dòng tồn kho theo ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventories/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventories",
+                "1"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ]
+}

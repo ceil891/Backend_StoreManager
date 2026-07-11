@@ -9,6 +9,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface LogActivity {
     String actionType(); // e.g. "CREATE", "UPDATE", "DELETE", "UPDATE_STATUS"
-    String entityName(); // e.g. "Unit"
-    Class<?> entityClass(); // e.g. Unit.class
+    String entityName();
+    Class<?> entityClass();
 }

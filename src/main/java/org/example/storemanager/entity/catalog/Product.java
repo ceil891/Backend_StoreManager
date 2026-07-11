@@ -3,6 +3,7 @@ package org.example.storemanager.entity.catalog;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
+import org.example.storemanager.enums.catalog.VariantStrategy;
 import java.math.BigDecimal;
 
 @Entity
@@ -36,7 +37,7 @@ public class Product extends BaseEntity {
     @Column(length = 100)
     private String brand;
 
-    @Column(name = "main_image_url", length = 500)
+    @Column(name = "main_image_url", length = 2000)
     private String mainImageUrl;
 
     @Column(length = 50)
@@ -62,6 +63,11 @@ public class Product extends BaseEntity {
 
     @Column(name = "variants", columnDefinition = "TEXT")
     private String variants;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "variant_strategy", length = 30, columnDefinition = "varchar(30) default 'NONE'")
+    @Builder.Default
+    private VariantStrategy variantStrategy = VariantStrategy.NONE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")

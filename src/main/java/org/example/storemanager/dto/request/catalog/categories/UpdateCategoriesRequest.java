@@ -18,4 +18,5 @@ public class UpdateCategoriesRequest {
     private Long parentId;
     private Boolean isActive;
     private Long departmentId;
+    private String imageUrl;
 }

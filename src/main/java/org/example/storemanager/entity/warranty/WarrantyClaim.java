@@ -6,6 +6,7 @@ import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.system.User;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "warranty_claims")
@@ -35,4 +36,31 @@ public class WarrantyClaim extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "handled_by")
     private User handledBy; // Nhân viên kỹ thuật phụ trách
+
+    @Column(name = "claim_code", unique = true, length = 50)
+    private String claimCode; // Mã phiếu bảo hành
+
+    @Column(name = "received_condition", columnDefinition = "TEXT")
+    private String receivedCondition; // Tình trạng khi tiếp nhận
+
+    @Column(name = "expected_return_date")
+    private LocalDateTime expectedReturnDate; // Ngày hẹn trả
+
+    @Column(name = "actual_return_date")
+    private LocalDateTime actualReturnDate; // Ngày trả thực tế
+
+    @Column(name = "repair_cost", precision = 18, scale = 2)
+    private BigDecimal repairCost; // Chi phí sửa chữa
+
+    @Column(name = "warranty_cost", precision = 18, scale = 2)
+    private BigDecimal warrantyCost; // Chi phí bảo hành
+
+    @Column(length = 500)
+    private String attachment; // Hình ảnh lỗi / File đính kèm
+
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason; // Lý do từ chối bảo hành
+
+    @Column(name = "customer_signature", length = 500)
+    private String customerSignature; // Chữ ký khách hàng
 }

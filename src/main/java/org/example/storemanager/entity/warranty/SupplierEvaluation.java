@@ -33,4 +33,28 @@ public class SupplierEvaluation extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "evaluated_by")
     private User evaluatedBy; // Nhân viên thực hiện đánh giá
+
+    @Column(name = "evaluation_type", length = 50)
+    private String evaluationType; // Monthly, Quarterly
+
+    @Column(name = "quality_score")
+    private Integer qualityScore; // Điểm chất lượng
+
+    @Column(name = "delivery_score")
+    private Integer deliveryScore; // Điểm giao hàng
+
+    @Column(name = "service_score")
+    private Integer serviceScore; // Điểm hỗ trợ
+
+    @Column(name = "price_score")
+    private Integer priceScore; // Điểm giá
+
+    @Column(name = "overall_score")
+    private Integer overallScore; // Điểm tổng
+
+    @Column(length = 30)
+    private String result; // EXCELLENT, GOOD, FAIR, POOR
+
+    @Column(columnDefinition = "TEXT")
+    private String improvement; // Kiến nghị cải thiện
 }

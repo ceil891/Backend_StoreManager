@@ -34,6 +34,7 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
             @Param("isActive") Boolean isActive,
             Pageable pageable);
 
+    @org.springframework.cache.annotation.Cacheable(value = "branches", key = "{#search, #isActive}")
     @Query("SELECT b FROM Branch b WHERE b.isDeleted = false AND " +
            "(:isActive IS NULL OR b.isActive = :isActive) AND " +
            "(:search IS NULL OR :search = '' OR " +
