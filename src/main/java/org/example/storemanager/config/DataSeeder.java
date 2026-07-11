@@ -131,9 +131,7 @@ public class DataSeeder implements CommandLineRunner {
         log.info("======= HOÀN THÀNH QUÉT PHÂN QUYỀN ĐỘNG =======");
     }
 
-    /**
-     * Quét tất cả RestController để tìm annotation @PreAuthorize
-     */
+
     private Set<String> scanControllerPermissions() {
         Set<String> permissionCodes = new HashSet<>();
         Map<String, Object> controllerBeans = applicationContext.getBeansWithAnnotation(RestController.class);
@@ -163,9 +161,7 @@ public class DataSeeder implements CommandLineRunner {
         return permissionCodes;
     }
 
-    /**
-     * Trích xuất các mã quyền từ biểu thức SpEL của @PreAuthorize
-     */
+
     private void extractPermissions(String expression, Set<String> permissionCodes) {
         if (expression == null || expression.trim().isEmpty()) {
             return;
@@ -179,12 +175,7 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
-    /**
-     * Tự động xác định tên Module hiển thị từ mã quyền
-     * Ví dụ:
-     * - "catalog:product:create" -> Module "Catalog"
-     * - "system:user:view" -> Module "System"
-     */
+
     private String determineModuleFromCode(String code) {
         if (code.contains(":")) {
             String prefix = code.split(":")[0];
