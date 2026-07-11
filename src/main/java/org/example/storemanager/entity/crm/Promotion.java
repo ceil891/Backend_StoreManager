@@ -6,6 +6,7 @@ import org.example.storemanager.entity.BaseEntity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.example.storemanager.entity.catalog.Department;
 
 @Entity
 @Table(name = "promotions")
@@ -36,4 +37,39 @@ public class Promotion extends BaseEntity {
 
     @Column(name = "end_date")
     private LocalDateTime endDate;
+
+    @Column(columnDefinition = "TEXT")
+    private String description; // Mô tả CTKM
+
+    @Column(length = 30)
+    private String status; // ACTIVE, EXPIRED, DISABLED
+
+    @Column(name = "usage_limit")
+    private Integer usageLimit; // Giới hạn lượt dùng
+
+    @Builder.Default
+    @Column(name = "used_count", columnDefinition = "integer default 0")
+    private Integer usedCount = 0; // Đã dùng bao nhiêu
+
+    @Column(name = "max_discount_amount", precision = 18, scale = 2)
+    private BigDecimal maxDiscountAmount; // Giảm tối đa
+
+    @Column(name = "customer_type", length = 50)
+    private String customerType; // Áp dụng nhóm khách
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tier_id")
+    private LoyaltyTier loyaltyTier; // Áp dụng hạng thành viên
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department; // Áp dụng cửa hàng
+
+    @Builder.Default
+    @Column(name = "is_stackable", columnDefinition = "boolean default false")
+    private Boolean isStackable = false; // Có cộng dồn KM không
+
+    @Builder.Default
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true; // Bật/Tắt
 }

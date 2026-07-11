@@ -21,4 +21,5 @@ public class RoleResponse {
     private LocalDateTime updatedAt;
     private String updatedBy;
     private Boolean isDeleted;
+    private java.util.List<String> permissions;
 }

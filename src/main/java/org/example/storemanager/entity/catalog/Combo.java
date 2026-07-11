@@ -3,7 +3,10 @@ package org.example.storemanager.entity.catalog;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
+import org.example.storemanager.enums.catalog.ComboType;
+
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "combos", indexes = {
@@ -22,8 +25,25 @@ public class Combo extends BaseEntity {
     @Column(name = "combo_name", nullable = false, length = 150)
     private String comboName;
 
+    @Column(length = 50)
+    private String barcode;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "combo_type", nullable = false, length = 30)
+    @Builder.Default
+    private ComboType comboType = ComboType.DYNAMIC_VIRTUAL;
+
     @Column(precision = 18, scale = 2, nullable = false)
-    private BigDecimal price; // Giá trọn gói của cả combo
+    private BigDecimal price;
+
+    @Column(name = "start_date")
+    private LocalDateTime startDate;
+
+    @Column(name = "end_date")
+    private LocalDateTime endDate;
 
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;

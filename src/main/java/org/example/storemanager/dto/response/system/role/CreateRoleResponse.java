@@ -18,4 +18,5 @@ public class CreateRoleResponse {
     private Boolean isActive;
     private LocalDateTime createdAt;
     private String createdBy;
+    private java.util.List<String> permissions;
 }

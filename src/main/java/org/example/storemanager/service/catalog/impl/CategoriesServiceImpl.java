@@ -6,6 +6,7 @@ import org.example.storemanager.dto.request.catalog.categories.UpdateCategoriesR
 import org.example.storemanager.dto.response.catalog.categories.*;
 import org.example.storemanager.dto.response.catalog.department.DepartmentResponse;
 import org.example.storemanager.dto.response.common.PageResponse;
+import org.example.storemanager.service.common.CloudinaryService;
 import org.example.storemanager.entity.catalog.Department;
 import org.example.storemanager.entity.catalog.ProductCategory;
 import org.example.storemanager.exception.DuplicateResourceException;
@@ -37,11 +38,13 @@ public class CategoriesServiceImpl implements CategoriesService {
 
     private final CategoriesRepository categoriesRepository;
     private final DepartmentRepository departmentRepository;
+    private final CloudinaryService cloudinaryService;
 
     @Autowired
-    public CategoriesServiceImpl(CategoriesRepository categoriesRepository, DepartmentRepository departmentRepository) {
+    public CategoriesServiceImpl(CategoriesRepository categoriesRepository, DepartmentRepository departmentRepository, CloudinaryService cloudinaryService) {
         this.categoriesRepository = categoriesRepository;
         this.departmentRepository = departmentRepository;
+        this.cloudinaryService = cloudinaryService;
     }
 
     @Override
@@ -71,6 +74,7 @@ public class CategoriesServiceImpl implements CategoriesService {
         category.setIsDeleted(false);
         category.setDepartment(department);
         category.setParent(parent);
+        category.setImageUrl(request.getImageUrl());
         category.setCreatedBy(getCurrentUsername());
 
         ProductCategory saved = categoriesRepository.save(category);
@@ -102,6 +106,14 @@ public class CategoriesServiceImpl implements CategoriesService {
                     .orElseThrow(() -> new ResourceNotFoundException("Ngành hàng", "id", request.getDepartmentId()));
         }
 
+        // --- DỌN DẸP ẢNH DANH MỤC CŨ NẾU CÓ THAY ĐỔI ---
+        String oldImage = category.getImageUrl();
+        String newImage = request.getImageUrl();
+        if (oldImage != null && !oldImage.equals(newImage)) {
+            cloudinaryService.deleteFileByUrl(oldImage);
+        }
+        // ----------------------------------------------
+
         category.setCategoryCode(request.getCategoryCode());
         category.setCategoryName(request.getCategoryName());
         category.setDescription(request.getDescription());
@@ -110,6 +122,7 @@ public class CategoriesServiceImpl implements CategoriesService {
         }
         category.setDepartment(department);
         category.setParent(parent);
+        category.setImageUrl(request.getImageUrl());
         category.setUpdatedBy(getCurrentUsername());
 
         ProductCategory updated = categoriesRepository.save(category);
@@ -129,6 +142,12 @@ public class CategoriesServiceImpl implements CategoriesService {
                 "Vui lòng tắt hoạt động trước, sau đó mới có thể xóa."
             );
         }
+
+        // --- XÓA ẢNH TRÊN CLOUDINARY KHI XÓA DANH MỤC ---
+        if (category.getImageUrl() != null) {
+            cloudinaryService.deleteFileByUrl(category.getImageUrl());
+        }
+        // ------------------------------------------------
 
         String username = getCurrentUsername();
         category.setIsDeleted(true);
@@ -313,6 +332,7 @@ public class CategoriesServiceImpl implements CategoriesService {
         if (entity.getParent() != null) {
             response.setParentId(entity.getParent().getId());
         }
+        response.setImageUrl(entity.getImageUrl());
         response.setIsDeleted(entity.getIsDeleted());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());
@@ -328,6 +348,7 @@ public class CategoriesServiceImpl implements CategoriesService {
                 .isActive(entity.getIsActive())
                 .department(mapToDepartmentResponse(entity.getDepartment()))
                 .parentId(entity.getParent() != null ? entity.getParent().getId() : null)
+                .imageUrl(entity.getImageUrl())
                 .isDeleted(entity.getIsDeleted())
                 .createdAt(entity.getCreatedAt())
                 .build();
@@ -342,6 +363,7 @@ public class CategoriesServiceImpl implements CategoriesService {
                 .isActive(entity.getIsActive())
                 .department(mapToDepartmentResponse(entity.getDepartment()))
                 .parentId(entity.getParent() != null ? entity.getParent().getId() : null)
+                .imageUrl(entity.getImageUrl())
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
                 .build();
@@ -356,6 +378,7 @@ public class CategoriesServiceImpl implements CategoriesService {
                 .isActive(entity.getIsActive())
                 .department(mapToDepartmentResponse(entity.getDepartment()))
                 .parentId(entity.getParent() != null ? entity.getParent().getId() : null)
+                .imageUrl(entity.getImageUrl())
                 .updatedAt(entity.getUpdatedAt())
                 .updatedBy(entity.getUpdatedBy())
                 .build();

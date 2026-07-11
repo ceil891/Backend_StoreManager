@@ -20,6 +20,7 @@ public class UpdateCategoriesResponse {
     private Boolean isActive;
     private DepartmentResponse department;
     private Long parentId;
+    private String imageUrl;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

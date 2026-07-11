@@ -7,6 +7,8 @@ import   org.example.storemanager.dto.request.auth.RefreshTokenRequest;
 
 import org.example.storemanager.dto.response.auth.LoginResponse;
 
+import java.util.List;
+
 public interface AuthService {
     LoginResponse register(RegisterRequest request);
     LoginResponse login(LoginRequest request);
@@ -14,4 +16,5 @@ public interface AuthService {
     void logout(String refreshToken);
     void logoutAll(String username);
     void changePassword(String username, ChangePasswordRequest request);
+    List<String> getMyPermissions(String username);
 }

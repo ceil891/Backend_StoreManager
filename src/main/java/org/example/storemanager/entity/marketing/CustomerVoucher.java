@@ -6,6 +6,8 @@ import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.partnerarea.Customer;
 
 import java.time.LocalDateTime;
+import org.example.storemanager.entity.sales.SaleOrder;
+import org.example.storemanager.entity.system.User;
 
 @Entity
 @Table(name = "customer_vouchers")
@@ -32,4 +34,15 @@ public class CustomerVoucher extends BaseEntity {
 
     @Column(nullable = false, length = 30)
     private String status; // UNUSED, USED, EXPIRED
+
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt; // Ngày hết hạn voucher
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "used_order_id")
+    private SaleOrder usedOrder; // Đơn hàng đã dùng
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_by")
+    private User assignedBy; // Người cấp voucher
 }

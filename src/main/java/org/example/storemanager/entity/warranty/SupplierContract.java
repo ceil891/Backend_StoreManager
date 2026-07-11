@@ -35,4 +35,28 @@ public class SupplierContract extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplier_id", nullable = false)
     private Supplier supplier;
+
+    @Column(name = "contract_name", length = 150)
+    private String contractName; // Tên hợp đồng
+
+    @Column(name = "contract_type", length = 50)
+    private String contractType; // Loại hợp đồng (Purchase, Distribution...)
+
+    @Column(name = "signed_date")
+    private LocalDate signedDate; // Ngày ký
+
+    @Column(name = "signed_by", length = 100)
+    private String signedBy; // Người ký
+
+    @Column(name = "payment_term", length = 255)
+    private String paymentTerm; // Điều khoản thanh toán
+
+    @Column(name = "delivery_term", length = 255)
+    private String deliveryTerm; // Điều khoản giao hàng
+
+    @Column(length = 500)
+    private String attachment; // File hợp đồng
+
+    @Column(name = "renewal_date")
+    private LocalDate renewalDate; // Ngày gia hạn
 }
