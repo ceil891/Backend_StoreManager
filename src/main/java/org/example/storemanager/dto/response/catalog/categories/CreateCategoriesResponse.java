@@ -20,6 +20,7 @@ public class CreateCategoriesResponse {
     private Boolean isActive;
     private DepartmentResponse department;
     private Long parentId;
+    private String imageUrl;
     private LocalDateTime createdAt;
     private String createdBy;
 }

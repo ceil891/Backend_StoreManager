@@ -23,5 +23,9 @@ public class ComboDetail extends BaseEntity {
     private Product product;
 
     @Column(precision = 12, scale = 3, nullable = false)
-    private BigDecimal quantity; // Số lượng của sản phẩm này trong combo
+    private BigDecimal quantity;
+
+    /** Snapshot giá lẻ tại thời điểm tạo combo — dùng cảnh báo giá combo. */
+    @Column(name = "unit_price_at_creation", precision = 18, scale = 2)
+    private BigDecimal unitPriceAtCreation;
 }

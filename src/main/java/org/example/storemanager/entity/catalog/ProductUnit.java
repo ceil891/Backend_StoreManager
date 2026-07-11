@@ -30,4 +30,10 @@ public class ProductUnit extends BaseEntity {
 
     @Column(length = 50)
     private String barcode;
+
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
+
+    @Column(name = "is_base_unit", columnDefinition = "boolean default false")
+    private Boolean isBaseUnit = false;
 }

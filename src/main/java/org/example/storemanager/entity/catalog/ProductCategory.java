@@ -25,6 +25,9 @@ public class ProductCategory extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 

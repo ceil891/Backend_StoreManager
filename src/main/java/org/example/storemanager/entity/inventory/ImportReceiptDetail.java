@@ -3,13 +3,16 @@ package org.example.storemanager.entity.inventory;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
-import org.example.storemanager.entity.catalog.Product;
+import org.example.storemanager.entity.catalog.ProductVariant;
 import org.example.storemanager.entity.catalog.Unit;
 
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "import_receipt_details")
+@Table(name = "import_receipt_details", indexes = {
+        @Index(name = "idx_import_rd_receipt", columnList = "receipt_id"),
+        @Index(name = "idx_import_rd_variant", columnList = "product_variant_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -22,18 +25,33 @@ public class ImportReceiptDetail extends BaseEntity {
     private ImportReceipt receipt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product product;
+    @JoinColumn(name = "product_variant_id", nullable = false)
+    private ProductVariant productVariant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
     private Unit unit;
 
+    // ---- Snapshot tại thời điểm nhập ----
+    @Column(name = "product_name_snapshot", nullable = false, length = 200)
+    private String productNameSnapshot;
+
+    @Column(name = "sku_snapshot", nullable = false, length = 100)
+    private String skuSnapshot;
+
+    @Column(name = "barcode_snapshot", length = 100)
+    private String barcodeSnapshot;
+
+    /** Ví dụ: "Size: M, Màu: Đen" */
+    @Column(name = "variant_description_snapshot", length = 300)
+    private String variantDescriptionSnapshot;
+
+    @Column(name = "unit_cost_snapshot", precision = 18, scale = 2, nullable = false)
+    private BigDecimal unitCostSnapshot;
+    // ---- End snapshot ----
+
     @Column(precision = 18, scale = 3, nullable = false)
     private BigDecimal quantity;
-
-    @Column(name = "unit_price", precision = 18, scale = 2, nullable = false)
-    private BigDecimal unitPrice;
 
     @Column(name = "sub_total", precision = 18, scale = 2)
     private BigDecimal subTotal;

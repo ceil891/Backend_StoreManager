@@ -18,4 +18,5 @@ public class UpdateRoleResponse {
     private String description;
     private LocalDateTime updatedAt;
     private String updatedBy;
+    private java.util.List<String> permissions;
 }

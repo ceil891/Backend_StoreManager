@@ -14,6 +14,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -100,5 +102,20 @@ public class AuthController {
         }
         authService.changePassword(auth.getName(), request);
         return ResponseEntity.ok(ApiResponse.noContent());
+    }
+
+    /**
+     * GET /api/v1/auth/me/permissions
+     * Trả về danh sách permissionCode của user đang đăng nhập.
+     * Frontend sử dụng để kiểm tra quyền động trên sidebar và route guard.
+     */
+    @GetMapping("/me/permissions")
+    public ResponseEntity<ApiResponse<List<String>>> getMyPermissions() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Chưa đăng nhập"));
+        }
+        List<String> permissions = authService.getMyPermissions(auth.getName());
+        return ResponseEntity.ok(ApiResponse.ok(permissions));
     }
 }

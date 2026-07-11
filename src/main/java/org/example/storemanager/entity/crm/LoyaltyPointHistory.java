@@ -5,6 +5,9 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.partnerarea.Customer;
 
+import java.time.LocalDateTime;
+import org.example.storemanager.entity.sales.SaleOrder;
+
 @Entity
 @Table(name = "loyalty_point_histories")
 @Data
@@ -26,4 +29,21 @@ public class LoyaltyPointHistory extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
+
+    @Column(name = "current_points")
+    private Integer currentPoints; // Tổng điểm sau giao dịch
+
+    @Column(name = "expired_date")
+    private LocalDateTime expiredDate; // Ngày hết hạn điểm
+
+    @Column(columnDefinition = "TEXT")
+    private String description; // Nội dung giao dịch / mô tả chi tiết
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    private SaleOrder order; // FK đến SaleOrder
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promotion_id")
+    private Promotion promotion; // Nếu điểm phát sinh từ CTKM
 }
