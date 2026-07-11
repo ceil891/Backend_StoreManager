@@ -20,5 +20,16 @@ public class PartnerGroup extends BaseEntity {
     private String groupName;
 
     @Column(length = 50)
-    private String type; // Ví dụ: CUSTOMER, SUPPLIER
+    private String type;
+
+    @Column(name = "description", length = 500)
+    private String description;
+
+    @Builder.Default
+    @Column(name = "initial_member_count")
+    private Integer initialMemberCount = 0;
+
+    @Builder.Default
+    @Column(name = "is_active")
+    private Boolean isActive = true;
 }
