@@ -19,6 +19,9 @@ public class SystemConfig extends BaseEntity {
     @Column(name = "config_value", columnDefinition = "TEXT")
     private String configValue;
 
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 }
