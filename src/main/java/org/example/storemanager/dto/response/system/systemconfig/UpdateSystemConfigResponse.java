@@ -16,6 +16,7 @@ public class UpdateSystemConfigResponse {
     private String configKey;
     private String configValue;
     private String description;
+    private Boolean isActive;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

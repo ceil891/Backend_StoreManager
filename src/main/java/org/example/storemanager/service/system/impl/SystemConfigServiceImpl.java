@@ -90,6 +90,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         SystemConfig config = systemConfigRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SystemConfig", "id", id));
 
+        // BỔ SUNG RÀO LOGIC TẠI ĐÂY: Nếu đang bật (isActive = true) thì ném lỗi, không cho xóa
+        if (Boolean.TRUE.equals(config.getIsActive())) {
+            // Dùng mã lỗi có sẵn trong Enum của bạn
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Cấu hình đang trong trạng thái hoạt động. Vui lòng tắt hoạt động trước khi xóa.");
+        }
+
+        // Vượt qua rào kiểm tra thì tiến hành xóa mềm
         config.setIsDeleted(true);
         config.setDeletedAt(LocalDateTime.now());
         config.setDeletedBy(getCurrentUsername());
@@ -226,6 +233,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 .configKey(config.getConfigKey())
                 .configValue(config.getConfigValue())
                 .description(config.getDescription())
+                .isActive(config.getIsActive())
                 .createdAt(config.getCreatedAt())
                 .createdBy(config.getCreatedBy())
                 .build();
@@ -237,6 +245,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 .configKey(config.getConfigKey())
                 .configValue(config.getConfigValue())
                 .description(config.getDescription())
+                .isActive(config.getIsActive())
                 .updatedAt(config.getUpdatedAt())
                 .updatedBy(config.getUpdatedBy())
                 .build();

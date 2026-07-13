@@ -16,6 +16,7 @@ public class CreateSystemConfigResponse {
     private String configKey;
     private String configValue;
     private String description;
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private String createdBy;
 }

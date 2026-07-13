@@ -1,6 +1,7 @@
 package org.example.storemanager.config;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.entity.system.Permission;
 import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.entity.system.RolePermission;
@@ -10,17 +11,22 @@ import org.example.storemanager.repository.system.RolePermissionRepository;
 import org.example.storemanager.repository.system.RoleRepository;
 import org.example.storemanager.repository.system.UserRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.ApplicationContext;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class DataSeeder implements CommandLineRunner {
 
     private final PermissionRepository permissionRepository;
@@ -28,40 +34,46 @@ public class DataSeeder implements CommandLineRunner {
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationContext applicationContext;
+
+    // Pattern Regex trích xuất tham số của hasPermission('xxx')
+    private static final Pattern PERMISSION_PATTERN = Pattern.compile("hasPermission\\s*\\(\\s*'([^']+)'\\s*\\)");
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        // 1. Tự động sinh danh sách Core Permissions nếu chưa có trong DB
+        log.info("======= BẮT ĐẦU QUÉT PHÂN QUYỀN ĐỘNG (DYNAMIC PERMISSION SCANNER) =======");
+
+        // 1. Quét tất cả các RestControllers trong ứng dụng để thu thập các mã quyền từ @PreAuthorize
+        Set<String> scannedPermissionCodes = scanControllerPermissions();
+        log.info("Đã quét được tổng cộng {} mã quyền độc nhất từ các Controller.", scannedPermissionCodes.size());
+
+        // 2. Thêm các quyền mới phát hiện vào DB nếu chưa tồn tại
         List<Permission> pendingPermissions = new ArrayList<>();
+        for (String code : scannedPermissionCodes) {
+            if (!permissionRepository.existsByPermissionCode(code)) {
+                // Xác định tên Module và mô tả cơ bản từ mã quyền (ví dụ: "catalog:product:create" -> Module "Catalog")
+                String moduleName = determineModuleFromCode(code);
+                String description = "Quyền truy cập chức năng " + code;
 
-        // ========== MODULE USER ==========
-        addIfAbsent("system:user:view", "System", "Xem danh sách và chi tiết người dùng", pendingPermissions);
-        addIfAbsent("system:user:create", "System", "Tạo mới người dùng", pendingPermissions);
-        addIfAbsent("system:user:update", "System", "Cập nhật thông tin người dùng", pendingPermissions);
-        addIfAbsent("system:user:update-status", "System", "Cập nhật trạng thái người dùng", pendingPermissions);
-        addIfAbsent("system:user:reset-password", "System", "Khôi phục mật khẩu người dùng", pendingPermissions);
-        addIfAbsent("system:user:delete", "System", "Xóa người dùng", pendingPermissions);
-        addIfAbsent("system:user:restore", "System", "Khôi phục tài khoản người dùng đã xóa mềm", pendingPermissions);
-
-        // ========== MODULE ROLE ==========
-        addIfAbsent("system:role:view", "System", "Xem danh sách và chi tiết vai trò", pendingPermissions);
-        addIfAbsent("system:role:create", "System", "Tạo mới vai trò", pendingPermissions);
-        addIfAbsent("system:role:update", "System", "Cập nhật thông tin vai trò", pendingPermissions);
-        addIfAbsent("system:role:update-status", "System", "Cập nhật trạng thái vai trò", pendingPermissions);
-        addIfAbsent("system:role:delete", "System", "Xóa vai trò", pendingPermissions);
-        addIfAbsent("system:role:assign-permissions", "System", "Gán quyền cho vai trò", pendingPermissions);
-        addIfAbsent("system:role:restore", "System", "Khôi phục vai trò đã xóa mềm", pendingPermissions);
-
-        // ========== QUYỀN HẠN MODULE PERMISSION ==========
-        addIfAbsent("system:permission:view", "System", "Xem danh sách quyền hạn", pendingPermissions);
-
-        if (!pendingPermissions.isEmpty()) {
-            // FIX LỖI: Dùng saveAllAndFlush để ép JPA đẩy ngay xuống Database
-            permissionRepository.saveAllAndFlush(pendingPermissions);
+                Permission perm = Permission.builder()
+                        .permissionCode(code)
+                        .module(moduleName)
+                        .description(description)
+                        .isActive(true)
+                        .build();
+                perm.setIsDeleted(false);
+                pendingPermissions.add(perm);
+                log.info("Phát hiện quyền mới -> chuẩn bị lưu: [{}] - Module: [{}]", code, moduleName);
+            }
         }
 
-        // 2. Khởi tạo thực thể SUPER_ADMIN (nếu chưa có)
+        if (!pendingPermissions.isEmpty()) {
+            permissionRepository.saveAllAndFlush(pendingPermissions);
+            log.info("Đã lưu thành công {} quyền mới vào Database.", pendingPermissions.size());
+        }
+
+        // 3. Khởi tạo thực thể SUPER_ADMIN (nếu chưa có)
         Role superAdminRole = roleRepository.findByRoleName("SUPER_ADMIN").orElse(null);
 
         if (superAdminRole == null) {
@@ -72,20 +84,16 @@ public class DataSeeder implements CommandLineRunner {
                     .build();
             superAdminRole.setIsDeleted(false);
             superAdminRole = roleRepository.saveAndFlush(superAdminRole);
+            log.info("Đã tạo mới vai trò SUPER_ADMIN mặc định.");
         }
 
-        // --- CẬP NHẬT TỰ ĐỘNG CÁC QUYỀN MỚI NHẤT CHO SUPER_ADMIN ---
-
-        // Bước A: Lấy tất cả quyền hiện có trong Database (Cũ + Mới)
+        // 4. CẬP NHẬT TỰ ĐỘNG CÁ C QUYỀN MỚI NHẤT CHO SUPER_ADMIN
         List<Permission> allPermissions = permissionRepository.findAll();
-
-        // Bước B: Lấy danh sách ID các quyền mà SUPER_ADMIN ĐANG CÓ sẵn
         List<RolePermission> currentRolePermissions = rolePermissionRepository.findByRoleId(superAdminRole.getId());
         Set<Long> currentPermissionIds = currentRolePermissions.stream()
                 .map(rp -> rp.getPermission().getId())
                 .collect(Collectors.toSet());
 
-        // Bước C: Lọc ra những quyền MỚI CHƯA CÓ để chuẩn bị gán thêm
         List<RolePermission> newPermissionsToAssign = new ArrayList<>();
         for (Permission perm : allPermissions) {
             if (!currentPermissionIds.contains(perm.getId())) {
@@ -93,20 +101,18 @@ public class DataSeeder implements CommandLineRunner {
                         .role(superAdminRole)
                         .permission(perm)
                         .build();
-                // FIX LỖI: Set mặc định thuộc tính isDeleted cho RolePermission
                 newRp.setIsDeleted(false);
                 newPermissionsToAssign.add(newRp);
             }
         }
 
-        // Bước D: Lưu các quyền bổ sung xuống Database
         if (!newPermissionsToAssign.isEmpty()) {
-            // FIX LỖI: Ép đẩy dữ liệu tức thì
             rolePermissionRepository.saveAllAndFlush(newPermissionsToAssign);
+            log.info("Đã gán bổ sung {} quyền mới cho vai trò SUPER_ADMIN.", newPermissionsToAssign.size());
         }
 
-        // 3. TẠO TÀI KHOẢN ADMIN MẶC ĐỊNH
-        if (superAdminRole != null && !userRepository.existsByUsername("admin")) {
+        // 5. TẠO TÀI KHOẢN ADMIN MẶC ĐỊNH
+        if (!userRepository.existsByUsername("admin")) {
             User adminUser = User.builder()
                     .username("admin")
                     .password(passwordEncoder.encode("admin123"))
@@ -119,20 +125,63 @@ public class DataSeeder implements CommandLineRunner {
             adminUser.setIsDeleted(false);
 
             userRepository.save(adminUser);
+            log.info("Đã tạo tài khoản 'admin' mặc định.");
+        }
+
+        log.info("======= HOÀN THÀNH QUÉT PHÂN QUYỀN ĐỘNG =======");
+    }
+
+
+    private Set<String> scanControllerPermissions() {
+        Set<String> permissionCodes = new HashSet<>();
+        Map<String, Object> controllerBeans = applicationContext.getBeansWithAnnotation(RestController.class);
+
+        for (Object bean : controllerBeans.values()) {
+            // Lấy class thực tế (tránh bị ảnh hưởng bởi Spring CGLIB Proxy)
+            Class<?> controllerClass = bean.getClass();
+            if (controllerClass.getName().contains("$$")) {
+                controllerClass = controllerClass.getSuperclass();
+            }
+
+            // A. Quét @PreAuthorize trên cấp Class (Controller level)
+            if (controllerClass.isAnnotationPresent(PreAuthorize.class)) {
+                PreAuthorize preAuthorize = controllerClass.getAnnotation(PreAuthorize.class);
+                extractPermissions(preAuthorize.value(), permissionCodes);
+            }
+
+            // B. Quét @PreAuthorize trên từng Method
+            for (Method method : controllerClass.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(PreAuthorize.class)) {
+                    PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+                    extractPermissions(preAuthorize.value(), permissionCodes);
+                }
+            }
+        }
+
+        return permissionCodes;
+    }
+
+
+    private void extractPermissions(String expression, Set<String> permissionCodes) {
+        if (expression == null || expression.trim().isEmpty()) {
+            return;
+        }
+        Matcher matcher = PERMISSION_PATTERN.matcher(expression);
+        while (matcher.find()) {
+            String code = matcher.group(1);
+            if (code != null && !code.trim().isEmpty()) {
+                permissionCodes.add(code.trim());
+            }
         }
     }
 
-    private void addIfAbsent(String code, String module, String desc, List<Permission> list) {
-        if (!permissionRepository.existsByPermissionCode(code)) {
-            Permission perm = Permission.builder()
-                    .permissionCode(code)
-                    .module(module)
-                    .description(desc)
-                    // FIX LỖI: Bắt buộc phải là isActive = true
-                    .isActive(true)
-                    .build();
-            perm.setIsDeleted(false);
-            list.add(perm);
+
+    private String determineModuleFromCode(String code) {
+        if (code.contains(":")) {
+            String prefix = code.split(":")[0];
+            // Viết hoa chữ cái đầu cho đẹp
+            return prefix.substring(0, 1).toUpperCase() + prefix.substring(1).toLowerCase();
         }
+        return "General";
     }
 }
