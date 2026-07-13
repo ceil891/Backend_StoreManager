@@ -52,11 +52,15 @@ public class Customer extends BaseEntity {
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id")
-    private PartnerGroup group;
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "group_id")
+//    private PartnerGroup group;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "area_id")
     private Area area;
+
+    @ManyToOne
+    @JoinColumn(name = "group_id")
+    private PartnerGroup partnerGroup;
 }

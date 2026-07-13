@@ -26,6 +26,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -79,16 +80,7 @@ public class GlobalExceptionHandler {
         return buildResponse(ex.getErrorCode(), ex.getMessage(), request);
     }
 
-    // ==================== Spring Security ====================
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
-            AccessDeniedException ex, HttpServletRequest request) {
-
-        log.warn("AccessDenied | Path: {}", request.getRequestURI());
-
-        return buildResponse(ErrorCode.ACCESS_DENIED, request);
-    }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadCredentials(
@@ -329,5 +321,37 @@ public class GlobalExceptionHandler {
             root = root.getCause();
         }
         return root.getMessage();
+    }
+
+    // File: src/main/java/org/example/storemanager/exception/GlobalExceptionHandler.java
+
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAppException(AppException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getErrorCode().getHttpStatus()).body(
+                ApiResponse.builder()
+                        .success(false)
+                        .status(ex.getErrorCode().getHttpStatus().value())
+                        .message(ex.getDetailMessage())
+                        .errorCode(ex.getErrorCode().name())
+                        .timestamp(LocalDateTime.now())
+                        .path(request.getRequestURI())
+                        .build()
+        );
+    }
+
+    // ==================== Spring Security ====================
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                ApiResponse.builder()
+                        .success(false)
+                        .status(401)
+                        .message("Bạn cần đăng nhập để thực hiện hành động này")
+                        .errorCode("UNAUTHORIZED")
+                        .timestamp(LocalDateTime.now())
+                        .path(request.getRequestURI())
+                        .build()
+        );
     }
 }

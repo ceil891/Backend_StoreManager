@@ -8,6 +8,7 @@ import org.example.storemanager.service.partnerarea.partnergroup.PartnerGroupSer
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,18 +19,27 @@ public class PartnerGroupController {
     private final PartnerGroupService service;
 
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<CreatePartnerGroupResponse> create(@Valid @RequestBody PartnerGroupRequest req) {
         return ResponseEntity.ok(service.create(req));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UpdatePartnerGroupResponse> update(@PathVariable Long id, @Valid @RequestBody PartnerGroupRequest req) {
         return ResponseEntity.ok(service.update(id, req));
     }
 
+    @PatchMapping("/{id}/toggle-status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UpdatePartnerGroupResponse> toggleStatus(@PathVariable Long id) {
+        return ResponseEntity.ok(service.toggleStatus(id));
+    }
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<DeletePartnerGroupResponse> delete(@PathVariable Long id) {
-        return ResponseEntity.ok(service.delete(id)); // Trả về DeletePartnerGroupResponse thay vì String
+        return ResponseEntity.ok(service.delete(id));
     }
 
     @GetMapping("/{id}")
@@ -39,16 +49,12 @@ public class PartnerGroupController {
 
     @GetMapping
     public ResponseEntity<Page<PartnerGroupListResponse>> getAll(
-            Pageable pageable,
+            Pageable pageable, // Spring sẽ tự map các param như ?page=0&size=20 vào đây
             @RequestParam(required = false) String groupCode,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String groupName,
             @RequestParam(required = false) Boolean isActive) {
-        return ResponseEntity.ok(service.findWithFilter(pageable, groupCode, type, search, isActive));
-    }
 
-    @PatchMapping("/{id}/toggle-status")
-    public ResponseEntity<UpdatePartnerGroupResponse> toggleStatus(@PathVariable Long id) {
-        return ResponseEntity.ok(service.toggleStatus(id));
+        return ResponseEntity.ok(service.findWithFilter(pageable, groupCode, type, groupName, isActive));
     }
 }

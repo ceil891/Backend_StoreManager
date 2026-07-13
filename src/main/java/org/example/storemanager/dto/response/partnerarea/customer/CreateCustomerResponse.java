@@ -28,4 +28,5 @@ public class CreateCustomerResponse {
     private String createdBy;
     private String message;
     private Boolean isActive;
+    private String groupName;
 }

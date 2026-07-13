@@ -27,4 +27,5 @@ public class CustomerDetailResponse {
     private LocalDateTime deletedAt;
     private String deletedBy;
     private Boolean isActive;
+    private String groupName;
 }

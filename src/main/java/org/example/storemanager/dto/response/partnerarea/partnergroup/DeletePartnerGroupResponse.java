@@ -11,4 +11,7 @@ public class DeletePartnerGroupResponse {
     private String message;
     private LocalDateTime deletedAt;
     private String deletedBy;
+    private boolean success;
+    private int status;
+    private LocalDateTime timestamp;
 }

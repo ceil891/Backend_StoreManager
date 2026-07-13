@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 
+import java.util.List;
+
 @Entity
 @Table(name = "partner_groups")
 @Data
@@ -32,4 +34,7 @@ public class PartnerGroup extends BaseEntity {
     @Builder.Default
     @Column(name = "is_active")
     private Boolean isActive = true;
+
+    @OneToMany(mappedBy = "partnerGroup", fetch = FetchType.LAZY)
+    private List<Customer> customers;
 }

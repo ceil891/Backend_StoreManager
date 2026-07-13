@@ -14,12 +14,11 @@ public class UpdatePartnerGroupResponse {
     private String description;
     private Integer initialMemberCount;
     private Boolean isActive;
-
-    // Đầy đủ thông tin audit
-    private LocalDateTime createdAt;
-    private String createdBy;
     private LocalDateTime updatedAt;
     private String updatedBy;
 
+    private boolean success;
+    private int status;
     private String message;
+    private LocalDateTime timestamp;
 }

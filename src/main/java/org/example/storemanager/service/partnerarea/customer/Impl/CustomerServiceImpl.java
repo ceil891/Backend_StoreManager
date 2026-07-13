@@ -23,6 +23,8 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import org.example.storemanager.entity.partnerarea.PartnerGroup;
+import org.example.storemanager.repository.partnerarea.PartnerGroupRepository;
 
 @Service
 @Transactional
@@ -30,6 +32,7 @@ import java.util.UUID;
 public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final PartnerGroupRepository partnerGroupRepository; // Khai báo biến
     private final CloudinaryService cloudinaryService;
 
     private String getCurrentUsername() {
@@ -46,6 +49,9 @@ public class CustomerServiceImpl implements CustomerService {
             throw new DuplicateResourceException("Customer", "email", req.getEmail());
         }
 
+        PartnerGroup group = partnerGroupRepository.findByGroupCode(req.getGroupCode())
+                .orElseThrow(() -> new ResourceNotFoundException("PartnerGroup", "groupCode", req.getGroupCode()));
+
         Customer c = new Customer();
         c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
         c.setName(req.getName());
@@ -57,6 +63,8 @@ public class CustomerServiceImpl implements CustomerService {
         c.setTotalSpend(0.0);
         c.setMembershipRank("Đồng");
         c.setCreatedBy(getCurrentUsername());
+
+        c.setPartnerGroup(group);
 
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
@@ -80,6 +88,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .totalSpend(refreshed.getTotalSpend())
                 .createdAt(refreshed.getCreatedAt())
                 .createdBy(refreshed.getCreatedBy())
+                .groupName(saved.getPartnerGroup().getGroupName())
                 .message("Tạo thành công").build();
     }
 
@@ -171,7 +180,9 @@ public class CustomerServiceImpl implements CustomerService {
                 .createdBy(c.getCreatedBy())
                 .createdAt(c.getCreatedAt())
                 .deletedAt(c.getDeletedAt())
-                .deletedBy(c.getDeletedBy()).build();
+                .deletedBy(c.getDeletedBy())
+                .groupName(c.getPartnerGroup() != null ? c.getPartnerGroup().getGroupName() : null)
+                .build();
     }
 
     @Override
@@ -205,4 +216,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override public List<DebtResponse> getCustomerDebts(Long id) { return Collections.emptyList(); }
     @Override public String importCustomers(MultipartFile file) { return "OK"; }
     @Override public byte[] exportCustomers() { return new byte[0]; }
+
+
+
 }

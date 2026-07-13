@@ -1,6 +1,5 @@
 package org.example.storemanager.dto.request.partnerarea.partnergroup;
 
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -18,9 +17,6 @@ public class PartnerGroupRequest {
     private String type;
 
     private String description;
-
-    @Min(value = 0, message = "Số thành viên không được âm")
-    private Integer initialMemberCount;
 
     private Boolean isActive;
 }

@@ -27,4 +27,5 @@ public class CreateCustomerRequest {
     private MultipartFile avatar;
     private Boolean isActive;
     private String avatarUrl;
+    private String groupCode;
 }
