@@ -117,4 +117,14 @@ public class CloudinaryServiceImpl implements CloudinaryService {
         log.info("Bắt đầu xóa ảnh bất đồng bộ cho URL: {}", url);
         deleteFileByUrl(url);
     }
+    @Override
+    public String uploadImage(MultipartFile file) {
+        try {
+            // Gọi đến hàm uploadFile sẵn có, với folder mặc định là "customers"
+            UploadResponse response = uploadFile(file, "customers");
+            return response.getImageUrl();
+        } catch (IOException e) {
+            throw new RuntimeException("Lỗi upload ảnh: " + e.getMessage());
+        }
+    }
 }

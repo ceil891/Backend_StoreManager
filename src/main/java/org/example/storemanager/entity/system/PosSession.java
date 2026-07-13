@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 @Builder
 public class PosSession extends BaseEntity {
 
+    @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
     private LocalDateTime endTime;
 
