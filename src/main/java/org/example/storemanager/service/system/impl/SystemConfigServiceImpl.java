@@ -77,13 +77,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         SystemConfig config = systemConfigRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SystemConfig", "id", id));
 
-        /* * LƯU Ý: Entity SystemConfig hiện tại chưa có trường `isActive`.
-         * Nếu bạn muốn dùng, hãy mở file SystemConfig.java và thêm:
-         * @Column(name = "is_active", columnDefinition = "boolean default true")
-         * private Boolean isActive = true;
-         * * Sau khi thêm, bạn có thể bỏ comment dòng code bên dưới:
-         */
-        // config.setIsActive(isActive);
+        config.setIsActive(isActive);
 
         config.setUpdatedBy(getCurrentUsername());
         SystemConfig updatedConfig = systemConfigRepository.save(config);
@@ -193,12 +187,11 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 ));
             }
 
-            // Mở comment này nếu Entity có trường isActive
-            /*
+
             if (isActive != null) {
                 predicates.add(cb.equal(root.get("isActive"), isActive));
             }
-            */
+
 
             if (search != null && !search.trim().isEmpty()) {
                 String searchPattern = "%" + search.trim().toLowerCase() + "%";
@@ -221,7 +214,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 .configKey(config.getConfigKey())
                 .configValue(config.getConfigValue())
                 .description(config.getDescription())
-                // .isActive(config.getIsActive()) // Mở comment nếu đã thêm isActive
+                .isActive(config.getIsActive())
                 .createdAt(config.getCreatedAt())
                 .updatedAt(config.getUpdatedAt())
                 .build();

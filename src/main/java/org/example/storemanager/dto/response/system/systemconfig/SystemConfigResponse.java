@@ -11,7 +11,8 @@ public class SystemConfigResponse {
     private String configKey;
     private String configValue;
     private String description;
-    private Boolean isActive; // Hoặc isDeleted tùy theo BaseEntity của bạn
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Boolean isDeleted;
 }
