@@ -3,7 +3,7 @@ package org.example.storemanager.entity.hrm;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
-import org.example.storemanager.enums.hrm.ManagementStatus;
+import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.enums.hrm.PositionRank;
 
 import java.math.BigDecimal;
@@ -36,8 +36,9 @@ public class Position extends BaseEntity {
     @Column(name = "position_rank", length = 50)
     private PositionRank positionRank;
 
-    @Column(name = "management_status", length = 50)
-    private ManagementStatus managementStatus;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "management_status_id")
+    private Role managementStatus;
 
     @Column(columnDefinition = "TEXT")
     private String description;

@@ -1,5 +1,6 @@
 package org.example.storemanager.dto.request.hrm.position;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -7,9 +8,6 @@ import java.math.BigDecimal;
 
 @Data
 public class UpdatePositionRequest {
-
-    @Size(max = 50)
-    private String positionCode;
 
     @Size(max = 150)
     private String positionName;
@@ -20,7 +18,8 @@ public class UpdatePositionRequest {
 
     private String positionRank;
 
-    private String managementStatus;
+    @JsonAlias({"managementStatus", "management_status_id"})
+    private Long managementStatusId;
 
     private String description;
 

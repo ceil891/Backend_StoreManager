@@ -7,6 +7,5 @@ import lombok.Data;
 @Builder
 public class PositionDropdownResponse {
     private Long id;
-    private String positionCode;
     private String positionName;
 }

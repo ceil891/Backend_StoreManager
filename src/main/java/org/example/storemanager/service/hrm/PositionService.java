@@ -3,11 +3,7 @@ package org.example.storemanager.service.hrm;
 import org.example.storemanager.dto.request.hrm.position.CreatePositionRequest;
 import org.example.storemanager.dto.request.hrm.position.UpdatePositionRequest;
 import org.example.storemanager.dto.response.common.PageResponse;
-import org.example.storemanager.dto.response.hrm.position.CreatePositionResponse;
-import org.example.storemanager.dto.response.hrm.position.DeletePositionResponse;
-import org.example.storemanager.dto.response.hrm.position.PositionDropdownResponse;
-import org.example.storemanager.dto.response.hrm.position.PositionResponse;
-import org.example.storemanager.dto.response.hrm.position.UpdatePositionResponse;
+import org.example.storemanager.dto.response.hrm.position.*;
 
 import java.util.List;
 

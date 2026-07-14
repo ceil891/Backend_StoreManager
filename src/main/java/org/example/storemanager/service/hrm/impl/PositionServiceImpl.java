@@ -4,20 +4,17 @@ import org.example.storemanager.config.LogActivity;
 import org.example.storemanager.dto.request.hrm.position.CreatePositionRequest;
 import org.example.storemanager.dto.request.hrm.position.UpdatePositionRequest;
 import org.example.storemanager.dto.response.common.PageResponse;
-import org.example.storemanager.dto.response.hrm.position.CreatePositionResponse;
-import org.example.storemanager.dto.response.hrm.position.DeletePositionResponse;
-import org.example.storemanager.dto.response.hrm.position.PositionDropdownResponse;
-import org.example.storemanager.dto.response.hrm.position.PositionResponse;
-import org.example.storemanager.dto.response.hrm.position.UpdatePositionResponse;
+import org.example.storemanager.dto.response.hrm.position.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.hrm.Department;
 import org.example.storemanager.entity.hrm.Position;
-import org.example.storemanager.enums.hrm.ManagementStatus;
+import org.example.storemanager.entity.system.Role;
 import org.example.storemanager.enums.hrm.PositionRank;
 import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.hrm.DepartmentHrmRepository;
 import org.example.storemanager.repository.hrm.PositionRepository;
+import org.example.storemanager.repository.system.RoleRepository;
 import org.example.storemanager.service.hrm.PositionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -42,32 +39,35 @@ public class PositionServiceImpl implements PositionService {
 
     private final PositionRepository positionRepository;
     private final DepartmentHrmRepository departmentHrmRepository;
+    private final RoleRepository roleRepository;
 
     @Autowired
-    public PositionServiceImpl(PositionRepository positionRepository, DepartmentHrmRepository departmentHrmRepository) {
+    public PositionServiceImpl(PositionRepository positionRepository,
+                               DepartmentHrmRepository departmentHrmRepository,
+                               RoleRepository roleRepository) {
         this.positionRepository = positionRepository;
         this.departmentHrmRepository = departmentHrmRepository;
+        this.roleRepository = roleRepository;
     }
 
     @Override
     @LogActivity(actionType = "CREATE", entityName = "Position", entityClass = Position.class)
     public CreatePositionResponse create(CreatePositionRequest request) {
-        if (positionRepository.existsByPositionCodeAndIsDeletedFalse(request.getPositionCode())) {
-            throw new DuplicateResourceException("Position", "positionCode", request.getPositionCode());
-        }
+        String generatedCode = generateNextPositionCode();
 
         PositionRank positionRank = null;
         if (request.getPositionRank() != null && !request.getPositionRank().isBlank()) {
             positionRank = PositionRank.valueOf(request.getPositionRank().toUpperCase());
         }
 
-        ManagementStatus managementStatus = null;
-        if (request.getManagementStatus() != null && !request.getManagementStatus().isBlank()) {
-            managementStatus = ManagementStatus.valueOf(request.getManagementStatus().toUpperCase());
+        Role managementStatus = null;
+        if (request.getManagementStatusId() != null) {
+            managementStatus = roleRepository.findByIdAndIsDeletedFalse(request.getManagementStatusId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "id", request.getManagementStatusId()));
         }
 
         Position position = Position.builder()
-                .positionCode(request.getPositionCode())
+                .positionCode(generatedCode)
                 .positionName(request.getPositionName())
                 .baseSalary(request.getBaseSalary())
                 .department(resolveDepartment(request.getDepartmentId()))
@@ -89,16 +89,6 @@ public class PositionServiceImpl implements PositionService {
         Position position = positionRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Position", "id", id));
 
-        // Only check positionCode uniqueness if it's being changed and is not null/blank
-        if (request.getPositionCode() != null && !request.getPositionCode().isBlank() &&
-            !position.getPositionCode().equals(request.getPositionCode()) &&
-            positionRepository.existsByPositionCodeAndIdNotAndIsDeletedFalse(request.getPositionCode(), id)) {
-            throw new DuplicateResourceException("Position", "positionCode", request.getPositionCode());
-        }
-
-        if (request.getPositionCode() != null && !request.getPositionCode().isBlank()) {
-            position.setPositionCode(request.getPositionCode());
-        }
         if (request.getPositionName() != null && !request.getPositionName().isBlank()) {
             position.setPositionName(request.getPositionName());
         }
@@ -111,8 +101,10 @@ public class PositionServiceImpl implements PositionService {
         if (request.getPositionRank() != null && !request.getPositionRank().isBlank()) {
             position.setPositionRank(PositionRank.valueOf(request.getPositionRank().toUpperCase()));
         }
-        if (request.getManagementStatus() != null && !request.getManagementStatus().isBlank()) {
-            position.setManagementStatus(ManagementStatus.valueOf(request.getManagementStatus().toUpperCase()));
+        if (request.getManagementStatusId() != null) {
+            Role managementStatus = roleRepository.findByIdAndIsDeletedFalse(request.getManagementStatusId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "id", request.getManagementStatusId()));
+            position.setManagementStatus(managementStatus);
         }
         if (request.getDescription() != null) {
             position.setDescription(request.getDescription());
@@ -191,9 +183,12 @@ public class PositionServiceImpl implements PositionService {
     @Override
     @Transactional(readOnly = true)
     public List<PositionDropdownResponse> getDropdownList() {
-        return positionRepository.findAllByIsDeletedFalseAndIsLockedFalse()
+        return positionRepository.findAllByIsDeletedFalseAndIsLockedFalseOrderByPositionNameAsc()
                 .stream()
-                .map(this::mapToDropdownResponse)
+                .map(position -> PositionDropdownResponse.builder()
+                        .id(position.getId())
+                        .positionName(position.getPositionName())
+                        .build())
                 .collect(Collectors.toList());
     }
 
@@ -211,6 +206,12 @@ public class PositionServiceImpl implements PositionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Department", "id", departmentId));
     }
 
+    private String generateNextPositionCode() {
+        return positionRepository.findMaxPositionCodeAsInteger()
+                .map(maxCode -> String.valueOf(maxCode + 1))
+                .orElse("1");
+    }
+
     private PositionResponse mapToResponse(Position position) {
         return PositionResponse.builder()
                 .id(position.getId())
@@ -220,7 +221,7 @@ public class PositionServiceImpl implements PositionService {
                 .departmentId(position.getDepartment().getId())
                 .departmentName(position.getDepartment().getDeptName())
                 .positionRank(position.getPositionRank() != null ? position.getPositionRank().name() : null)
-                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().name() : null)
+                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().getRoleName() : null)
                 .description(position.getDescription())
                 .isActive(isActive(position.getIsLocked()))
                 .isDeleted(position.getIsDeleted())
@@ -237,7 +238,7 @@ public class PositionServiceImpl implements PositionService {
                 .baseSalary(position.getBaseSalary())
                 .departmentId(position.getDepartment().getId())
                 .positionRank(position.getPositionRank() != null ? position.getPositionRank().name() : null)
-                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().name() : null)
+                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().getRoleName() : null)
                 .description(position.getDescription())
                 .isActive(isActive(position.getIsLocked()))
                 .createdAt(position.getCreatedAt())
@@ -253,19 +254,11 @@ public class PositionServiceImpl implements PositionService {
                 .baseSalary(position.getBaseSalary())
                 .departmentId(position.getDepartment().getId())
                 .positionRank(position.getPositionRank() != null ? position.getPositionRank().name() : null)
-                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().name() : null)
+                .managementStatus(position.getManagementStatus() != null ? position.getManagementStatus().getRoleName() : null)
                 .description(position.getDescription())
                 .isActive(isActive(position.getIsLocked()))
                 .updatedAt(position.getUpdatedAt())
                 .updatedBy(position.getUpdatedBy())
-                .build();
-    }
-
-    private PositionDropdownResponse mapToDropdownResponse(Position position) {
-        return PositionDropdownResponse.builder()
-                .id(position.getId())
-                .positionCode(position.getPositionCode())
-                .positionName(position.getPositionName())
                 .build();
     }
 

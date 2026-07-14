@@ -20,13 +20,16 @@ public interface PositionRepository extends JpaRepository<Position, Long> {
 
     boolean existsByPositionCodeAndIdNotAndIsDeletedFalse(String positionCode, Long id);
 
+    @Query(value = "SELECT MAX(CAST(position_code AS INTEGER)) FROM positions WHERE is_deleted = false", nativeQuery = true)
+    Optional<Integer> findMaxPositionCodeAsInteger();
+
     @Query("SELECT p FROM Position p WHERE " +
-           "(:includeDeleted = true OR p.isDeleted = false) AND " +
-           "(:isActive IS NULL OR (:isActive = true AND (p.isLocked IS NULL OR p.isLocked = false)) OR (:isActive = false AND p.isLocked = true)) AND " +
-           "(:departmentId IS NULL OR p.department.id = :departmentId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(p.positionCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.positionName) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(:includeDeleted = true OR p.isDeleted = false) AND " +
+            "(:isActive IS NULL OR (:isActive = true AND (p.isLocked IS NULL OR p.isLocked = false)) OR (:isActive = false AND p.isLocked = true)) AND " +
+            "(:departmentId IS NULL OR p.department.id = :departmentId) AND " +
+            "(:search IS NULL OR :search = '' OR " +
+            "LOWER(p.positionCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(p.positionName) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Position> findAllFiltered(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -34,7 +37,7 @@ public interface PositionRepository extends JpaRepository<Position, Long> {
             @Param("includeDeleted") boolean includeDeleted,
             Pageable pageable);
 
-    List<Position> findAllByIsDeletedFalseAndIsLockedFalse();
+    List<Position> findAllByIsDeletedFalseAndIsLockedFalseOrderByPositionNameAsc();
 
     List<Position> findByPositionCodeContainsIgnoreCaseOrPositionNameContainsIgnoreCaseAndIsDeletedFalse(String positionCode, String positionName);
 }
