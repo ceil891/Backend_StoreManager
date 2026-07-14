@@ -4,6 +4,7 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.dto.request.partnerarea.partnergroup.PartnerGroupRequest;
 import org.example.storemanager.dto.response.partnerarea.partnergroup.*;
+import org.example.storemanager.entity.partnerarea.Customer;
 import org.example.storemanager.entity.partnerarea.PartnerGroup;
 import org.example.storemanager.enums.ErrorCode;
 import org.example.storemanager.enums.PartnerType;
@@ -19,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import org.example.storemanager.dto.response.partnerarea.supplier.SupplierInfo;
 import org.example.storemanager.dto.response.partnerarea.customer.CustomerInfo;
+import org.example.storemanager.entity.partnerarea.Supplier;
+import org.example.storemanager.repository.partnerarea.CustomerRepository;
+import org.example.storemanager.repository.partnerarea.SupplierRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +33,8 @@ import java.util.List;
 public class PartnerGroupServiceImpl implements PartnerGroupService {
 
     private final PartnerGroupRepository repository;
+    private final CustomerRepository customerRepository;
+    private final SupplierRepository supplierRepository;
 
     private String getCurrentUser() {
         return SecurityContextHolder.getContext().getAuthentication().getName();
@@ -80,10 +86,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .isActive(savedGroup.getIsActive())
                 .createdAt(savedGroup.getCreatedAt())
                 .createdBy(savedGroup.getCreatedBy())
-                .success(true)
-                .status(200)
-                .message("Tạo nhóm thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -132,10 +134,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 // Đếm danh sách an toàn
                 .initialMemberCount(group.getCustomers() != null ? group.getCustomers().size() : 0)                .updatedAt(updatedGroup.getUpdatedAt())
                 .updatedBy(updatedGroup.getUpdatedBy())
-                .success(true)
-                .status(200)
-                .message("Cập nhật thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -157,10 +155,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .isActive(updatedGroup.getIsActive())
                 .updatedAt(updatedGroup.getUpdatedAt())
                 .updatedBy(updatedGroup.getUpdatedBy())
-                .success(true)
-                .status(200)
-                .message("Thay đổi trạng thái thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -183,10 +177,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .deletedBy(deleted.getDeletedBy())
                 .isDeleted(deleted.getIsDeleted())
                 .isActive(deleted.getIsActive())
-                .success(true)
-                .status(200)
-                .message("Xóa nhóm thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
     }
     @Override
@@ -232,10 +222,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .createdBy(group.getCreatedBy())
                 .updatedAt(group.getUpdatedAt())
                 .updatedBy(group.getUpdatedBy())
-                .success(true)
-                .status(200)
-                .message("Lấy chi tiết thành công")
-                .timestamp(LocalDateTime.now())
                 .suppliers(supplierInfos)
                 .build();
     }
@@ -293,7 +279,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .createdAt(g.getCreatedAt())
                 .createdBy(g.getCreatedBy()).updatedAt(g.getUpdatedAt())
                 .updatedBy(g.getUpdatedBy())
-                .message(msg)
                 .build();
     }
 
@@ -308,7 +293,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .isActive(g.getIsActive())
                 .updatedAt(g.getUpdatedAt())
                 .updatedBy(g.getUpdatedBy())
-                .message(msg)
                 .build();
     }
 
@@ -352,10 +336,6 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                 .createdBy(g.getCreatedBy())
                 .updatedAt(g.getUpdatedAt())
                 .updatedBy(g.getUpdatedBy())
-                .success(true)                            // Thêm vào nếu DTO có các trường này
-                .status(200)
-                .message("Lấy chi tiết thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
     }
 
@@ -363,10 +343,33 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
         return PartnerGroupListResponse.builder()
                 .id(g.getId()).groupCode(g.getGroupCode()).groupName(g.getGroupName())
                 .type(g.getType()).isActive(g.getIsActive())
-                .success(true)
-                .status(200)
-                .message("Lấy danh sách thành công")
-                .timestamp(LocalDateTime.now())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void addMemberToGroup(Long groupId, Long memberId, String type) {
+        // 1. Tìm Group
+        PartnerGroup group = repository.findById(groupId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhóm"));
+
+        // 2. Kiểm tra loại nhóm có khớp không
+        if (!group.getType().equalsIgnoreCase(type)) {
+            throw new AppException(ErrorCode.BUSINESS_ERROR, "Nhóm này thuộc loại " + group.getType() + ", không thể thêm thành viên loại " + type);
+        }
+
+        if ("CUSTOMER".equalsIgnoreCase(type)) {
+            Customer customer = customerRepository.findById(memberId)
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy khách hàng"));
+
+            customer.setPartnerGroup(group); // Gán group vào khách hàng
+            customerRepository.save(customer);
+        } else {
+            Supplier supplier = supplierRepository.findById(memberId)
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhà cung cấp"));
+
+            supplier.setPartnerGroup(group);
+            supplierRepository.save(supplier);
+        }
     }
 }

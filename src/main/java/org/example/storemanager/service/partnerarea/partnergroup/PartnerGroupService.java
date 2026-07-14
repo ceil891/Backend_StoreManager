@@ -31,4 +31,6 @@ public interface PartnerGroupService {
 
     // Danh sách mặc định
     Page<PartnerGroupListResponse> getAll(Pageable pageable, String search, String type);
+
+    void addMemberToGroup(Long groupId, Long memberId, String type);
 }

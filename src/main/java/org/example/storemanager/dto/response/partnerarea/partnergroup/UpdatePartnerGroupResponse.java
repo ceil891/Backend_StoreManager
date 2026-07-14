@@ -16,9 +16,4 @@ public class UpdatePartnerGroupResponse {
     private Boolean isActive;
     private LocalDateTime updatedAt;
     private String updatedBy;
-
-    private boolean success;
-    private int status;
-    private String message;
-    private LocalDateTime timestamp;
 }

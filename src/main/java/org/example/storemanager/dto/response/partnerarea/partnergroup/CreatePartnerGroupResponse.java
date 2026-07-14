@@ -23,10 +23,4 @@ public class CreatePartnerGroupResponse {
     private String createdBy;
     private LocalDateTime updatedAt;
     private String updatedBy;
-
-    // 3. Các trường chuẩn API (đã sửa lỗi trùng lặp 'message')
-    private boolean success;
-    private int status;
-    private String message;
-    private LocalDateTime timestamp;
 }

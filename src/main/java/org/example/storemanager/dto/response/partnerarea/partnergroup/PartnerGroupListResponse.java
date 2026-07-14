@@ -13,8 +13,4 @@ public class PartnerGroupListResponse {
     private String groupName;
     private String type;
     private Boolean isActive;
-    private boolean success = true;
-    private int status = 200;
-    private String message;
-    private LocalDateTime timestamp;
 }

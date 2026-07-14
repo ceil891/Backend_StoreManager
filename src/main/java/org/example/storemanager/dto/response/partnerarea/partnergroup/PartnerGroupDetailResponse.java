@@ -1,5 +1,6 @@
 package org.example.storemanager.dto.response.partnerarea.partnergroup;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +12,7 @@ import java.util.List;
 
 @Data
 @Builder
+@JsonInclude(JsonInclude.Include.NON_EMPTY) // Dùng NON_EMPTY để tự ẩn list rỗng
 public class PartnerGroupDetailResponse {
     private Long id;
     private String groupCode;
@@ -23,12 +25,8 @@ public class PartnerGroupDetailResponse {
     private String createdBy;
     private LocalDateTime updatedAt;
     private String updatedBy;
-    private boolean success;
-    private int status;
-    private String message;
-    private LocalDateTime timestamp;
-    private List<CustomerInfo> customers;
     private Boolean isDeleted;
     private Integer totalMember;
+    private List<CustomerInfo> customers;
     private List<SupplierInfo> suppliers;
 }
