@@ -12,10 +12,12 @@ import org.example.storemanager.repository.partnerarea.PartnerGroupRepository;
 import org.example.storemanager.service.partnerarea.partnergroup.PartnerGroupService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
+import org.example.storemanager.dto.response.partnerarea.supplier.SupplierInfo;
 import org.example.storemanager.dto.response.partnerarea.customer.CustomerInfo;
 
 import java.time.LocalDateTime;
@@ -88,36 +90,47 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
     @Override
     @Transactional
     public UpdatePartnerGroupResponse update(Long id, PartnerGroupRequest req) {
-        validatePartnerType(req.getType()); // Phải validate trước!
+        // 1. Validate loại nhóm
+        validatePartnerType(req.getType());
 
-        PartnerGroup group = repository.findById(id).orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhóm"));
+        // 2. Tìm nhóm hiện tại
+        PartnerGroup group = repository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhóm"));
 
-        // Validate trùng lặp khi sửa (QUAN TRỌNG)
-        if (!group.getGroupCode().equals(req.getGroupCode()) && repository.existsByGroupCode(req.getGroupCode())) {
-            throw new AppException(ErrorCode.DUPLICATE_RESOURCE, "Mã nhóm đã tồn tại");
+        // 3. Chỉ check trùng nếu mã/tên MỚI khác với mã/tên HIỆN TẠI
+        if (!req.getGroupCode().equals(group.getGroupCode())) {
+            if (repository.existsByGroupCode(req.getGroupCode())) {
+                throw new AppException(ErrorCode.DUPLICATE_RESOURCE, "Mã nhóm đã tồn tại");
+            }
         }
-        if (!group.getGroupName().equals(req.getGroupName()) && repository.existsByGroupName(req.getGroupName())) {
-            throw new AppException(ErrorCode.DUPLICATE_RESOURCE, "Tên nhóm đã tồn tại");
+        if (!req.getGroupName().equals(group.getGroupName())) {
+            if (repository.existsByGroupName(req.getGroupName())) {
+                throw new AppException(ErrorCode.DUPLICATE_RESOURCE, "Tên nhóm đã tồn tại");
+            }
         }
 
+        // 4. Cập nhật thông tin
+        group.setGroupCode(req.getGroupCode());
         group.setGroupName(req.getGroupName());
-        group.setType(req.getType().toUpperCase()); // Lưu dạng hoa
+        repository.save(group);
+        group.setType(req.getType().toUpperCase());
         group.setDescription(req.getDescription());
         group.setIsActive(req.getIsActive() != null ? req.getIsActive() : group.getIsActive());
         group.setUpdatedBy(getCurrentUser());
 
+        // 5. Lưu xuống DB
         PartnerGroup updatedGroup = repository.save(group);
 
-        validatePartnerType(req.getType());
-
+        // 6. Trả về Response
         return UpdatePartnerGroupResponse.builder()
-                .id(updatedGroup
-                .getId()).groupCode(updatedGroup.getGroupCode())
+                .id(group.getId())
+                .groupCode(updatedGroup.getGroupCode())
                 .groupName(updatedGroup.getGroupName())
                 .type(updatedGroup.getType())
                 .description(updatedGroup.getDescription())
                 .isActive(updatedGroup.getIsActive())
-                .updatedAt(updatedGroup.getUpdatedAt())
+                // Đếm danh sách an toàn
+                .initialMemberCount(group.getCustomers() != null ? group.getCustomers().size() : 0)                .updatedAt(updatedGroup.getUpdatedAt())
                 .updatedBy(updatedGroup.getUpdatedBy())
                 .success(true)
                 .status(200)
@@ -161,28 +174,28 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
         group.setIsDeleted(true);
         group.setDeletedAt(LocalDateTime.now());
         group.setDeletedBy(getCurrentUser());
+        group.setIsActive(false);
         PartnerGroup deleted = repository.save(group);
 
         return DeletePartnerGroupResponse.builder()
                 .id(deleted.getId())
                 .deletedAt(deleted.getDeletedAt())
                 .deletedBy(deleted.getDeletedBy())
+                .isDeleted(deleted.getIsDeleted())
+                .isActive(deleted.getIsActive())
                 .success(true)
                 .status(200)
                 .message("Xóa nhóm thành công")
                 .timestamp(LocalDateTime.now())
                 .build();
     }
-
     @Override
     @Transactional(readOnly = true)
     public PartnerGroupDetailResponse getById(Long id) {
-        // 1. Tìm nhóm, kiểm tra tồn tại và kiểm tra đã xóa hay chưa
         PartnerGroup group = repository.findById(id)
-                .filter(g -> !Boolean.TRUE.equals(g.getIsDeleted()))
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Không tìm thấy nhóm"));
 
-        // 2. Map danh sách khách hàng (Xử lý trường hợp null an toàn)
+        // Map khách hàng an toàn
         List<CustomerInfo> customerInfos = (group.getCustomers() == null) ?
                 Collections.emptyList() :
                 group.getCustomers().stream()
@@ -194,27 +207,36 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
                                 .build())
                         .toList();
 
-        // 3. Build response với tất cả thông tin
+        List<SupplierInfo> supplierInfos = (group.getSuppliers() == null) ?
+                Collections.emptyList() :
+                group.getSuppliers().stream()
+                        .map(s -> SupplierInfo.builder()
+                                .id(s.getId())
+                                .name(s.getName())
+                                .phone(s.getPhone())
+                                .build())
+                        .toList();
+
         return PartnerGroupDetailResponse.builder()
-                // Thông tin nhóm
                 .id(group.getId())
                 .groupCode(group.getGroupCode())
                 .groupName(group.getGroupName())
                 .type(group.getType())
                 .description(group.getDescription())
                 .isActive(group.getIsActive())
+                .isDeleted(group.getIsDeleted())
+                .initialMemberCount("SUPPLIER".equals(group.getType()) ? supplierInfos.size() : customerInfos.size())
+                .customers(customerInfos)
+                .suppliers(supplierInfos)
                 .createdAt(group.getCreatedAt())
                 .createdBy(group.getCreatedBy())
                 .updatedAt(group.getUpdatedAt())
                 .updatedBy(group.getUpdatedBy())
-                // Thông tin khách hàng và đếm số lượng
-                .customers(customerInfos)
-                .initialMemberCount(customerInfos.size())
-                // Thông tin response wrapper
                 .success(true)
                 .status(200)
                 .message("Lấy chi tiết thành công")
                 .timestamp(LocalDateTime.now())
+                .suppliers(supplierInfos)
                 .build();
     }
 
@@ -248,9 +270,14 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Page<PartnerGroupListResponse> getAll(Pageable pageable, String search, String type) {
-        return findWithFilter(pageable, null, type, search, null);
+        // Dùng Specification để lọc
+        Specification<PartnerGroup> spec = (root, query, cb) -> {
+            Predicate p = cb.equal(root.get("isDeleted"), false); // Chỉ lấy cái chưa xóa
+            if (search != null) p = cb.and(p, cb.like(root.get("groupName"), "%" + search + "%"));
+            return p;
+        };
+        return repository.findAll(spec, pageable).map(this::mapToListResponse);
     }
 
 
@@ -286,18 +313,49 @@ public class PartnerGroupServiceImpl implements PartnerGroupService {
     }
 
     private PartnerGroupDetailResponse mapToDetailResponse(PartnerGroup g) {
+        // 1. Xử lý danh sách khách hàng an toàn
+        System.out.println("DEBUG - ID: " + g.getId() + ", Suppliers list size: " + (g.getSuppliers() != null ? g.getSuppliers().size() : "NULL"));
+        List<CustomerInfo> customerInfos = (g.getCustomers() == null) ?
+                Collections.emptyList() :
+                g.getCustomers().stream()
+                        .map(c -> CustomerInfo.builder()
+                                .id(c.getId())
+                                .name(c.getName())
+                                .phone(c.getPhone())
+                                .customerCode(c.getCustomerCode())
+                                .build())
+                        .toList();
+
+        List<SupplierInfo> supplierInfos = (g.getSuppliers() == null) ?
+                Collections.emptyList() :
+                g.getSuppliers().stream()
+                        .map(s -> SupplierInfo.builder()
+                                .id(s.getId())
+                                .name(s.getName())
+                                .phone(s.getPhone())
+                                .build())
+                        .toList();
+
+        // 2. Build response đầy đủ
         return PartnerGroupDetailResponse.builder()
                 .id(g.getId())
                 .groupCode(g.getGroupCode())
                 .groupName(g.getGroupName())
                 .type(g.getType())
                 .description(g.getDescription())
-                .initialMemberCount(g.getInitialMemberCount())
                 .isActive(g.getIsActive())
+                .isDeleted(g.getIsDeleted())
+                .initialMemberCount("SUPPLIER".equalsIgnoreCase(g.getType()) ? supplierInfos.size() : customerInfos.size())
+                .customers(customerInfos)                 // Gán luôn list đã map
+                .suppliers(supplierInfos)
                 .createdAt(g.getCreatedAt())
                 .createdBy(g.getCreatedBy())
                 .updatedAt(g.getUpdatedAt())
                 .updatedBy(g.getUpdatedBy())
+                .success(true)                            // Thêm vào nếu DTO có các trường này
+                .status(200)
+                .message("Lấy chi tiết thành công")
+                .timestamp(LocalDateTime.now())
                 .build();
     }
 

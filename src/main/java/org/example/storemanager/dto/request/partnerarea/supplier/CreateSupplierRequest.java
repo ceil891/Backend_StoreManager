@@ -47,7 +47,5 @@ public class CreateSupplierRequest {
     private Long groupId;
     private Long areaId;
     private Boolean isActive;
-
-
-
+    private String groupCode;
 }

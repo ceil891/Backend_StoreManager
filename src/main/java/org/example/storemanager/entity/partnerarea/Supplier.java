@@ -36,15 +36,15 @@ public class Supplier extends BaseEntity {
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
+    // CHỈ GIỮ LẠI MỘT TRƯỜNG NÀY ĐỂ MAPPING VỚI GROUP
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id")
-    private PartnerGroup group;
+    private PartnerGroup partnerGroup;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "area_id")
     private Area area;
 
-    //Thêm 2 trường mới danh mục hàng hóa và người liên hệ
     @Column(name = "category", length = 100)
     private String category;
 
@@ -52,10 +52,10 @@ public class Supplier extends BaseEntity {
     private String contactPerson;
 
     @Column(name = "payment_term")
-    private Integer paymentTerm; // Số ngày công nợ
+    private Integer paymentTerm;
 
     @Column(name = "credit_limit", precision = 19, scale = 2)
-    private BigDecimal creditLimit; // Hạn mức công nợ
+    private BigDecimal creditLimit;
 
     @Column(name = "bank_name", length = 100)
     private String bankName;

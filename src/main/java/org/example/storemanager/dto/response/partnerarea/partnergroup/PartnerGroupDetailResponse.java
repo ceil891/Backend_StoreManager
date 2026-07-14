@@ -1,9 +1,11 @@
 package org.example.storemanager.dto.response.partnerarea.partnergroup;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 import org.example.storemanager.dto.response.partnerarea.customer.CustomerInfo;
-
+import org.example.storemanager.dto.response.partnerarea.supplier.SupplierInfo;
+import java.util.Collections;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,4 +28,7 @@ public class PartnerGroupDetailResponse {
     private String message;
     private LocalDateTime timestamp;
     private List<CustomerInfo> customers;
+    private Boolean isDeleted;
+    private Integer totalMember;
+    private List<SupplierInfo> suppliers;
 }

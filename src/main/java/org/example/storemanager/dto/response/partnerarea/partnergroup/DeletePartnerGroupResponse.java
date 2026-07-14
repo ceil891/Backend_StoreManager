@@ -14,4 +14,7 @@ public class DeletePartnerGroupResponse {
     private boolean success;
     private int status;
     private LocalDateTime timestamp;
+    private Boolean isDeleted;
+    private Boolean isActive;
+
 }

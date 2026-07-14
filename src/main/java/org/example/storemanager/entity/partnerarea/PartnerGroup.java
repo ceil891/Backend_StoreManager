@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -12,6 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Getter @Setter
 @EqualsAndHashCode(callSuper = true)
 public class PartnerGroup extends BaseEntity {
 
@@ -28,6 +30,7 @@ public class PartnerGroup extends BaseEntity {
     private String description;
 
     @Builder.Default
+    @Transient
     @Column(name = "initial_member_count")
     private Integer initialMemberCount = 0;
 
@@ -37,4 +40,10 @@ public class PartnerGroup extends BaseEntity {
 
     @OneToMany(mappedBy = "partnerGroup", fetch = FetchType.LAZY)
     private List<Customer> customers;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
+
+    @OneToMany(mappedBy = "partnerGroup")
+    private List<Supplier> suppliers = new ArrayList<>();
 }

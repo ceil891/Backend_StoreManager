@@ -27,4 +27,5 @@ public class UpdateSupplierResponse {
     private String accountHolder;
     private String description;
     private String message;
+    private String groupCode;
 }

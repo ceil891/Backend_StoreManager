@@ -22,4 +22,5 @@ public class CreateSupplierResponse {
     private String createdBy;
     private LocalDateTime createdAt;
     private String description;
+    private String groupCode;
 }

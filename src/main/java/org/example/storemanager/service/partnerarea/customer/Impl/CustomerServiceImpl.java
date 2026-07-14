@@ -5,6 +5,8 @@ import org.example.storemanager.dto.request.partnerarea.customerdto.CreateCustom
 import org.example.storemanager.dto.request.partnerarea.customerdto.UpdateCustomerRequest;
 import org.example.storemanager.dto.response.partnerarea.customer.*;
 import org.example.storemanager.entity.partnerarea.Customer;
+import org.example.storemanager.enums.ErrorCode;
+import org.example.storemanager.exception.AppException;
 import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.partnerarea.CustomerRepository;
@@ -51,6 +53,10 @@ public class CustomerServiceImpl implements CustomerService {
 
         PartnerGroup group = partnerGroupRepository.findByGroupCode(req.getGroupCode())
                 .orElseThrow(() -> new ResourceNotFoundException("PartnerGroup", "groupCode", req.getGroupCode()));
+
+        if (!"CUSTOMER".equalsIgnoreCase(group.getType())) {
+            throw new AppException(ErrorCode.INVALID_GROUP_TYPE, "Nhóm này không thuộc loại Khách hàng (CUSTOMER)");
+        }
 
         Customer c = new Customer();
         c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());

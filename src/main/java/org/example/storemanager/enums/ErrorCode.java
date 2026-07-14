@@ -39,6 +39,9 @@ public enum ErrorCode {
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Định dạng dữ liệu không được hỗ trợ"),
 
     // === Business Logic ===
+    //thêm
+    INVALID_GROUP_TYPE(HttpStatus.BAD_REQUEST, "Nhóm này không thuộc loại yêu cầu"),
+    //
     BUSINESS_ERROR(HttpStatus.BAD_REQUEST, "Lỗi nghiệp vụ"),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "Tài nguyên đã tồn tại"),
     INSUFFICIENT_STOCK(HttpStatus.BAD_REQUEST, "Số lượng tồn kho không đủ"),

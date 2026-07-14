@@ -30,4 +30,5 @@ public class SupplierDetailResponse {
     private LocalDateTime createdAt;
     private String updatedBy;
     private LocalDateTime updatedAt;
+    private String groupCode;
 }

@@ -23,4 +23,5 @@ public class SupplierListResponse {
     private LocalDateTime createdAt;
     private String updatedBy;
     private LocalDateTime updatedAt;
+    private String groupCode;
 }
