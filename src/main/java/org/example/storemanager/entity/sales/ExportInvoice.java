@@ -1,4 +1,5 @@
 package org.example.storemanager.entity.sales;
+import org.example.storemanager.enums.sales.OrderStatus;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -37,8 +38,13 @@ public class ExportInvoice extends BaseEntity {
     @Column(name = "total_amount", precision = 18, scale = 2, nullable = false)
     private BigDecimal totalAmount;
 
-    @Column(nullable = false, length = 30)
-    private String status; // DRAFT, PAID, CANCELLED, RETURNED
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 50)
+    private OrderStatus status;
+
+    @Builder.Default
+    @Column(name = "is_active")
+    private Boolean isActive = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
