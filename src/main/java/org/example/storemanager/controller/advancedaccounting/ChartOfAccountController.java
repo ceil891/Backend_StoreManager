@@ -2,9 +2,9 @@ package org.example.storemanager.controller.advancedaccounting;
 
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.dto.request.advancedaccounting.CreateAccountRequest;
-import org.example.storemanager.dto.response.advancedaccounting.AccountDropdownResponse;
-import org.example.storemanager.dto.response.advancedaccounting.AccountResponse;
-import org.example.storemanager.dto.response.advancedaccounting.AccountDetailResponse;
+import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountDropdownResponse;
+import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountResponse;
+import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountDetailResponse;
 import org.example.storemanager.dto.response.common.ApiResponse;
 import org.example.storemanager.service.advancedaccounting.ChartOfAccountService;
 import org.springframework.data.domain.Page;

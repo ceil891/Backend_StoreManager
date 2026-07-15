@@ -1,4 +1,4 @@
-package org.example.storemanager.dto.response.advancedaccounting;
+package org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;

@@ -1,4 +1,4 @@
-package org.example.storemanager.dto.response.advancedaccounting;
+package org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount;
 
 import lombok.Builder;
 import lombok.Data;
