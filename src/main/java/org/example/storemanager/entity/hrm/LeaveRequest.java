@@ -6,6 +6,7 @@ import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.system.User;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "leave_requests")
@@ -38,4 +39,19 @@ public class LeaveRequest extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")
     private User approvedBy; // Người duyệt đơn
+
+    @Column(name = "number_of_days")
+    private Integer numberOfDays; // Số ngày nghỉ
+
+    @Column(name = "approval_date")
+    private LocalDateTime approvalDate; // Thời gian duyệt
+
+    @Column(columnDefinition = "TEXT")
+    private String rejectionReason; // Lý do từ chối
+
+    @Column(name = "attachment_path", length = 255)
+    private String attachmentPath; // Đường dẫn file đính kèm (pdf, ...)
+
+    @Column(name = "is_active", columnDefinition = "boolean default true")
+    private Boolean isActive = true;
 }
