@@ -37,7 +37,8 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 // Mọi request đều cho phép — kiểm soát qua @PreAuthorize ở Controller
-                .anyRequest().permitAll()
+                    .requestMatchers("/api/v1/chart-of-accounts/**").authenticated()
+                    .anyRequest().permitAll()
             )
             // Đăng ký JWT filter: chạy trước UsernamePasswordAuthenticationFilter
             // Nếu có token hợp lệ → set username vào SecurityContext

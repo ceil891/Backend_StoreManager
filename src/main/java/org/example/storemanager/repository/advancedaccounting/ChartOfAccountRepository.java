@@ -12,6 +12,8 @@ public interface ChartOfAccountRepository extends JpaRepository<ChartOfAccount, 
     // Phân trang và lọc theo trạng thái
     Page<ChartOfAccount> findByIsActive(Boolean isActive, Pageable pageable);
 
+    boolean existsByAccountCode(String accountCode);
+    boolean existsByParentId(Long parentId);
     // Tìm các tài khoản cha (parentId is null)
     Page<ChartOfAccount> findByParentIsNull(Pageable pageable);
 }

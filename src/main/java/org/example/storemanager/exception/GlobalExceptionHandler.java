@@ -189,13 +189,35 @@ public class GlobalExceptionHandler {
 
     // ==================== Malformed Request Body ====================
 
+//    @ExceptionHandler(HttpMessageNotReadableException.class)
+//    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(
+//            HttpMessageNotReadableException ex, HttpServletRequest request) {
+//
+//        log.warn("MessageNotReadable | Path: {}", request.getRequestURI());
+//
+//        return buildResponse(ErrorCode.INVALID_REQUEST_BODY, request);
+//    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(
             HttpMessageNotReadableException ex, HttpServletRequest request) {
 
         log.warn("MessageNotReadable | Path: {}", request.getRequestURI());
 
-        return buildResponse(ErrorCode.INVALID_REQUEST_BODY, request);
+        String message = "Dữ liệu đầu vào không hợp lệ hoặc sai định dạng.";
+
+        // Kiểm tra nếu lỗi do định dạng (thường là do sai giá trị Enum)
+        if (ex.getCause() instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException cause) {
+            if (cause.getTargetType().isEnum()) {
+                String fieldName = cause.getPath().get(cause.getPath().size() - 1).getFieldName();
+                String allowedValues = java.util.Arrays.toString(cause.getTargetType().getEnumConstants());
+
+                message = String.format("Giá trị '%s' không hợp lệ cho trường '%s'. Các giá trị hợp lệ là: %s",
+                        cause.getValue(), fieldName, allowedValues);
+            }
+        }
+
+        return buildResponse(ErrorCode.INVALID_REQUEST_BODY, message, request);
     }
 
     // ==================== HTTP Method Not Supported ====================
