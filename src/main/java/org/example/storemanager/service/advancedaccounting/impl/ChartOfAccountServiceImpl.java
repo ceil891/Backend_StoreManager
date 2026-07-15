@@ -1,7 +1,7 @@
 package org.example.storemanager.service.advancedaccounting.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.storemanager.dto.request.advancedaccounting.CreateAccountRequest;
+import org.example.storemanager.dto.request.advancedaccounting.ChartOfAccount.CreateAccountRequest;
 import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountDropdownResponse;
 import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountResponse;
 import org.example.storemanager.dto.response.advancedaccounting.ChartOfAccount.AccountDetailResponse;

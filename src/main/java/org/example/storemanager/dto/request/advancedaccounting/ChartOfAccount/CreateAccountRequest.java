@@ -1,4 +1,4 @@
-package org.example.storemanager.dto.request.advancedaccounting;
+package org.example.storemanager.dto.request.advancedaccounting.ChartOfAccount;
 import lombok.Data;
 import jakarta.validation.constraints.NotBlank;
 import org.example.storemanager.enums.account.AccountType;

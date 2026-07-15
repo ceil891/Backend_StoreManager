@@ -1,6 +1,6 @@
 package org.example.storemanager.service.hrm;
 
-import org.example.storemanager.dto.request.advancedaccounting.AdjustAttendanceRequest;
+import org.example.storemanager.dto.request.advancedaccounting.ChartOfAccount.AdjustAttendanceRequest;
 import org.example.storemanager.dto.request.hrm.attendance.*;
 import org.example.storemanager.dto.response.common.PageResponse;
 import org.example.storemanager.dto.response.hrm.attendance.*;
