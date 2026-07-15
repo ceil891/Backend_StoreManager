@@ -12,4 +12,6 @@ public interface CloudinaryService {
     void deleteMultipleFiles(List<String> publicIds) throws IOException;
     void deleteFileByUrl(String url);
     void deleteFileByUrlAsync(String url);
+    String uploadImage(MultipartFile file);
+
 }

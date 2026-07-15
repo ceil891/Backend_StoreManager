@@ -3,51 +3,37 @@ package org.example.storemanager.entity.sales;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
-import org.example.storemanager.entity.catalog.ProductVariant;
 
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "sale_order_details", indexes = {
-        @Index(name = "idx_sale_od_order", columnList = "order_id"),
-        @Index(name = "idx_sale_od_variant", columnList = "product_variant_id")
+        @Index(name = "idx_order_detail_order", columnList = "sale_order_id"),
+        @Index(name = "idx_order_detail_variant", columnList = "product_variant_id")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
 public class SaleOrderDetail extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private SaleOrder order;
+    @JoinColumn(name = "sale_order_id", referencedColumnName = "id", nullable = false)
+    private SaleOrder saleOrder;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_variant_id", nullable = false)
-    private ProductVariant productVariant;
+    @Column(name = "product_variant_id", nullable = false)
+    private Long productVariantId;
 
-    // ---- Snapshot tại thời điểm bán ----
-    @Column(name = "product_name_snapshot", nullable = false, length = 200)
-    private String productNameSnapshot;
+    @Column(name = "quantity", nullable = false)
+    private Integer quantity;
 
-    @Column(name = "sku_snapshot", nullable = false, length = 100)
-    private String skuSnapshot;
+    @Column(name = "unit_price", nullable = false, precision = 18, scale = 2)
+    private BigDecimal price;
 
-    @Column(name = "barcode_snapshot", length = 100)
-    private String barcodeSnapshot;
+    @Column(name = "discount_amount", precision = 18, scale = 2)
+    private BigDecimal discountAmount;
 
-    /** Ví dụ: "Size: M, Màu: Đen" */
-    @Column(name = "variant_description_snapshot", length = 300)
-    private String variantDescriptionSnapshot;
-    // ---- End snapshot ----
-
-    @Column(precision = 18, scale = 3, nullable = false)
-    private BigDecimal quantity;
-
-    @Column(name = "unit_price_snapshot", precision = 18, scale = 2, nullable = false)
-    private BigDecimal unitPriceSnapshot;
-
-    @Column(name = "sub_total", precision = 18, scale = 2)
-    private BigDecimal subTotal;
+    @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
+    private BigDecimal totalAmount;
 }
