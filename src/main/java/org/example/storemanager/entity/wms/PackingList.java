@@ -30,9 +30,33 @@ public class PackingList extends BaseEntity {
     private String dimensions; // Kích thước (VD: 30x20x15 cm)
 
     @Column(nullable = false, length = 30)
-    private String status; // PACKING, PACKED, HANDED_OVER
+    private String status; // DRAFT, PICKING, PICKED, PACKING, PACKED, CANCELLED
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
-    private SaleOrder order; // Phiếu đóng gói này thuộc về đơn đặt hàng nào
+    private SaleOrder order;
+
+    @Column(name = "picking_started_by", length = 100)
+    private String pickingStartedBy;
+
+    @Column(name = "picking_started_at")
+    private LocalDateTime pickingStartedAt;
+
+    @Column(name = "picked_by", length = 100)
+    private String pickedBy;
+
+    @Column(name = "picked_at")
+    private LocalDateTime pickedAt;
+
+    @Column(name = "packing_started_by", length = 100)
+    private String packingStartedBy;
+
+    @Column(name = "packing_started_at")
+    private LocalDateTime packingStartedAt;
+
+    @Column(name = "packed_by", length = 100)
+    private String packedBy;
+
+    @Column(name = "packed_at")
+    private LocalDateTime packedAt;
 }

@@ -10,7 +10,13 @@ import org.example.storemanager.entity.wms.WarehouseZone;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "stock_ledgers")
+@Table(name = "stock_ledgers", indexes = {
+        @Index(name = "idx_stock_ledger_product", columnList = "product_id"),
+        @Index(name = "idx_stock_ledger_branch", columnList = "branch_id"),
+        @Index(name = "idx_stock_ledger_zone", columnList = "warehouse_zone_id"),
+        @Index(name = "idx_stock_ledger_ref", columnList = "reference_id"),
+        @Index(name = "idx_stock_ledger_batch", columnList = "batch_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -24,5 +24,8 @@ public class MapCategoriesResponse {
     private String imageUrl;
     private Boolean isDeleted;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
     private List<MapCategoriesResponse> children;
 }

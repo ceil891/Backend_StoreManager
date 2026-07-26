@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Repository
+@Repository("partnerAreaRepository")
 public interface AreaRepository extends JpaRepository<Area, Long> {
 
     // 1. Kiểm tra tồn tại theo code (dùng để validate đầu vào)
@@ -29,6 +29,6 @@ public interface AreaRepository extends JpaRepository<Area, Long> {
     List<Area> findByAreaNameAndLevel(String areaName, Integer level);
 
     // 6. Truy vấn lấy toàn bộ cây từ gốc (Root)
-    @Query("SELECT DISTINCT a FROM Area a LEFT JOIN FETCH a.children WHERE a.level = 1")
+    @Query("SELECT DISTINCT a FROM PartnerArea a LEFT JOIN FETCH a.children WHERE a.level = 1")
     List<Area> findRootAreasWithChildren();
 }

@@ -23,6 +23,9 @@ public class MapProductResponse {
     private String barcode;
     private Boolean isActive;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
     private Boolean isDeleted;
 
     private Long categoryId;
@@ -31,4 +34,7 @@ public class MapProductResponse {
     private Long baseUnitId;
     private String baseUnitCode;
     private String baseUnitName;
+
+    /** Tổng tồn kho vật lý hiện tại (tổng từ size_inventory) */
+    private BigDecimal onHand;
 }

@@ -214,6 +214,9 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .description(department.getDescription())
                 .isActive(department.getIsActive())
                 .createdAt(department.getCreatedAt())
+                .createdBy(department.getCreatedBy())
+                .updatedBy(department.getUpdatedBy())
+                .updatedAt(department.getUpdatedAt())
                 .build();
     }
     private MapDepartmentResponse mapToResponseAll(Department department) {
@@ -224,6 +227,9 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .description(department.getDescription())
                 .isActive(department.getIsActive())
                 .createdAt(department.getCreatedAt())
+                .createdBy(department.getCreatedBy())
+                .updatedBy(department.getUpdatedBy())
+                .updatedAt(department.getUpdatedAt())
                 .isDeleted(department.getIsDeleted())
                 .build();
     }

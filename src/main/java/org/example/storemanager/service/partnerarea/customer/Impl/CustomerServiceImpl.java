@@ -59,7 +59,11 @@ public class CustomerServiceImpl implements CustomerService {
         c.setCreatedBy(getCurrentUsername());
 
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
-            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
+            try {
+                c.setAvatarUrl(cloudinaryService.uploadFile(req.getAvatar(), "customers").getImageUrl());
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("Lỗi tải ảnh lên Cloudinary", e);
+            }
         }
 
         Customer saved = customerRepository.save(c);
@@ -98,7 +102,11 @@ public class CustomerServiceImpl implements CustomerService {
         c.setMembershipRank("Đồng");
 
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
-            c.setAvatarUrl(cloudinaryService.uploadImage(req.getAvatar()));
+            try {
+                c.setAvatarUrl(cloudinaryService.uploadFile(req.getAvatar(), "customers").getImageUrl());
+            } catch (java.io.IOException e) {
+                throw new RuntimeException("Lỗi tải ảnh lên Cloudinary", e);
+            }
         }
         Customer saved = customerRepository.save(c);
 

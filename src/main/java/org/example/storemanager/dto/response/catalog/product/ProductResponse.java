@@ -32,6 +32,9 @@ public class ProductResponse {
     private String galleryImages;
     private String variants;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
 
     private Long categoryId;
     private String categoryCode;

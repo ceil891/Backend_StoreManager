@@ -36,17 +36,14 @@ public class DataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationContext applicationContext;
 
-    // Pattern Regex trích xuất tham số của hasPermission('xxx')
     private static final Pattern PERMISSION_PATTERN = Pattern.compile("hasPermission\\s*\\(\\s*'([^']+)'\\s*\\)");
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        log.info("======= BẮT ĐẦU QUÉT PHÂN QUYỀN ĐỘNG (DYNAMIC PERMISSION SCANNER) =======");
 
         // 1. Quét tất cả các RestControllers trong ứng dụng để thu thập các mã quyền từ @PreAuthorize
         Set<String> scannedPermissionCodes = scanControllerPermissions();
-        log.info("Đã quét được tổng cộng {} mã quyền độc nhất từ các Controller.", scannedPermissionCodes.size());
 
         // 2. Thêm các quyền mới phát hiện vào DB nếu chưa tồn tại
         List<Permission> pendingPermissions = new ArrayList<>();
@@ -122,66 +119,74 @@ public class DataSeeder implements CommandLineRunner {
                     .status("ACTIVE")
                     .role(superAdminRole)
                     .build();
-            adminUser.setIsDeleted(false);
-
             userRepository.save(adminUser);
             log.info("Đã tạo tài khoản 'admin' mặc định.");
         }
 
-        log.info("======= HOÀN THÀNH QUÉT PHÂN QUYỀN ĐỘNG =======");
     }
 
-
+    /**
+     * Quét tất cả các @RestController bean trong ApplicationContext,
+     * tìm tất cả method có @PreAuthorize("hasPermission('...')") và trích xuất mã quyền.
+     */
     private Set<String> scanControllerPermissions() {
-        Set<String> permissionCodes = new HashSet<>();
-        Map<String, Object> controllerBeans = applicationContext.getBeansWithAnnotation(RestController.class);
+        Set<String> permissionCodes = new LinkedHashSet<>();
+        Map<String, Object> controllers = applicationContext.getBeansWithAnnotation(RestController.class);
 
-        for (Object bean : controllerBeans.values()) {
-            // Lấy class thực tế (tránh bị ảnh hưởng bởi Spring CGLIB Proxy)
-            Class<?> controllerClass = bean.getClass();
-            if (controllerClass.getName().contains("$$")) {
-                controllerClass = controllerClass.getSuperclass();
+        for (Object bean : controllers.values()) {
+            Class<?> targetClass = bean.getClass();
+            // Unwrap CGLIB proxy nếu có
+            while (targetClass.getSimpleName().contains("$$")) {
+                targetClass = targetClass.getSuperclass();
             }
 
-            // A. Quét @PreAuthorize trên cấp Class (Controller level)
-            if (controllerClass.isAnnotationPresent(PreAuthorize.class)) {
-                PreAuthorize preAuthorize = controllerClass.getAnnotation(PreAuthorize.class);
-                extractPermissions(preAuthorize.value(), permissionCodes);
-            }
-
-            // B. Quét @PreAuthorize trên từng Method
-            for (Method method : controllerClass.getDeclaredMethods()) {
-                if (method.isAnnotationPresent(PreAuthorize.class)) {
-                    PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
-                    extractPermissions(preAuthorize.value(), permissionCodes);
+            for (Method method : targetClass.getDeclaredMethods()) {
+                PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+                if (preAuthorize != null) {
+                    String expression = preAuthorize.value();
+                    Matcher matcher = PERMISSION_PATTERN.matcher(expression);
+                    while (matcher.find()) {
+                        String permCode = matcher.group(1).trim();
+                        if (!permCode.isEmpty()) {
+                            permissionCodes.add(permCode);
+                        }
+                    }
                 }
             }
         }
-
         return permissionCodes;
     }
 
+    /**
+     * Xác định tên Module từ mã quyền.
+     * Ví dụ: "catalog:product:create" -> "Catalog"
+     *         "inventory:import:approve" -> "Inventory"
+     */
+    private String determineModuleFromCode(String code) {
+        if (code == null || code.isBlank()) return "General";
+        String[] parts = code.split("[:_\\-]");
+        if (parts.length == 0) return "General";
 
-    private void extractPermissions(String expression, Set<String> permissionCodes) {
-        if (expression == null || expression.trim().isEmpty()) {
-            return;
-        }
-        Matcher matcher = PERMISSION_PATTERN.matcher(expression);
-        while (matcher.find()) {
-            String code = matcher.group(1);
-            if (code != null && !code.trim().isEmpty()) {
-                permissionCodes.add(code.trim());
-            }
-        }
+        String prefix = parts[0].toLowerCase();
+        return switch (prefix) {
+            case "catalog"          -> "Catalog - Danh mục sản phẩm";
+            case "inventory"        -> "Inventory - Kho hàng";
+            case "purchase"         -> "Purchase - Mua hàng";
+            case "sales"            -> "Sales - Bán hàng";
+            case "crm"              -> "CRM - Khách hàng";
+            case "hrm"              -> "HRM - Nhân sự";
+            case "finance"          -> "Finance - Tài chính";
+            case "wms"              -> "WMS - Quản lý kho vật lý";
+            case "system"           -> "System - Hệ thống";
+            case "partnerarea"      -> "Partner Area - Đối tác";
+            case "report"           -> "Report - Báo cáo";
+            case "omnichannel"      -> "Omnichannel - Đa kênh";
+            default                 -> capitalize(prefix);
+        };
     }
 
-
-    private String determineModuleFromCode(String code) {
-        if (code.contains(":")) {
-            String prefix = code.split(":")[0];
-            // Viết hoa chữ cái đầu cho đẹp
-            return prefix.substring(0, 1).toUpperCase() + prefix.substring(1).toLowerCase();
-        }
-        return "General";
+    private String capitalize(String s) {
+        if (s == null || s.isEmpty()) return s;
+        return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController
+@RestController("partnerAreaController")
 @RequestMapping("/api/v1/partnerarea/areas")
 @RequiredArgsConstructor
 public class AreaController {

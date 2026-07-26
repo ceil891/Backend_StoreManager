@@ -1,5 +1,6 @@
 package org.example.storemanager.repository.partnerarea;
 
+import java.util.Optional;
 import org.example.storemanager.entity.partnerarea.Customer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
+
+    Optional<Customer> findByIdAndIsDeletedFalse(Long id);
 
     // 1. Khai báo phương thức search đã dùng trong Service
     // Lưu ý: @Param("keyword") phải khớp với :keyword trong Query

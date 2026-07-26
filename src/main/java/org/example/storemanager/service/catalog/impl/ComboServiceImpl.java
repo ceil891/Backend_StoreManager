@@ -301,4 +301,76 @@ public class ComboServiceImpl implements ComboService {
         }
         return "system";
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ComboDetailResponse> getItems(Long comboId) {
+        findActiveEntity(comboId);
+        return comboDetailRepository.findByComboIdAndIsDeletedFalse(comboId).stream()
+                .map(this::mapDetailToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public ComboDetailResponse addItem(Long comboId, ComboDetailRequest request) {
+        Combo combo = findActiveEntity(comboId);
+        
+        List<ComboDetail> existing = comboDetailRepository.findByComboIdAndIsDeletedFalse(comboId);
+        for (ComboDetail detail : existing) {
+            if (detail.getProduct().getId().equals(request.getProductId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được trùng sản phẩm trong cùng combo");
+            }
+        }
+        
+        Product product = productRepository.findByIdAndIsDeletedFalse(request.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()));
+        
+        BigDecimal unitPrice = request.getUnitPriceAtCreation() != null
+                ? request.getUnitPriceAtCreation()
+                : product.getBasePrice();
+
+        ComboDetail detail = ComboDetail.builder()
+                .combo(combo)
+                .product(product)
+                .quantity(request.getQuantity())
+                .unitPriceAtCreation(unitPrice)
+                .build();
+        detail.setIsDeleted(false);
+        detail.setCreatedBy(getCurrentUsername());
+        
+        ComboDetail saved = comboDetailRepository.save(detail);
+        return mapDetailToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ComboDetailResponse updateItem(Long id, ComboDetailRequest request) {
+        ComboDetail detail = comboDetailRepository.findById(id)
+                .filter(d -> !Boolean.TRUE.equals(d.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("ComboDetail", "id", id));
+        
+        if (request.getQuantity() != null) {
+            detail.setQuantity(request.getQuantity());
+        }
+        if (request.getUnitPriceAtCreation() != null) {
+            detail.setUnitPriceAtCreation(request.getUnitPriceAtCreation());
+        }
+        
+        detail.setUpdatedBy(getCurrentUsername());
+        ComboDetail saved = comboDetailRepository.save(detail);
+        return mapDetailToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteItem(Long id) {
+        ComboDetail detail = comboDetailRepository.findById(id)
+                .filter(d -> !Boolean.TRUE.equals(d.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("ComboDetail", "id", id));
+        detail.setIsDeleted(true);
+        detail.setDeletedAt(LocalDateTime.now());
+        detail.setDeletedBy(getCurrentUsername());
+        comboDetailRepository.save(detail);
+    }
 }

@@ -16,6 +16,8 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     Optional<Branch> findByIdAndIsDeletedFalse(Long id);
 
+    List<Branch> findByIsDeletedFalse();
+
     Optional<Branch> findById(Long id);
 
     boolean existsByBranchCodeAndIsDeletedFalse(String branchCode);

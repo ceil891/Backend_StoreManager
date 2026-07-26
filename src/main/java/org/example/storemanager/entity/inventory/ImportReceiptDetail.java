@@ -5,6 +5,7 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.catalog.ProductVariant;
 import org.example.storemanager.entity.catalog.Unit;
+import org.example.storemanager.entity.wms.WarehouseBin;
 
 import java.math.BigDecimal;
 
@@ -29,6 +30,10 @@ public class ImportReceiptDetail extends BaseEntity {
     private ProductVariant productVariant;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
+    private org.example.storemanager.entity.catalog.Product product;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unit_id")
     private Unit unit;
 
@@ -48,6 +53,9 @@ public class ImportReceiptDetail extends BaseEntity {
 
     @Column(name = "unit_cost_snapshot", precision = 18, scale = 2, nullable = false)
     private BigDecimal unitCostSnapshot;
+
+    @Column(name = "unit_price", precision = 18, scale = 2)
+    private BigDecimal unitPrice;
     // ---- End snapshot ----
 
     @Column(precision = 18, scale = 3, nullable = false)
@@ -61,4 +69,20 @@ public class ImportReceiptDetail extends BaseEntity {
 
     @Column(name = "expiry_date")
     private java.time.LocalDate expiryDate;
+
+    /**
+     * Ô kệ đích — hàng nhập vào bin nào.
+     * Nullable: cho phép nhập kho trước, chỉ định vị trí sau (Putaway workflow).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_bin_id")
+    private WarehouseBin targetBin;
+
+    /**
+     * Liên kết với lô hàng đã tạo sau khi nhập.
+     * Nullable: không phải tất cả sản phẩm đều quản lý theo lô.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "batch_id")
+    private ProductBatch batch;
 }

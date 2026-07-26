@@ -1,5 +1,6 @@
 package org.example.storemanager.service.catalog;
 
+import org.example.storemanager.dto.request.catalog.variant.CreateSingleVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.CreateVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.UpdateVariantRequest;
 import org.example.storemanager.dto.response.catalog.variant.CreateVariantResponse;
@@ -41,4 +42,12 @@ public interface ProductVariantService {
      * Lấy toàn bộ biến thể của 1 sản phẩm.
      */
     List<VariantResponse> getByProductId(Long productId);
+
+    VariantResponse getBySku(String sku);
+
+    VariantResponse getByBarcode(String barcode);
+
+    VariantResponse createSingleVariant(Long productId, CreateSingleVariantRequest request);
+
+    List<VariantResponse> getAllVariants();
 }

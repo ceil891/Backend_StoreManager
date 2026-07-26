@@ -2,6 +2,7 @@ package org.example.storemanager.service.catalog.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.config.LogActivity;
+import org.example.storemanager.dto.request.catalog.variant.CreateSingleVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.CreateVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.UpdateVariantRequest;
 import org.example.storemanager.dto.response.catalog.variant.CreateVariantResponse;
@@ -413,5 +414,82 @@ public class ProductVariantServiceImpl implements ProductVariantService {
         }
         
         inventoryBalanceRepository.saveAll(balances);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VariantResponse getBySku(String sku) {
+        ProductVariant variant = productVariantRepository.findBySkuAndIsDeletedFalse(sku)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "sku", sku));
+        return buildVariantResponse(variant);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VariantResponse getByBarcode(String barcode) {
+        ProductVariant variant = productVariantRepository.findByBarcodeAndIsDeletedFalse(barcode)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "barcode", barcode));
+        return buildVariantResponse(variant);
+    }
+
+    @Override
+    @LogActivity(actionType = "CREATE", entityName = "ProductVariant", entityClass = ProductVariant.class)
+    public VariantResponse createSingleVariant(Long productId, CreateSingleVariantRequest request) {
+        Product product = productRepository.findByIdAndIsDeletedFalse(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+
+        if (productVariantRepository.existsBySkuAndIsDeletedFalse(request.getSku())) {
+            throw new DuplicateResourceException("ProductVariant", "sku", request.getSku());
+        }
+
+        if (request.getBarcode() != null && !request.getBarcode().isBlank()
+                && productVariantRepository.existsByBarcodeAndIsDeletedFalse(request.getBarcode())) {
+            throw new DuplicateResourceException("ProductVariant", "barcode", request.getBarcode());
+        }
+
+        String username = getCurrentUsername();
+        String variantCode = generateVariantCode();
+
+        ProductVariant variant = ProductVariant.builder()
+                .product(product)
+                .variantCode(variantCode)
+                .sku(request.getSku())
+                .barcode(request.getBarcode())
+                .status(VariantStatus.ACTIVE)
+                .build();
+        variant.setIsActive(true);
+        variant.setIsDeleted(false);
+        variant.setCreatedBy(username);
+
+        ProductVariant saved = productVariantRepository.save(variant);
+
+        if (request.getAttributes() != null) {
+            for (CreateSingleVariantRequest.AttributeInput attrInput : request.getAttributes()) {
+                AttributeValue av = attributeValueRepository.findByIdAndIsDeletedFalse(attrInput.getValueId())
+                        .orElseThrow(() -> new ResourceNotFoundException("AttributeValue", "id", attrInput.getValueId()));
+                
+                VariantAttributeValue vav = VariantAttributeValue.builder()
+                        .productVariant(saved)
+                        .productAttribute(av.getProductAttribute())
+                        .attributeValue(av)
+                        .build();
+                vav.setIsDeleted(false);
+                vav.setCreatedBy(username);
+                variantAttributeValueRepository.save(vav);
+            }
+        }
+
+        List<Branch> activeBranches = branchRepository.findAllBranchesList(null, true);
+        initializeInventoryBalanceBatch(List.of(saved), activeBranches, username);
+
+        return buildVariantResponse(saved);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<VariantResponse> getAllVariants() {
+        return productVariantRepository.findByIsDeletedFalse().stream()
+                .map(this::buildVariantResponse)
+                .collect(java.util.stream.Collectors.toList());
     }
 }

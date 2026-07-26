@@ -17,4 +17,7 @@ public class SizeResponse {
     private String description;
     private Boolean isActive;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
 }

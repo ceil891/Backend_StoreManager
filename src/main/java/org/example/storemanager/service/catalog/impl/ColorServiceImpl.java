@@ -213,6 +213,9 @@ public class ColorServiceImpl implements ColorService {
                 .description(color.getDescription())
                 .isActive(color.getIsActive())
                 .createdAt(color.getCreatedAt())
+                .createdBy(color.getCreatedBy())
+                .updatedBy(color.getUpdatedBy())
+                .updatedAt(color.getUpdatedAt())
                 .build();
     }
 
@@ -225,6 +228,9 @@ public class ColorServiceImpl implements ColorService {
                 .description(color.getDescription())
                 .isActive(color.getIsActive())
                 .createdAt(color.getCreatedAt())
+                .createdBy(color.getCreatedBy())
+                .updatedBy(color.getUpdatedBy())
+                .updatedAt(color.getUpdatedAt())
                 .isDeleted(color.getIsDeleted())
                 .build();
     }

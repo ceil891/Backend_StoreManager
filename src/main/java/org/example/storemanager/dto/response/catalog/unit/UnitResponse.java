@@ -22,6 +22,9 @@ public class UnitResponse {
     private String baseUnitCode;
     private Integer precisionDecimals;
     private LocalDateTime createdAt;
+    private String createdBy;
+    private String updatedBy;
+    private LocalDateTime updatedAt;
 
     // Trường hỗ trợ xem đơn vị đã xóa mềm
     private Boolean isDeleted;

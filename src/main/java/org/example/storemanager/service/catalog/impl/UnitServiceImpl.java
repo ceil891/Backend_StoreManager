@@ -209,6 +209,9 @@ public class UnitServiceImpl implements UnitService {
                 .baseUnitCode(unit.getBaseUnitCode())
                 .precisionDecimals(unit.getPrecisionDecimals())
                 .createdAt(unit.getCreatedAt())
+                .createdBy(unit.getCreatedBy())
+                .updatedBy(unit.getUpdatedBy())
+                .updatedAt(unit.getUpdatedAt())
                 // Thêm thông tin xóa mềm
                 .isDeleted(unit.getIsDeleted())
                 .build();

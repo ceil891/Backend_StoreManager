@@ -8,14 +8,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.cache.annotation.Cacheable;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface SizeRepository extends JpaRepository<Size, Long> {
 
+    @Cacheable(value = "sizes", key = "#id")
     Optional<Size> findByIdAndIsDeletedFalse(Long id);
 
+    @Cacheable(value = "sizes", key = "#id")
     Optional<Size> findById(Long id);
 
     boolean existsBySizeCodeAndIsDeletedFalse(String sizeCode);

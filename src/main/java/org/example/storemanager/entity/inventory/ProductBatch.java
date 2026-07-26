@@ -8,7 +8,11 @@ import org.example.storemanager.entity.catalog.Product;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "product_batches")
+@Table(name = "product_batches", indexes = {
+        @Index(name = "idx_product_batch_product", columnList = "product_id"),
+        @Index(name = "idx_product_batch_expiry", columnList = "expiry_date"),
+        @Index(name = "idx_product_batch_status", columnList = "status")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -8,7 +8,10 @@ import org.example.storemanager.entity.system.Branch;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "stock_transfers")
+@Table(name = "stock_transfers", indexes = {
+        @Index(name = "idx_stock_transfer_from_branch", columnList = "from_branch_id"),
+        @Index(name = "idx_stock_transfer_to_branch", columnList = "to_branch_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

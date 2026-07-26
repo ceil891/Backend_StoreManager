@@ -10,7 +10,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "import_receipts")
+@Table(name = "import_receipts", indexes = {
+        @Index(name = "idx_import_receipt_branch", columnList = "branch_id"),
+        @Index(name = "idx_import_receipt_supplier", columnList = "supplier_id"),
+        @Index(name = "idx_import_receipt_po", columnList = "purchase_order_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -47,4 +51,10 @@ public class ImportReceipt extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "purchase_order_id")
     private org.example.storemanager.entity.sales.PurchaseOrder purchaseOrder;
+
+    @Column(name = "inspected_by", length = 100)
+    private String inspectedBy;
+
+    @Column(name = "note", columnDefinition = "TEXT")
+    private String note;
 }

@@ -8,14 +8,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.cache.annotation.Cacheable;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface ColorRepository extends JpaRepository<Color, Long> {
 
+    @Cacheable(value = "colors", key = "#id")
     Optional<Color> findByIdAndIsDeletedFalse(Long id);
 
+    @Cacheable(value = "colors", key = "#id")
     Optional<Color> findById(Long id);
 
     boolean existsByColorCodeAndIsDeletedFalse(String colorCode);

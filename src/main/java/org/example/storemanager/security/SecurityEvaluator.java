@@ -42,28 +42,13 @@ public class SecurityEvaluator {
         Role role = user.getRole();
         List<RolePermission> rolePermissions = rolePermissionRepository.findByRoleId(role.getId());
 
-        // ========================================================
-        // KHU VỰC IN LOG RA MÀN HÌNH CONSOLE ĐỂ BẮT LỖI
-        // ========================================================
-        System.out.println("\n========= KIỂM TRA PHÂN QUYỀN API =========");
-        System.out.println("1. Người gọi API: " + username);
-        System.out.println("2. Vai trò (Role) trong DB: " + role.getRoleName() + " (ID: " + role.getId() + ")");
-        System.out.println("3. Quyền API đang ĐÒI HỎI: [" + requiredPermission + "]");
-        System.out.println("4. Danh sách quyền Role này ĐANG CÓ (" + rolePermissions.size() + " quyền):");
+        boolean hasPerm = rolePermissions.stream()
+                .anyMatch(rp -> rp.getPermission() != null && requiredPermission.equals(rp.getPermission().getPermissionCode()));
 
-        boolean hasPerm = false;
-        for (RolePermission rp : rolePermissions) {
-            String currentCode = rp.getPermission().getPermissionCode();
-            System.out.println("   - " + currentCode);
-            if (currentCode.equals(requiredPermission)) {
-                hasPerm = true;
-            }
+        if (!hasPerm) {
+            log.warn("Access Denied: User [{}] (Role: {}) missing permission [{}]", username, role.getRoleName(), requiredPermission);
         }
-
-        System.out.println("=> KẾT LUẬN: " + (hasPerm ? "CHO PHÉP ĐI QUA" : "BỊ TỪ CHỐI (403 FORBIDDEN)"));
-        System.out.println("===========================================\n");
-        // ========================================================
 
         return hasPerm;
     }
-}
+}

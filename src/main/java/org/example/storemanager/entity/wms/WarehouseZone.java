@@ -5,6 +5,8 @@ import lombok.*;
 import org.example.storemanager.entity.BaseEntity;
 import org.example.storemanager.entity.system.Branch;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "warehouse_zones")
 @Data
@@ -22,6 +24,20 @@ public class WarehouseZone extends BaseEntity {
 
     @Column(length = 255)
     private String conditions; // Điều kiện lưu trữ: Nhiệt độ, Độ ẩm...
+
+    /** Sức chứa tổng của Zone (đơn vị tùy quy ước: m², pallet...) */
+    @Column(precision = 18, scale = 2)
+    private BigDecimal capacity;
+
+    /**
+     * Trạng thái: ACTIVE (hoạt động) / INACTIVE (tạm ngưng)
+     * Khi INACTIVE, không thể chọn làm đích trong Putaway/Import Receipt.
+     */
+    @Column(nullable = false, length = 20)
+    private String status = "ACTIVE";
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)

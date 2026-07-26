@@ -8,8 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface SupplierRepository extends JpaRepository<Supplier, Long> {
+    Optional<Supplier> findByIdAndIsDeletedFalse(Long id);
     Page<Supplier> findByIsActive(Boolean isActive, Pageable pageable);
     boolean existsBySupplierCode(String supplierCode);
 

@@ -8,7 +8,10 @@ import org.example.storemanager.entity.catalog.Product;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "cancel_issue_details")
+@Table(name = "cancel_issue_details", indexes = {
+        @Index(name = "idx_cancel_detail_issue", columnList = "cancel_id"),
+        @Index(name = "idx_cancel_detail_product", columnList = "product_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

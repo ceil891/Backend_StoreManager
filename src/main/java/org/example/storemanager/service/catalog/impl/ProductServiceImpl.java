@@ -12,15 +12,21 @@ import org.example.storemanager.dto.response.common.PageResponse;
 import org.example.storemanager.entity.catalog.Product;
 import org.example.storemanager.entity.catalog.ProductCategory;
 import org.example.storemanager.entity.catalog.ProductUnit;
+import org.example.storemanager.entity.catalog.ProductVariant;
 import org.example.storemanager.entity.catalog.Unit;
+import org.example.storemanager.entity.inventory.InventoryBalance;
 import org.example.storemanager.entity.inventory.SizeInventory;
+import org.example.storemanager.entity.system.Branch;
 import org.example.storemanager.exception.DuplicateResourceException;
 import org.example.storemanager.exception.ResourceNotFoundException;
 import org.example.storemanager.repository.catalog.CategoriesRepository;
 import org.example.storemanager.repository.catalog.ProductRepository;
 import org.example.storemanager.repository.catalog.ProductUnitRepository;
 import org.example.storemanager.repository.catalog.UnitRepository;
+import org.example.storemanager.repository.catalog.ProductVariantRepository;
+import org.example.storemanager.repository.inventory.InventoryBalanceRepository;
 import org.example.storemanager.repository.inventory.SizeInventoryRepository;
+import org.example.storemanager.repository.system.BranchRepository;
 import org.example.storemanager.service.catalog.ProductService;
 import org.example.storemanager.service.catalog.ProductUnitService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,6 +59,10 @@ public class ProductServiceImpl implements ProductService {
     private final ProductUnitService productUnitService;
     private final CloudinaryService cloudinaryService;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @Autowired private BranchRepository branchRepository;
+    @Autowired private ProductVariantRepository productVariantRepository;
+    @Autowired private InventoryBalanceRepository inventoryBalanceRepository;
 
     @Autowired
     public ProductServiceImpl(ProductRepository productRepository,
@@ -141,6 +151,49 @@ public class ProductServiceImpl implements ProductService {
                 pu.setIsActive(true);
                 pu.setCreatedBy(username);
                 productUnitRepository.save(pu);
+            }
+        }
+        // ----------------------------------------------------
+        // ERP WMS AUTOMATIC INVENTORY BALANCE INITIALIZATION
+        // ----------------------------------------------------
+        List<ProductVariant> variants = productVariantRepository.findByProductIdAndIsDeletedFalse(savedProduct.getId());
+        if (variants.isEmpty()) {
+            String defaultCode = savedProduct.getProductCode() + "-DEF";
+            String defaultSku = savedProduct.getProductCode();
+            
+            ProductVariant defaultVariant = ProductVariant.builder()
+                    .variantCode(defaultCode)
+                    .sku(defaultSku)
+                    .barcode(savedProduct.getBarcode())
+                    .price(savedProduct.getBasePrice())
+                    .status(org.example.storemanager.enums.catalog.VariantStatus.ACTIVE)
+                    .isActive(true)
+                    .product(savedProduct)
+                    .build();
+            defaultVariant.setIsDeleted(false);
+            defaultVariant.setCreatedBy(username);
+            defaultVariant = productVariantRepository.save(defaultVariant);
+            variants = List.of(defaultVariant);
+        }
+
+        List<Branch> branches = branchRepository.findByIsDeletedFalse();
+        for (ProductVariant variant : variants) {
+            for (Branch branch : branches) {
+                if (inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId()).isEmpty()) {
+                    InventoryBalance balance = InventoryBalance.builder()
+                            .productVariant(variant)
+                            .branch(branch)
+                            .availableQuantity(BigDecimal.ZERO)
+                            .reservedQuantity(BigDecimal.ZERO)
+                            .damagedQuantity(BigDecimal.ZERO)
+                            .minimumQuantity(savedProduct.getMinStock() != null ? savedProduct.getMinStock() : BigDecimal.ZERO)
+                            .reorderPoint(savedProduct.getReorderPoint() != null ? savedProduct.getReorderPoint() : BigDecimal.ZERO)
+                            .lastUpdated(LocalDateTime.now())
+                            .build();
+                    balance.setIsDeleted(false);
+                    balance.setCreatedBy(username);
+                    inventoryBalanceRepository.save(balance);
+                }
             }
         }
 
@@ -447,6 +500,9 @@ public class ProductServiceImpl implements ProductService {
                 .galleryImages(product.getGalleryImages())
                 .variants(product.getVariants())
                 .createdAt(product.getCreatedAt())
+                .createdBy(product.getCreatedBy())
+                .updatedBy(product.getUpdatedBy())
+                .updatedAt(product.getUpdatedAt())
                 .categoryId(product.getCategory().getId())
                 .categoryCode(product.getCategory().getCategoryCode())
                 .categoryName(product.getCategory().getCategoryName())
@@ -458,6 +514,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private MapProductResponse mapToMapProductResponse(Product product) {
+        // Query tổng tồn kho vật lý từ size_inventory
+        java.math.BigDecimal onHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
         return MapProductResponse.builder()
                 .id(product.getId())
                 .productCode(product.getProductCode())
@@ -469,12 +527,16 @@ public class ProductServiceImpl implements ProductService {
                 .barcode(product.getBarcode())
                 .isActive(product.getIsActive())
                 .createdAt(product.getCreatedAt())
+                .createdBy(product.getCreatedBy())
+                .updatedBy(product.getUpdatedBy())
+                .updatedAt(product.getUpdatedAt())
                 .isDeleted(product.getIsDeleted())
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getCategoryName())
                 .baseUnitId(product.getBaseUnit().getId())
                 .baseUnitCode(product.getBaseUnit().getUnitCode())
                 .baseUnitName(product.getBaseUnit().getUnitName())
+                .onHand(onHand != null ? onHand : java.math.BigDecimal.ZERO)
                 .build();
     }
 }

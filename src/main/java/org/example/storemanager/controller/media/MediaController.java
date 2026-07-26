@@ -19,7 +19,6 @@ public class MediaController {
     private final MediaService mediaService;
 
     @PostMapping("/upload")
-    // @PreAuthorize("isAuthenticated()") // Tạm thời comment lại để debug 403
     public ResponseEntity<ApiResponse<MediaResponse>> uploadMedia(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "folder", required = false) String folder) throws IOException {

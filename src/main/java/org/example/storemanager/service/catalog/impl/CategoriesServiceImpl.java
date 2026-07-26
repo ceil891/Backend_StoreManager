@@ -336,6 +336,8 @@ public class CategoriesServiceImpl implements CategoriesService {
         response.setIsDeleted(entity.getIsDeleted());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());
+        response.setUpdatedBy(entity.getUpdatedBy());
+        response.setUpdatedAt(entity.getUpdatedAt());
         return response;
     }
 
@@ -351,6 +353,9 @@ public class CategoriesServiceImpl implements CategoriesService {
                 .imageUrl(entity.getImageUrl())
                 .isDeleted(entity.getIsDeleted())
                 .createdAt(entity.getCreatedAt())
+                .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 

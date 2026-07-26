@@ -6,7 +6,7 @@ import org.example.storemanager.entity.BaseEntity;
 
 import java.util.List;
 
-@Entity
+@Entity(name = "PartnerArea")
 @Table(name = "areas")
 @Data
 @NoArgsConstructor

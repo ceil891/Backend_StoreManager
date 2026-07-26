@@ -12,6 +12,7 @@ import org.example.storemanager.entity.catalog.PriceList;
 import org.example.storemanager.entity.catalog.PriceListDetail;
 import org.example.storemanager.entity.catalog.Product;
 import org.example.storemanager.entity.catalog.ProductUnit;
+import org.example.storemanager.entity.catalog.ProductVariant;
 import org.example.storemanager.entity.system.Branch;
 import org.example.storemanager.enums.ErrorCode;
 import org.example.storemanager.exception.DuplicateResourceException;
@@ -45,6 +46,7 @@ public class PriceListServiceImpl implements PriceListService {
     private final BranchRepository branchRepository;
     private final ProductRepository productRepository;
     private final ProductUnitRepository productUnitRepository;
+    private final org.example.storemanager.repository.catalog.ProductVariantRepository productVariantRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -284,5 +286,145 @@ public class PriceListServiceImpl implements PriceListService {
             return auth.getName();
         }
         return "system";
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PriceListDetailResponse> getItems(Long priceListId) {
+        findActiveEntity(priceListId);
+        return priceListDetailRepository.findByPriceListIdAndIsDeletedFalse(priceListId).stream()
+                .map(this::mapDetailToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public PriceListDetailResponse addItem(Long priceListId, PriceListDetailRequest request) {
+        PriceList priceList = findActiveEntity(priceListId);
+        Product product = productRepository.findByIdAndIsDeletedFalse(request.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()));
+        ProductUnit productUnit = resolveProductUnit(product.getId(), request.getProductUnitId());
+
+        List<PriceListDetail> existing = priceListDetailRepository.findByPriceListIdAndIsDeletedFalse(priceListId);
+        for (PriceListDetail detail : existing) {
+            if (detail.getProduct().getId().equals(product.getId()) &&
+                detail.getProductUnit().getId().equals(productUnit.getId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trùng cấu hình giá cho cùng sản phẩm và đơn vị quy đổi");
+            }
+        }
+
+        PriceListDetail detail = PriceListDetail.builder()
+                .priceList(priceList)
+                .product(product)
+                .productUnit(productUnit)
+                .price(request.getPrice())
+                .build();
+        detail.setIsDeleted(false);
+        detail.setCreatedBy(getCurrentUsername());
+        PriceListDetail saved = priceListDetailRepository.save(detail);
+        return mapDetailToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public PriceListDetailResponse updateItem(Long id, java.math.BigDecimal price) {
+        PriceListDetail detail = priceListDetailRepository.findById(id)
+                .filter(d -> !Boolean.TRUE.equals(d.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("PriceListDetail", "id", id));
+        detail.setPrice(price);
+        detail.setUpdatedBy(getCurrentUsername());
+        PriceListDetail saved = priceListDetailRepository.save(detail);
+        return mapDetailToResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteItem(Long id) {
+        PriceListDetail detail = priceListDetailRepository.findById(id)
+                .filter(d -> !Boolean.TRUE.equals(d.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("PriceListDetail", "id", id));
+        detail.setIsDeleted(true);
+        detail.setDeletedAt(LocalDateTime.now());
+        detail.setDeletedBy(getCurrentUsername());
+        priceListDetailRepository.save(detail);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.math.BigDecimal getVariantPrice(Long variantId, Long branchId) {
+        ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(variantId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "id", variantId));
+        
+        Product product = variant.getProduct();
+        
+        LocalDateTime now = LocalDateTime.now();
+        List<PriceList> activeLists = priceListRepository.findActiveForBranch(branchId, now);
+        for (PriceList list : activeLists) {
+            List<PriceListDetail> details = priceListDetailRepository.findByPriceListIdAndIsDeletedFalse(list.getId());
+            for (PriceListDetail detail : details) {
+                if (detail.getProduct().getId().equals(product.getId())) {
+                    if (detail.getProductUnit() != null && Boolean.TRUE.equals(detail.getProductUnit().getIsBaseUnit())) {
+                        return detail.getPrice();
+                    }
+                }
+            }
+        }
+        
+        if (variant.getPrice() != null) {
+            return variant.getPrice();
+        }
+        
+        return product.getBasePrice();
+    }
+
+    @Override
+    public org.example.storemanager.dto.response.catalog.pricelist.ActualPriceResponse resolveActualPrice(Long variantId, Long branchId) {
+        ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(variantId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "id", variantId));
+        
+        Product product = variant.getProduct();
+        LocalDateTime now = LocalDateTime.now();
+        List<Branch> activeBranches = branchRepository.findAllBranchesList(null, true);
+        
+        List<PriceList> activeLists = priceListRepository.findActiveForBranch(branchId, now);
+        for (PriceList list : activeLists) {
+            List<PriceListDetail> details = priceListDetailRepository.findByPriceListIdAndIsDeletedFalse(list.getId());
+            for (PriceListDetail detail : details) {
+                if (detail.getProduct().getId().equals(product.getId())) {
+                    if (detail.getProductUnit() != null && Boolean.TRUE.equals(detail.getProductUnit().getIsBaseUnit())) {
+                        return org.example.storemanager.dto.response.catalog.pricelist.ActualPriceResponse.builder()
+                                .variantId(variantId)
+                                .productId(product.getId())
+                                .finalPrice(detail.getPrice())
+                                .source("PRICE_LIST")
+                                .priceListId(list.getId())
+                                .priceListName(list.getListName())
+                                .priceSource("PRICE_LIST")
+                                .resolvedAt(LocalDateTime.now())
+                                .build();
+                    }
+                }
+            }
+        }
+        
+        if (variant.getPrice() != null) {
+            return org.example.storemanager.dto.response.catalog.pricelist.ActualPriceResponse.builder()
+                    .variantId(variantId)
+                    .productId(product.getId())
+                    .finalPrice(variant.getPrice())
+                    .source("VARIANT_OVERRIDE")
+                    .priceSource("VARIANT_OVERRIDE")
+                    .resolvedAt(LocalDateTime.now())
+                    .build();
+        }
+        
+        return org.example.storemanager.dto.response.catalog.pricelist.ActualPriceResponse.builder()
+                .variantId(variantId)
+                .productId(product.getId())
+                .finalPrice(product.getBasePrice())
+                .source("PRODUCT_BASE")
+                .priceSource("PRODUCT_BASE")
+                .resolvedAt(LocalDateTime.now())
+                .build();
     }
 }

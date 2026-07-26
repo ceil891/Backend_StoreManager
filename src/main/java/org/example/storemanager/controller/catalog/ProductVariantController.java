@@ -2,43 +2,81 @@ package org.example.storemanager.controller.catalog;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.example.storemanager.dto.request.catalog.variant.CreateSingleVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.CreateVariantRequest;
 import org.example.storemanager.dto.request.catalog.variant.UpdateVariantRequest;
 import org.example.storemanager.dto.response.catalog.variant.CreateVariantResponse;
 import org.example.storemanager.dto.response.catalog.variant.VariantResponse;
+import org.example.storemanager.dto.response.catalog.pricelist.ActualPriceResponse;
 import org.example.storemanager.dto.response.common.ApiResponse;
 import org.example.storemanager.service.catalog.ProductVariantService;
+import org.example.storemanager.service.catalog.PriceListService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/variants")
+@RequestMapping("/api/v1/catalog")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class ProductVariantController {
 
     private final ProductVariantService productVariantService;
+    private final PriceListService priceListService;
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // POST /api/v1/variants
-    // Tạo biến thể (1 hoặc nhiều tổ hợp). Xem mô tả DTO để biết body structure.
-    // ──────────────────────────────────────────────────────────────────────────
-    @PostMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:create')")
-    public ResponseEntity<ApiResponse<List<CreateVariantResponse>>> createVariants(
-            @Valid @RequestBody CreateVariantRequest request) {
-        List<CreateVariantResponse> responses = productVariantService.createVariants(request);
-        return ResponseEntity.status(201).body(ApiResponse.created(responses));
+    // --- Search / Filter / List Variants ---
+    @GetMapping("/variants")
+    public ResponseEntity<ApiResponse<List<VariantResponse>>> getVariants(
+            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) String sku,
+            @RequestParam(required = false) String barcode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String status) {
+        if (sku != null) {
+            try {
+                return ResponseEntity.ok(ApiResponse.ok(List.of(productVariantService.getBySku(sku))));
+            } catch (Exception e) {
+                return ResponseEntity.ok(ApiResponse.ok(List.of()));
+            }
+        }
+        if (barcode != null) {
+            try {
+                return ResponseEntity.ok(ApiResponse.ok(List.of(productVariantService.getByBarcode(barcode))));
+            } catch (Exception e) {
+                return ResponseEntity.ok(ApiResponse.ok(List.of()));
+            }
+        }
+        if (productId != null) {
+            return ResponseEntity.ok(ApiResponse.ok(productVariantService.getByProductId(productId)));
+        }
+        return ResponseEntity.ok(ApiResponse.ok(productVariantService.getAllVariants()));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // PUT /api/v1/variants/{id}
-    // Cập nhật barcode / ảnh / giá override. SKU và variantCode là immutable.
-    // ──────────────────────────────────────────────────────────────────────────
-    @PutMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:update')")
+    @GetMapping("/variants/{id}")
+    public ResponseEntity<ApiResponse<VariantResponse>> getById(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(productVariantService.getById(id)));
+    }
+
+    @GetMapping("/variants/sku/{sku}")
+    public ResponseEntity<ApiResponse<VariantResponse>> getBySku(@PathVariable String sku) {
+        return ResponseEntity.ok(ApiResponse.ok(productVariantService.getBySku(sku)));
+    }
+
+    @GetMapping("/variants/barcode/{barcode}")
+    public ResponseEntity<ApiResponse<VariantResponse>> getByBarcode(@PathVariable String barcode) {
+        return ResponseEntity.ok(ApiResponse.ok(productVariantService.getByBarcode(barcode)));
+    }
+
+    @PostMapping("/products/{productId}/variants")
+    public ResponseEntity<ApiResponse<VariantResponse>> createSingleVariant(
+            @PathVariable Long productId,
+            @Valid @RequestBody CreateSingleVariantRequest request) {
+        VariantResponse response = productVariantService.createSingleVariant(productId, request);
+        return ResponseEntity.status(201).body(ApiResponse.created(response));
+    }
+
+    @PutMapping("/variants/{id}")
     public ResponseEntity<ApiResponse<VariantResponse>> updateVariant(
             @PathVariable Long id,
             @Valid @RequestBody UpdateVariantRequest request) {
@@ -46,50 +84,26 @@ public class ProductVariantController {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật biến thể thành công", response));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // PUT /api/v1/variants/{id}/status?isActive=true|false
-    // Bật/tắt hoạt động biến thể.
-    // ──────────────────────────────────────────────────────────────────────────
-    @PutMapping("/{id}/status")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:update-status')")
-    public ResponseEntity<ApiResponse<VariantResponse>> toggleStatus(
-            @PathVariable Long id,
-            @RequestParam Boolean isActive) {
-        VariantResponse response = productVariantService.toggleStatus(id, isActive);
-        return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái biến thể thành công", response));
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // DELETE /api/v1/variants/{id}
-    // Xóa mềm (chỉ khi đã tắt hoạt động).
-    // ──────────────────────────────────────────────────────────────────────────
-    @DeleteMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:delete')")
+    @DeleteMapping("/variants/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteVariant(@PathVariable Long id) {
         productVariantService.deleteVariant(id);
         return ResponseEntity.ok(ApiResponse.ok("Xóa biến thể thành công", null));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /api/v1/variants/{id}
-    // Xem chi tiết 1 biến thể (kèm danh sách thuộc tính Size/Color...).
-    // ──────────────────────────────────────────────────────────────────────────
-    @GetMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:view')")
-    public ResponseEntity<ApiResponse<VariantResponse>> getById(@PathVariable Long id) {
-        VariantResponse response = productVariantService.getById(id);
-        return ResponseEntity.ok(ApiResponse.ok(response));
+    // --- Price Resolution ---
+    @GetMapping("/variants/{variantId}/actual-price")
+    public ResponseEntity<ApiResponse<ActualPriceResponse>> getActualPrice(
+            @PathVariable Long variantId,
+            @RequestParam Long branchId) {
+        return ResponseEntity.ok(ApiResponse.ok(priceListService.resolveActualPrice(variantId, branchId)));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET /api/v1/variants?productId=1
-    // Lấy toàn bộ biến thể của 1 sản phẩm.
-    // ──────────────────────────────────────────────────────────────────────────
-    @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:variant:view')")
-    public ResponseEntity<ApiResponse<List<VariantResponse>>> getByProductId(
-            @RequestParam Long productId) {
-        List<VariantResponse> responses = productVariantService.getByProductId(productId);
-        return ResponseEntity.ok(ApiResponse.ok(responses));
+    @GetMapping("/pricing/resolve")
+    public ResponseEntity<ApiResponse<ActualPriceResponse>> resolvePrice(
+            @RequestParam Long variantId,
+            @RequestParam Long branchId,
+            @RequestParam(required = false) Long customerId,
+            @RequestParam(required = false) Integer quantity) {
+        return ResponseEntity.ok(ApiResponse.ok(priceListService.resolveActualPrice(variantId, branchId)));
     }
 }

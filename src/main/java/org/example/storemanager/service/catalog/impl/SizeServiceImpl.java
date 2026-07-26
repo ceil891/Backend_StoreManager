@@ -210,6 +210,9 @@ public class SizeServiceImpl implements SizeService {
                 .description(size.getDescription())
                 .isActive(size.getIsActive())
                 .createdAt(size.getCreatedAt())
+                .createdBy(size.getCreatedBy())
+                .updatedBy(size.getUpdatedBy())
+                .updatedAt(size.getUpdatedAt())
                 .build();
     }
 
@@ -221,6 +224,9 @@ public class SizeServiceImpl implements SizeService {
                 .description(size.getDescription())
                 .isActive(size.getIsActive())
                 .createdAt(size.getCreatedAt())
+                .createdBy(size.getCreatedBy())
+                .updatedBy(size.getUpdatedBy())
+                .updatedAt(size.getUpdatedAt())
                 .isDeleted(size.getIsDeleted())
                 .build();
     }

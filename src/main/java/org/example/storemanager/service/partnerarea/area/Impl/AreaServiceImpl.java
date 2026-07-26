@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-@Service
+@Service("partnerAreaService")
 @RequiredArgsConstructor
 public class AreaServiceImpl implements AreaService {
     private final RestTemplate restTemplate;

@@ -37,12 +37,18 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Mọi request đều cho phép — kiểm soát qua @PreAuthorize ở Controller
+                        .requestMatchers(
+                                "/api/v1/auth/**",
+                                "/api/v1/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/error"
+                        ).permitAll()
                         .anyRequest().permitAll()
                 )
-                // Đăng ký JWT filter: chạy trước UsernamePasswordAuthenticationFilter
-                // Nếu có token hợp lệ → set username vào SecurityContext
-                // Nếu không có token → vẫn cho qua (vì permitAll)
+
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

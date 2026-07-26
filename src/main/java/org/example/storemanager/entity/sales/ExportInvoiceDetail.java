@@ -40,4 +40,7 @@ public class ExportInvoiceDetail extends BaseEntity {
 
     @Column(name = "sub_total", precision = 18, scale = 2)
     private BigDecimal subTotal;
+
+    @Column(name = "tax_rate", precision = 5, scale = 2)
+    private BigDecimal taxRate; // Thuế suất snapshot tại thời điểm bán
 }
