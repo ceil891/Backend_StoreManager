@@ -1,0 +1,16 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!target//*.jar
+
+# IDE files
+.idea
+*.iml
+.classpath
+.project
+.settings
+
+# Logs and temp files
+*.log
+.DS_Store
+mvnw
+mvnw.cmd

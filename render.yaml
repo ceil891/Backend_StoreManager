@@ -1,0 +1,33 @@
+services:
+  # -------------------------------------------------------------
+  # Spring Boot Backend Web Service on Render
+  # -------------------------------------------------------------
+  - type: web
+    name: storemanager-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SPRING_DATA_REDIS_HOST
+        fromService:
+          type: redis
+          name: storemanager-redis
+          property: host
+      - key: SPRING_DATA_REDIS_PORT
+        fromService:
+          type: redis
+          name: storemanager-redis
+          property: port
+
+  # -------------------------------------------------------------
+  # Redis Managed Service on Render
+  # -------------------------------------------------------------
+  - type: redis
+    name: storemanager-redis
+    region: singapore
+    plan: free
+    maxmemoryPolicy: noeviction
