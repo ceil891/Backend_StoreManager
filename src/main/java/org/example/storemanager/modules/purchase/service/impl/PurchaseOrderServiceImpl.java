@@ -118,6 +118,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
 
+        if ("COMPLETED".equals(po.getStatus()) || "CANCELLED".equals(po.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa đơn mua hàng ở trạng thái " + po.getStatus());
+        }
+
         Supplier supplier = supplierRepository.findByIdAndIsDeletedFalse(request.getSupplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
 
@@ -191,6 +195,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     public void deleteOrder(Long id) {
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
+
+        if ("COMPLETED".equals(po.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xóa đơn mua hàng ở trạng thái COMPLETED");
+        }
 
         String username = getCurrentUsername();
         po.setIsDeleted(true);

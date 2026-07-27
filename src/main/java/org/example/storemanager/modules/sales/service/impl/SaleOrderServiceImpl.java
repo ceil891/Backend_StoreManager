@@ -130,6 +130,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         SaleOrder order = saleOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SaleOrder", "id", id));
 
+        if ("COMPLETED".equals(order.getStatus()) || "CANCELLED".equals(order.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể chỉnh sửa đơn bán hàng ở trạng thái " + order.getStatus());
+        }
+
         Customer customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
 
@@ -208,6 +212,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     public void deleteOrder(Long id) {
         SaleOrder order = saleOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SaleOrder", "id", id));
+
+        if ("COMPLETED".equals(order.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xóa đơn bán hàng ở trạng thái COMPLETED");
+        }
 
         String username = getCurrentUsername();
         order.setIsDeleted(true);
