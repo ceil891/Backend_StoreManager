@@ -517,7 +517,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .totalAmount(dto.getTotalAmount() != null ? dto.getTotalAmount() : BigDecimal.ZERO)
                 .discount(dto.getDiscount() != null ? dto.getDiscount() : BigDecimal.ZERO)
                 .tax(dto.getTax() != null ? dto.getTax() : BigDecimal.ZERO)
-                .status("PENDING")
+                .status(dto.getStatus() != null ? dto.getStatus() : "COMPLETE")
                 .branch(branch)
                 .supplier(supplier)
                 .inspectedBy(dto.getInspectedBy())
@@ -608,6 +608,12 @@ public class InventoryServiceImpl implements InventoryService {
                 ImportReceiptDetail savedDetail = importReceiptDetailRepository.save(detail);
                 savedLines.add(toImportReceiptDetailDTO(savedDetail));
             }
+        }
+
+        if ("COMPLETE".equalsIgnoreCase(saved.getStatus()) || "PASSED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) {
+            saved.setStatus("PENDING");
+            importReceiptRepository.save(saved);
+            return completeImportReceipt(saved.getId());
         }
 
         ImportReceiptDTO result = toImportReceiptDTO(saved);
