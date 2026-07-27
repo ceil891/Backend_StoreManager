@@ -22,5 +22,5 @@ COPY --from=build /app/target/*.jar app.jar
 # Expose Spring Boot port
 EXPOSE 8080
 
-# Run Spring Boot application with JVM memory limits suitable for Render free tier
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+# Run Spring Boot application with optimized JVM flags for Render 512MB free tier
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms128m", "-Xmx300m", "-XX:MaxMetaspaceSize=128m", "-XX:ReservedCodeCacheSize=64m", "-Xss256k", "-XX:+UseSerialGC", "-jar", "app.jar"]
