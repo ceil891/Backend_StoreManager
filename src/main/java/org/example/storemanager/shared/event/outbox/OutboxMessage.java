@@ -20,16 +20,16 @@ public class OutboxMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "eventid", nullable = false, unique = true)
     private String eventId;
 
-    @Column(nullable = false)
+    @Column(name = "aggregatetype", nullable = false)
     private String aggregateType;
 
-    @Column(nullable = false)
+    @Column(name = "aggregateid", nullable = false)
     private String aggregateId;
 
-    @Column(nullable = false)
+    @Column(name = "eventtype", nullable = false)
     private String eventType;
 
     @Column(columnDefinition = "TEXT", nullable = false)
@@ -39,8 +39,13 @@ public class OutboxMessage {
     @Column(nullable = false)
     private OutboxStatus status;
 
+    @Column(name = "createdat")
     private LocalDateTime createdAt;
+
+    @Column(name = "processedat")
     private LocalDateTime processedAt;
+
+    @Column(name = "retrycount")
     private int retryCount;
 
     public enum OutboxStatus {
