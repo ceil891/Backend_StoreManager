@@ -14,7 +14,7 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:SmartRetailProject2026_SecureKeyForJWT_MustBeAtLeast64CharactersLong_For_HS512_Security}")
     private String jwtSecret;
 
     // Access token hết hạn sau 1 giờ (ms)
