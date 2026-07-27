@@ -12,6 +12,8 @@ services:
     envVars:
       - key: PORT
         value: 8080
+      - key: JWT_SECRET
+        value: SmartRetailProject2026_SecureKeyForJWT_MustBeAtLeast64CharactersLong_For_HS512_Security
       - key: SPRING_DATA_REDIS_HOST
         fromService:
           type: redis

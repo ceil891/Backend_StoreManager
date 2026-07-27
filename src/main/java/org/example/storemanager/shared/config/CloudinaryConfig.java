@@ -8,9 +8,9 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class CloudinaryConfig {
-    @Value("${cloudinary.cloud_name}") private String cloudName;
-    @Value("${cloudinary.api_key}") private String apiKey;
-    @Value("${cloudinary.api_secret}") private String apiSecret;
+    @Value("${cloudinary.cloud_name:ddjd3bkh2}") private String cloudName;
+    @Value("${cloudinary.api_key:594541298539529}") private String apiKey;
+    @Value("${cloudinary.api_secret:9RZap99fEpt7mm_jf7z0FZMNUik}") private String apiSecret;
 
     @Bean
     public Cloudinary cloudinary() {
