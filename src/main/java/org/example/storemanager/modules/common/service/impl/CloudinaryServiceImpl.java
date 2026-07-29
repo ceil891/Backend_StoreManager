@@ -27,7 +27,9 @@ public class CloudinaryServiceImpl implements CloudinaryService {
     public UploadResponse uploadFile(MultipartFile file, String folder) throws IOException {
         Map params = ObjectUtils.asMap(
                 "folder", folder,
-                "resource_type", "auto"
+                "resource_type", "auto",
+                "quality", "auto:good",
+                "fetch_format", "auto"
         );
         Map uploadResult = cloudinary.uploader().upload(file.getBytes(), params);
         
@@ -42,15 +44,20 @@ public class CloudinaryServiceImpl implements CloudinaryService {
 
     @Override
     public List<UploadResponse> uploadMultipleFiles(MultipartFile[] files, String folder) throws IOException {
-        List<UploadResponse> responses = new ArrayList<>();
-        if (files != null) {
-            for (MultipartFile file : files) {
-                if (!file.isEmpty()) {
-                    responses.add(uploadFile(file, folder));
-                }
+        if (files == null || files.length == 0) return new ArrayList<>();
+
+        List<MultipartFile> validFiles = Arrays.stream(files)
+                .filter(f -> f != null && !f.isEmpty())
+                .collect(Collectors.toList());
+
+        return validFiles.parallelStream().map(file -> {
+            try {
+                return uploadFile(file, folder);
+            } catch (IOException e) {
+                log.error("Lỗi khi tải file song song: {}", e.getMessage());
+                throw new RuntimeException(e);
             }
-        }
-        return responses;
+        }).collect(Collectors.toList());
     }
 
     @Override

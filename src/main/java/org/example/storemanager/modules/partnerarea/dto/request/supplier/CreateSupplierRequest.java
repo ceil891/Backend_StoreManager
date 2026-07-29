@@ -24,8 +24,8 @@ public class CreateSupplierRequest {
 
     private String contactPerson;
 
-    // Validate phone
-    @Pattern(regexp = "^[0-9]{10,11}$", message = "Số điện thoại phải từ 10-11 chữ số")
+    // Validate phone (cho phép rỗng hoặc 10-11 chữ số)
+    @Pattern(regexp = "^$|^[0-9]{10,11}$", message = "Số điện thoại phải từ 10-11 chữ số")
     private String phone;
 
     // Validate email

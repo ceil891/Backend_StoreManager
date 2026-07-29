@@ -64,14 +64,12 @@ public class ProductController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:product:view')")
     public ResponseEntity<ApiResponse<ProductResponse>> getProductById(@PathVariable Long id) {
         ProductResponse response = productService.getProductById(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:product:view')")
     public ResponseEntity<ApiResponse<?>> getProducts(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long categoryId,

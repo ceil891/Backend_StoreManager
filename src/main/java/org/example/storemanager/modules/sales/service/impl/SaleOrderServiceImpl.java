@@ -47,6 +47,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     private final BranchRepository branchRepository;
     private final ProductVariantRepository productVariantRepository;
     private final org.example.storemanager.shared.event.outbox.OutboxService outboxService;
+    private final org.example.storemanager.modules.inventory.service.InventoryService inventoryService;
+    private final org.example.storemanager.modules.wms.service.WarehouseService warehouseService;
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
@@ -102,6 +104,31 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         order.setTotalAmount(totalAmount);
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(details);
+
+        // Tự động trừ tồn kho thực tế nếu đơn hàng đã hoàn tất (COMPLETED)
+        if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
+            try {
+                org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
+                        warehouseService.getOrCreateDefaultZone(branch);
+                for (SaleOrderDetail detail : details) {
+                    ProductVariant pv = detail.getProductVariant();
+                    inventoryService.deductStock(
+                            defaultZone.getId(),
+                            branch.getId(),
+                            pv.getProduct().getId(),
+                            null,
+                            null,
+                            detail.getQuantity(),
+                            "EXPORT",
+                            savedOrder.getOrderCode(),
+                            savedOrder.getId()
+                    );
+                }
+            } catch (Exception e) {
+                // Log warning nếu có lỗi khi trừ tồn kho nhưng vẫn cho đơn tạo thành công
+                System.err.println("Cảnh báo khi trừ tồn kho đơn hàng: " + e.getMessage());
+            }
+        }
 
         // Transactional Outbox Pattern: Save Event to Outbox table in the SAME DB Transaction
         org.example.storemanager.shared.event.payload.OrderCreatedEventPayload payload = 

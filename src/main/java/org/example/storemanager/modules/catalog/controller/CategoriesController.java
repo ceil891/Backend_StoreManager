@@ -70,7 +70,6 @@ public class CategoriesController {
 
     // ========== XEM CHI TIẾT ==========
     @GetMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:category:view')")
     public ResponseEntity<ApiResponse<CategoriesResponse>> getById(@PathVariable Long id) {
         CategoriesResponse response = categoriesService.getById(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
@@ -91,7 +90,6 @@ public class CategoriesController {
      * GET /api/v1/categories?page=0&size=10&includeDeleted=true
      */
     @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:category:view')")
     public ResponseEntity<ApiResponse<?>> getAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean isActive,
@@ -110,7 +108,6 @@ public class CategoriesController {
 
     // ========== CÂY DANH MỤC ==========
     @GetMapping("/tree")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:category:view')")
     public ResponseEntity<ApiResponse<List<MapCategoriesResponse>>> getTree() {
         List<MapCategoriesResponse> tree = categoriesService.getTree();
         return ResponseEntity.ok(ApiResponse.ok(tree));
@@ -118,7 +115,6 @@ public class CategoriesController {
 
     // ========== DANH MỤC CON ==========
     @GetMapping("/{id}/children")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:category:view')")
     public ResponseEntity<ApiResponse<List<MapCategoriesResponse>>> getChildren(@PathVariable Long id) {
         List<MapCategoriesResponse> children = categoriesService.getChildren(id);
         return ResponseEntity.ok(ApiResponse.ok(children));
@@ -126,7 +122,6 @@ public class CategoriesController {
 
     // ========== DANH MỤC CHA ==========
     @GetMapping("/{id}/parent")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:category:view')")
     public ResponseEntity<ApiResponse<CategoriesResponse>> getParent(@PathVariable Long id) {
         CategoriesResponse parent = categoriesService.getParent(id);
         return ResponseEntity.ok(ApiResponse.ok(parent));
