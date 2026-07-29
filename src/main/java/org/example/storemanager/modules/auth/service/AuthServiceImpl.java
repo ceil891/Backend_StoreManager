@@ -7,6 +7,7 @@ import org.example.storemanager.modules.auth.dto.request.RegisterRequest;
 import org.example.storemanager.modules.auth.dto.response.LoginResponse;
 import org.example.storemanager.modules.auth.dto.response.UserInfoResponse;
 import org.example.storemanager.modules.system.entity.RefreshToken;
+import org.example.storemanager.modules.system.entity.Role;
 import org.example.storemanager.modules.system.entity.RolePermission;
 import org.example.storemanager.modules.system.entity.User;
 import org.example.storemanager.shared.enums.ErrorCode;
@@ -16,6 +17,7 @@ import org.example.storemanager.shared.exception.JwtAuthenticationException;
 import org.example.storemanager.shared.exception.ResourceNotFoundException;
 import org.example.storemanager.modules.system.repository.RefreshTokenRepository;
 import org.example.storemanager.modules.system.repository.RolePermissionRepository;
+import org.example.storemanager.modules.system.repository.RoleRepository;
 import org.example.storemanager.modules.system.repository.UserRepository;
 import org.example.storemanager.shared.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
 
@@ -43,10 +46,12 @@ public class AuthServiceImpl implements AuthService {
     public AuthServiceImpl(UserRepository userRepository,
                            RefreshTokenRepository refreshTokenRepository,
                            RolePermissionRepository rolePermissionRepository,
+                           RoleRepository roleRepository,
                            JwtUtil jwtUtil) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.rolePermissionRepository = rolePermissionRepository;
+        this.roleRepository = roleRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
@@ -69,12 +74,19 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("Tài khoản", "phone", request.getPhone());
         }
 
+        Role defaultRole = roleRepository.findByRoleName("USER")
+                .or(() -> roleRepository.findByRoleName("Nguoi dung"))
+                .or(() -> roleRepository.findByRoleName("Người dùng"))
+                .or(() -> roleRepository.findByRoleName("Khách hàng"))
+                .orElse(null);
+
         User user = User.builder()
                 .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
+                .role(defaultRole)
                 .status("ACTIVE")
                 .build();
         user.setCreatedBy(request.getUsername());
