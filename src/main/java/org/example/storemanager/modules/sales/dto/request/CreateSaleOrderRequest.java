@@ -26,6 +26,16 @@ public class CreateSaleOrderRequest {
     @NotBlank(message = "Trạng thái không được để trống")
     private String status;
 
+    private String customerName;
+
+    private String customerPhone;
+
+    private String shippingAddress;
+
+    private String orderOrigin;
+
+    private String paymentStatus;
+
     private String note;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")

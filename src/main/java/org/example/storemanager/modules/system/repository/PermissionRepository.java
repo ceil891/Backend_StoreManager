@@ -21,9 +21,9 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
 
     // Bổ sung hàm tìm kiếm, lọc và phân trang (dành cho getAllPermissions và getPermissionsPaginated)
     @Query("SELECT p FROM Permission p WHERE " +
-            "(:search IS NULL OR LOWER(p.permissionCode) LIKE LOWER(CONCAT('%', :search, '%')) " +
-            "OR LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%')) " +
-            "OR LOWER(p.module) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+            "(CAST(:search AS string) IS NULL OR LOWER(p.permissionCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+            "OR LOWER(p.description) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+            "OR LOWER(p.module) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) " +
             "AND (:isActive IS NULL OR p.isActive = :isActive) " +
             "AND (:includeDeleted = TRUE OR p.isDeleted = FALSE)")
     Page<Permission> findAllPermissionsIncludeDeleted(

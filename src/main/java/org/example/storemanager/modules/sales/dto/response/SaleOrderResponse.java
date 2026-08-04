@@ -21,10 +21,24 @@ public class SaleOrderResponse {
     private String status;
     private Long customerId;
     private String customerName;
+    private String customerPhone;
+    private String shippingAddress;
+    private String orderOrigin;
+    private String paymentStatus;
     private Long branchId;
     private String branchName;
     private String note;
     private LocalDateTime createdAt;
     private String createdBy;
+    private Long carrierId;
+    private String carrier;
+    private Long driverId;
+    private String trackingCode;
+    private String trackingUrl;
+    private String shipperName;
+    private String shipperPhone;
+    private String deliveryStatus;
+    private LocalDateTime assignedAt;
+    private String assignedBy;
     private List<SaleOrderDetailResponse> details;
 }

@@ -32,12 +32,14 @@ public class DeliveryTrip extends BaseEntity {
     @Column(nullable = false, length = 30)
     private String status; // PENDING, DELIVERING, SUCCESS, FAILED
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shipper_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "shipper_id")
     private Shipper shipper;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "order_id")
     private SaleOrder order;
 
     private Double distance; // Quãng đường
