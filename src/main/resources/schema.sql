@@ -1,0 +1,43 @@
+-- Migration: Add online order fields to sale_orders table
+-- Safe to run multiple times (IF NOT EXISTS)
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30);
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS shipping_address TEXT;
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS order_origin VARCHAR(50) DEFAULT 'ONLINE';
+ALTER TABLE sale_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'UNPAID';
+UPDATE sale_orders SET order_origin = 'ONLINE' WHERE order_origin = 'ONLINE_STORE' OR order_origin IS NULL;
+UPDATE sale_orders SET payment_status = 'UNPAID' WHERE payment_status IS NULL;
+ALTER TABLE sale_orders DROP CONSTRAINT IF EXISTS sale_orders_order_origin_check;
+ALTER TABLE sale_orders ADD CONSTRAINT sale_orders_order_origin_check CHECK (order_origin IN ('MANUAL', 'POS', 'ONLINE', 'ONLINE_STORE'));
+
+-- Migration: Add fields to sale_order_details table
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS unit_price NUMERIC(18, 2);
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(18, 2) DEFAULT 0;
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(18, 2) DEFAULT 0;
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS total_amount NUMERIC(18, 2);
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS order_id BIGINT;
+ALTER TABLE sale_order_details ADD COLUMN IF NOT EXISTS sale_order_id BIGINT;
+UPDATE sale_order_details SET unit_price = unit_price_snapshot WHERE unit_price IS NULL AND unit_price_snapshot IS NOT NULL;
+UPDATE sale_order_details SET total_amount = sub_total WHERE total_amount IS NULL AND sub_total IS NOT NULL;
+UPDATE sale_order_details SET sub_total = total_amount WHERE sub_total IS NULL AND total_amount IS NOT NULL;
+UPDATE sale_order_details SET sale_order_id = order_id WHERE sale_order_id IS NULL AND order_id IS NOT NULL;
+UPDATE sale_order_details SET order_id = sale_order_id WHERE order_id IS NULL AND sale_order_id IS NOT NULL;
+ALTER TABLE sale_order_details ALTER COLUMN unit_price DROP NOT NULL;
+ALTER TABLE sale_order_details ALTER COLUMN total_amount DROP NOT NULL;
+ALTER TABLE sale_order_details ALTER COLUMN sub_total DROP NOT NULL;
+ALTER TABLE sale_order_details ALTER COLUMN sale_order_id DROP NOT NULL;
+ALTER TABLE sale_order_details ALTER COLUMN order_id DROP NOT NULL;
+
+-- Migration: Fix delivery_assignment_histories missing BaseEntity columns
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255);
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(255);
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false;
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS trace_id VARCHAR(255);
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 0;
+ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
+UPDATE delivery_assignment_histories SET version = 0 WHERE version IS NULL;
+UPDATE delivery_assignment_histories SET is_deleted = false WHERE is_deleted IS NULL;
+UPDATE delivery_assignment_histories SET is_locked = false WHERE is_locked IS NULL;

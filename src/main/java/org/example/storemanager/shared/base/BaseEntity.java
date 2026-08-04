@@ -51,4 +51,14 @@ public abstract class BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String note;
+
+    @PrePersist
+    protected void onBasePrePersist() {
+        if (this.isDeleted == null) {
+            this.isDeleted = false;
+        }
+        if (this.isLocked == null) {
+            this.isLocked = false;
+        }
+    }
 }

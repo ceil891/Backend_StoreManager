@@ -47,6 +47,7 @@ public class Shipper extends BaseEntity {
     @Column(length = 500)
     private String avatar; // Ảnh đại diện
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department; // Kho/CN

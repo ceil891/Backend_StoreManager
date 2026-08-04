@@ -25,6 +25,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 
 import java.time.LocalDateTime;
 
+@Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
 
@@ -167,10 +169,16 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout(String refreshToken) {
-        refreshTokenRepository.findByToken(refreshToken).ifPresent(rt -> {
-            rt.setIsRevoked(true);
-            refreshTokenRepository.save(rt);
-        });
+        try {
+            refreshTokenRepository.findByToken(refreshToken).ifPresent(rt -> {
+                if (Boolean.TRUE.equals(rt.getIsRevoked())) return; // already revoked
+                rt.setIsRevoked(true);
+                refreshTokenRepository.save(rt);
+            });
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+            // Token was concurrently revoked by another request — treat as success
+            log.warn("Logout: token already revoked by concurrent request, ignoring: {}", ex.getMessage());
+        }
     }
 
     @Override

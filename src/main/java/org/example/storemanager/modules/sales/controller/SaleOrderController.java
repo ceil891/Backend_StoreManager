@@ -28,7 +28,6 @@ public class SaleOrderController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('sales:order:update')")
     public ResponseEntity<ApiResponse<SaleOrderResponse>> updateOrder(
             @PathVariable Long id,
             @Valid @RequestBody UpdateSaleOrderRequest request) {
@@ -37,11 +36,14 @@ public class SaleOrderController {
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("@securityEvaluator.hasPermission('sales:order:update')")
     public ResponseEntity<ApiResponse<SaleOrderResponse>> updateStatus(
             @PathVariable Long id,
-            @RequestParam String status) {
-        SaleOrderResponse response = saleOrderService.updateStatus(id, status);
+            @RequestParam String status,
+            @RequestParam(required = false) String carrier,
+            @RequestParam(required = false) String trackingCode,
+            @RequestParam(required = false) String shipperName,
+            @RequestParam(required = false) String shipperPhone) {
+        SaleOrderResponse response = saleOrderService.updateStatus(id, status, carrier, trackingCode, shipperName, shipperPhone);
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái đơn hàng thành công", response));
     }
 

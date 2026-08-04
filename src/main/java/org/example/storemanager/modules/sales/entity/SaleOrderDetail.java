@@ -45,12 +45,54 @@ public class SaleOrderDetail extends BaseEntity {
     @Column(precision = 18, scale = 3, nullable = true)
     private BigDecimal quantity;
 
+    @Column(name = "unit_price", precision = 18, scale = 2)
+    private BigDecimal unitPrice;
+
     @Column(name = "unit_price_snapshot", precision = 18, scale = 2, nullable = true)
     private BigDecimal unitPriceSnapshot;
+
+    @Builder.Default
+    @Column(name = "discount_amount", precision = 18, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "tax_amount", precision = 18, scale = 2)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
 
     @Column(name = "sub_total", precision = 18, scale = 2)
     private BigDecimal subTotal;
 
+    @Column(name = "total_amount", precision = 18, scale = 2)
+    private BigDecimal totalAmount;
+
     @Column(name = "tax_rate", precision = 5, scale = 2)
     private BigDecimal taxRate; // Thuế suất snapshot tại thời điểm bán
+
+    @PrePersist
+    public void prePersist() {
+        if (this.unitPrice == null && this.unitPriceSnapshot != null) {
+            this.unitPrice = this.unitPriceSnapshot;
+        }
+        if (this.unitPriceSnapshot == null && this.unitPrice != null) {
+            this.unitPriceSnapshot = this.unitPrice;
+        }
+        if (this.discountAmount == null) {
+            this.discountAmount = BigDecimal.ZERO;
+        }
+        if (this.taxAmount == null) {
+            this.taxAmount = BigDecimal.ZERO;
+        }
+        if (this.subTotal == null && this.quantity != null && this.unitPriceSnapshot != null) {
+            this.subTotal = this.quantity.multiply(this.unitPriceSnapshot);
+        }
+        if (this.totalAmount == null) {
+            this.totalAmount = this.subTotal != null ? this.subTotal : (this.quantity != null && this.unitPriceSnapshot != null ? this.quantity.multiply(this.unitPriceSnapshot) : BigDecimal.ZERO);
+        }
+        if (this.subTotal == null) {
+            this.subTotal = this.totalAmount;
+        }
+        if (this.taxRate == null) {
+            this.taxRate = BigDecimal.ZERO;
+        }
+    }
 }

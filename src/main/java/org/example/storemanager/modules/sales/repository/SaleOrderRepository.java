@@ -17,11 +17,12 @@ public interface SaleOrderRepository extends JpaRepository<SaleOrder, Long> {
 
     @Query("SELECT o FROM SaleOrder o WHERE " +
            "(:includeDeleted = true OR o.isDeleted = false) AND " +
-           "(:status IS NULL OR o.status = :status) AND " +
+           "(:status IS NULL OR :status = '' OR o.status = :status) AND " +
            "(:branchId IS NULL OR o.branch.id = :branchId) AND " +
            "(:search IS NULL OR :search = '' OR " +
            "LOWER(o.orderCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(o.customer.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(o.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
            "LOWER(o.note) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<SaleOrder> findAllOrders(
             @Param("search") String search,

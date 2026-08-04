@@ -45,4 +45,5 @@ public class ProductResponse {
     private String baseUnitName;
 
     private List<ProductUnitResponse> units;
+    private BigDecimal onHand;
 }

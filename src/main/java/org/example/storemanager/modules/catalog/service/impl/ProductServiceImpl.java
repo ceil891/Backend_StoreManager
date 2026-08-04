@@ -482,6 +482,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductResponse mapToProductResponse(Product product, List<ProductUnitResponse> units) {
+        BigDecimal onHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
         return ProductResponse.builder()
                 .id(product.getId())
                 .productCode(product.getProductCode())
@@ -510,6 +511,7 @@ public class ProductServiceImpl implements ProductService {
                 .baseUnitCode(product.getBaseUnit().getUnitCode())
                 .baseUnitName(product.getBaseUnit().getUnitName())
                 .units(units)
+                .onHand(onHand != null ? onHand : BigDecimal.ZERO)
                 .build();
     }
 

@@ -28,7 +28,6 @@ public class InventoryController {
     private final InventoryService inventoryService;
 
     @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:inventory:search')")
     public ResponseEntity<ApiResponse<List<InventoryResponse>>> getAllInventories() {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.getAllInventories()));
     }

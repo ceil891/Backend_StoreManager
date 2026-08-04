@@ -29,11 +29,17 @@ public class LogisticsController {
     private final PromotionRepository promotionRepository;
     private final ShippingCarrierRepository shippingCarrierRepository;
     private final SaleOrderRepository saleOrderRepository;
+    private final org.example.storemanager.modules.logistics.repository.DeliveryAssignmentHistoryRepository deliveryAssignmentHistoryRepository;
 
     // --- SHIPPERS ---
     @GetMapping("/shippers")
     public ResponseEntity<ApiResponse<List<Shipper>>> getAllShippers() {
         return ResponseEntity.ok(ApiResponse.ok(shipperRepository.findByIsDeletedFalse()));
+    }
+
+    @GetMapping("/orders/{orderId}/assignment-history")
+    public ResponseEntity<ApiResponse<List<org.example.storemanager.modules.logistics.entity.DeliveryAssignmentHistory>>> getOrderAssignmentHistory(@PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.ok(deliveryAssignmentHistoryRepository.findByOrderIdAndIsDeletedFalseOrderByCreatedAtDesc(orderId)));
     }
 
     @PostMapping("/shippers")
@@ -44,6 +50,7 @@ public class LogisticsController {
 
     // --- DELIVERY TRIPS ---
     @GetMapping("/trips")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<List<DeliveryTrip>>> getAllTrips() {
         return ResponseEntity.ok(ApiResponse.ok(deliveryTripRepository.findByIsDeletedFalse()));
     }
