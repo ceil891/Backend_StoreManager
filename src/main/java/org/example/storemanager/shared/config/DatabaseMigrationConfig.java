@@ -164,6 +164,15 @@ public class DatabaseMigrationConfig implements ApplicationRunner {
             } catch (Exception ex) {
                 log.warn("[Migration] delivery_assignment_histories migration warning: {}", ex.getMessage());
             }
+
+            // ---- loyalty_tiers migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE loyalty_tiers ADD COLUMN IF NOT EXISTS min_spend NUMERIC(15, 2)");
+                jdbcTemplate.execute("ALTER TABLE loyalty_tiers ADD COLUMN IF NOT EXISTS max_spend NUMERIC(15, 2)");
+                log.info("[Migration] loyalty_tiers columns (min_spend, max_spend) ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] loyalty_tiers migration warning: {}", ex.getMessage());
+            }
         } catch (Exception e) {
             log.warn("[Migration] sale_orders migration warning: {}", e.getMessage());
         }

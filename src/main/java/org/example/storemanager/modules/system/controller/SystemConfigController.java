@@ -84,13 +84,4 @@ public class SystemConfigController {
         return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
     }
 
-    @GetMapping("/device-sessions")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDeviceSessions() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
-    }
-
-    @GetMapping("/password-history")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPasswordHistory() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
-    }
 }

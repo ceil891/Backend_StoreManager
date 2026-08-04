@@ -27,6 +27,12 @@ public class LoyaltyTier extends BaseEntity {
     @Column(name = "max_points")
     private Integer maxPoints; // Giới hạn điểm của hạng (nếu áp dụng)
 
+    @Column(name = "min_spend", precision = 15, scale = 2)
+    private BigDecimal minSpend; // Mốc tổng chi tiêu tối thiểu (VNĐ)
+
+    @Column(name = "max_spend", precision = 15, scale = 2)
+    private BigDecimal maxSpend; // Mốc tổng chi tiêu tối đa (VNĐ)
+
     @Column(name = "discount_percent", precision = 5, scale = 2)
     private BigDecimal discountPercent; // % Giảm giá mặc định cho hạng này
 
