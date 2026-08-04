@@ -309,12 +309,6 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(paymentMethodRepository.findByIsDeletedFalse()));
     }
 
-    // --- PAYROLL ---
-    @GetMapping("/payrolls")
-    public ResponseEntity<ApiResponse<List<Payroll>>> getAllPayrolls() {
-        return ResponseEntity.ok(ApiResponse.ok(payrollRepository.findByIsDeletedFalse()));
-    }
-
     private void createJournalEntryForReceipt(ReceiptVoucher rv) {
         String creditAccountCode = "511";
         String reasonCode = rv.getReason() != null ? rv.getReason().getReasonCode() : "";
