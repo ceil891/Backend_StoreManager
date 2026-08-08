@@ -8,7 +8,9 @@ import org.example.storemanager.modules.system.entity.Branch;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "warehouse_zones")
+@Table(name = "warehouse_zones", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_warehouse_zones_branch_zone_code", columnNames = {"branch_id", "zone_code"})
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,7 +18,7 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(callSuper = true)
 public class WarehouseZone extends BaseEntity {
 
-    @Column(name = "zone_code", nullable = false, unique = true, length = 50)
+    @Column(name = "zone_code", nullable = false, length = 50)
     private String zoneCode;
 
     @Column(name = "zone_name", nullable = false, length = 150)

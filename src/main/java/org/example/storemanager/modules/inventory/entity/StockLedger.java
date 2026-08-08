@@ -5,6 +5,7 @@ import lombok.*;
 import org.example.storemanager.shared.base.BaseEntity;
 import org.example.storemanager.modules.system.entity.Branch;
 import org.example.storemanager.modules.catalog.entity.Product;
+import org.example.storemanager.modules.catalog.entity.ProductVariant;
 import org.example.storemanager.modules.wms.entity.WarehouseZone;
 
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "stock_ledgers", indexes = {
         @Index(name = "idx_stock_ledger_product", columnList = "product_id"),
+        @Index(name = "idx_stock_ledger_variant", columnList = "product_variant_id"),
         @Index(name = "idx_stock_ledger_branch", columnList = "branch_id"),
         @Index(name = "idx_stock_ledger_zone", columnList = "warehouse_zone_id"),
         @Index(name = "idx_stock_ledger_ref", columnList = "reference_id"),
@@ -49,6 +51,10 @@ public class StockLedger extends BaseEntity {
     private Product product;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_variant_id")
+    private ProductVariant productVariant;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "batch_id")
     private ProductBatch batch; // Tùy chọn lô hàng
-}
+}

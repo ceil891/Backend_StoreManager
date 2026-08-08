@@ -48,3 +48,27 @@ CREATE INDEX IF NOT EXISTS idx_sale_od_sale_order ON sale_order_details(sale_ord
 CREATE INDEX IF NOT EXISTS idx_sale_od_variant ON sale_order_details(product_variant_id);
 CREATE INDEX IF NOT EXISTS idx_suppliers_supplier_code ON suppliers(supplier_code);
 CREATE INDEX IF NOT EXISTS idx_sale_orders_customer_id ON sale_orders(customer_id);
+
+-- Migration: Add attribute_signature to product_variants
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS attribute_signature VARCHAR(500);
+
+-- Migration: Add product_variant_id to stock_ledgers
+ALTER TABLE stock_ledgers ADD COLUMN IF NOT EXISTS product_variant_id BIGINT;
+
+ALTER TABLE stock_ledgers DROP CONSTRAINT IF EXISTS fk_stock_ledger_variant;
+ALTER TABLE stock_ledgers ADD CONSTRAINT fk_stock_ledger_variant
+    FOREIGN KEY (product_variant_id) REFERENCES product_variants(id);
+
+-- Migration: Partial unique index for active variant barcodes
+CREATE UNIQUE INDEX IF NOT EXISTS ux_variant_barcode_active
+ON product_variants(barcode)
+WHERE is_deleted = false AND barcode IS NOT NULL AND barcode != '';
+
+-- Migration: Partial unique index for active variant attribute signature per product
+CREATE UNIQUE INDEX IF NOT EXISTS ux_variant_attr_sig_active
+ON product_variants(product_id, attribute_signature)
+WHERE is_deleted = false AND attribute_signature IS NOT NULL AND attribute_signature != '';
+
+-- Migration: Index on stock_ledgers.product_variant_id
+CREATE INDEX IF NOT EXISTS idx_stock_ledger_variant ON stock_ledgers(product_variant_id);
+

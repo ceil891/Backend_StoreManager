@@ -173,8 +173,109 @@ public class DatabaseMigrationConfig implements ApplicationRunner {
             } catch (Exception ex) {
                 log.warn("[Migration] loyalty_tiers migration warning: {}", ex.getMessage());
             }
+
+            // ---- product_variants migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS attribute_signature VARCHAR(255)");
+                log.info("[Migration] product_variants column attribute_signature ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] product_variants migration warning: {}", ex.getMessage());
+            }
+
+            // ---- warehouse_zones migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE warehouse_zones DROP CONSTRAINT IF EXISTS uk_hyb8d4xfdqbv7tnwq5d5wny81");
+                log.info("[Migration] warehouse_zones constraint uk_hyb8d4xfdqbv7tnwq5d5wny81 dropped OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] warehouse_zones migration warning: {}", ex.getMessage());
+            }
+
+            // ---- product_attributes & attribute_values default seed ----
+            try {
+                jdbcTemplate.execute(
+                    "INSERT INTO product_attributes (attribute_name, attribute_code, attribute_type, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'Màu sắc (Color)', 'COLOR', 'TEXT', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM product_attributes WHERE attribute_code = 'COLOR')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO product_attributes (attribute_name, attribute_code, attribute_type, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'Kích thước (Size)', 'SIZE', 'TEXT', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM product_attributes WHERE attribute_code = 'SIZE')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO product_attributes (attribute_name, attribute_code, attribute_type, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'Dung lượng (Storage)', 'STORAGE', 'TEXT', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM product_attributes WHERE attribute_code = 'STORAGE')"
+                );
+
+                // Seed attribute values for COLOR
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Đỏ (Red)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'COLOR' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'COLOR' AND av.value_text = 'Đỏ (Red)')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Xanh Đen (Navy)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'COLOR' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'COLOR' AND av.value_text = 'Xanh Đen (Navy)')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Đen (Black)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'COLOR' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'COLOR' AND av.value_text = 'Đen (Black)')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Trắng (White)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'COLOR' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'COLOR' AND av.value_text = 'Trắng (White)')"
+                );
+
+                // Seed attribute values for SIZE
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Size S', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'SIZE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'SIZE' AND av.value_text = 'Size S')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Size M', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'SIZE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'SIZE' AND av.value_text = 'Size M')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Size L', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'SIZE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'SIZE' AND av.value_text = 'Size L')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, 'Size XL', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'SIZE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'SIZE' AND av.value_text = 'Size XL')"
+                );
+
+                // Seed attribute values for STORAGE
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, '128GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'STORAGE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'STORAGE' AND av.value_text = '128GB')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, '256GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'STORAGE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'STORAGE' AND av.value_text = '256GB')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO attribute_values (attribute_id, value_text, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT id, '512GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM product_attributes WHERE attribute_code = 'STORAGE' " +
+                    "AND NOT EXISTS (SELECT 1 FROM attribute_values av JOIN product_attributes pa ON av.attribute_id = pa.id WHERE pa.attribute_code = 'STORAGE' AND av.value_text = '512GB')"
+                );
+
+                log.info("[Migration] product_attributes & attribute_values default seed ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] product_attributes seed warning: {}", ex.getMessage());
+            }
         } catch (Exception e) {
-            log.warn("[Migration] sale_orders migration warning: {}", e.getMessage());
+          log.warn("[Migration] sale_orders migration warning: {}", e.getMessage());
         }
     }
 }
+

@@ -30,4 +30,6 @@ public interface UserService {
     void resetPassword(Long id, ResetPasswordRequest request);
 
     UserResponse restoreUser(Long id);
-}
+
+    UpdateUserResponse updateRoleAndBranch(Long id, Long roleId, Long branchId);
+}

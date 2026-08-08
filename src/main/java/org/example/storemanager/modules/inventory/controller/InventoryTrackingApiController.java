@@ -18,6 +18,7 @@ import org.example.storemanager.modules.inventory.repository.InventoryTransactio
 import org.example.storemanager.modules.inventory.service.InventoryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ import java.util.List;
 @RequestMapping({"/api/v1/inventory", "/api/v1/inventories"})
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*", allowedHeaders = "*")
+@Transactional(readOnly = true)
 public class InventoryTrackingApiController {
 
     private final InventoryService inventoryService;
@@ -202,17 +204,35 @@ public class InventoryTrackingApiController {
     }
 
     private InventoryBalanceDTO toBalanceDTO(InventoryBalance b) {
+        Long productId = null;
+        Long productVariantId = null;
+        String sku = null;
+        String productName = "";
+
+        if (b.getProductVariant() != null) {
+            productVariantId = b.getProductVariant().getId();
+            sku = b.getProductVariant().getSku();
+            if (b.getProductVariant().getProduct() != null) {
+                productId = b.getProductVariant().getProduct().getId();
+                productName = b.getProductVariant().getProduct().getName();
+            }
+        }
+
+        BigDecimal avail = b.getAvailableQuantity() != null ? b.getAvailableQuantity() : BigDecimal.ZERO;
+        BigDecimal resv = b.getReservedQuantity() != null ? b.getReservedQuantity() : BigDecimal.ZERO;
+
         return InventoryBalanceDTO.builder()
                 .id(b.getId())
-                .productVariantId(b.getProductVariant().getId())
-                .sku(b.getProductVariant().getSku())
-                .productName(b.getProductVariant().getProduct() != null ? b.getProductVariant().getProduct().getName() : "")
-                .branchId(b.getBranch().getId())
-                .branchName(b.getBranch().getBranchName())
-                .availableQuantity(b.getAvailableQuantity())
-                .reservedQuantity(b.getReservedQuantity())
-                .damagedQuantity(b.getDamagedQuantity())
-                .onHandQuantity(b.getAvailableQuantity().add(b.getReservedQuantity()))
+                .productId(productId)
+                .productVariantId(productVariantId)
+                .sku(sku)
+                .productName(productName)
+                .branchId(b.getBranch() != null ? b.getBranch().getId() : null)
+                .branchName(b.getBranch() != null ? b.getBranch().getBranchName() : "")
+                .availableQuantity(avail)
+                .reservedQuantity(resv)
+                .damagedQuantity(b.getDamagedQuantity() != null ? b.getDamagedQuantity() : BigDecimal.ZERO)
+                .onHandQuantity(avail.add(resv))
                 .lastUpdated(b.getLastUpdated())
                 .build();
     }
@@ -250,6 +270,7 @@ public class InventoryTrackingApiController {
     @Builder
     public static class InventoryBalanceDTO {
         private Long id;
+        private Long productId;
         private Long productVariantId;
         private String sku;
         private String productName;

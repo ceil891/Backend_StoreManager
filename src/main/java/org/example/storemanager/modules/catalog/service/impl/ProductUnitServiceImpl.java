@@ -209,9 +209,20 @@ public class ProductUnitServiceImpl implements ProductUnitService {
             if (productUnitRepository.existsByBarcodeAndIdNotAndIsDeletedFalse(barcode, excludeProductUnitId)) {
                 throw new DuplicateResourceException("ProductUnit", "barcode", barcode);
             }
+        } else if (excludeProductId != null) {
+            List<ProductUnit> existingUnits = productUnitRepository.findByProductIdAndIsDeletedFalse(excludeProductId);
+            boolean belongsToCurrentProductUnit = existingUnits.stream().anyMatch(u -> u.getBarcode() != null && u.getBarcode().trim().equalsIgnoreCase(barcode.trim()));
+            boolean belongsToCurrentProductMain = productRepository.findByIdAndIsDeletedFalse(excludeProductId)
+                    .map(p -> p.getBarcode() != null && p.getBarcode().trim().equalsIgnoreCase(barcode.trim()))
+                    .orElse(false);
+            if (!belongsToCurrentProductUnit && !belongsToCurrentProductMain && productUnitRepository.existsByBarcodeAndIsDeletedFalse(barcode)) {
+                throw new DuplicateResourceException("ProductUnit", "barcode", barcode);
+            }
         } else if (productUnitRepository.existsByBarcodeAndIsDeletedFalse(barcode)) {
+
             throw new DuplicateResourceException("ProductUnit", "barcode", barcode);
         }
+
         if (excludeProductId != null) {
             if (productRepository.existsByBarcodeAndIdNotAndIsDeletedFalse(barcode, excludeProductId)) {
                 throw new DuplicateResourceException("Product", "barcode", barcode);
@@ -220,6 +231,7 @@ public class ProductUnitServiceImpl implements ProductUnitService {
             throw new DuplicateResourceException("Product", "barcode", barcode);
         }
     }
+
 
     private ProductUnitResponse mapToResponse(ProductUnit productUnit) {
         return ProductUnitResponse.builder()

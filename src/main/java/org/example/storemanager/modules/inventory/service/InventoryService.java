@@ -105,4 +105,11 @@ public interface InventoryService {
     org.example.storemanager.modules.inventory.dto.StockTransferDTO submitStockTransfer(Long id);
     org.example.storemanager.modules.inventory.dto.StockTransferDTO approveStockTransfer(Long id);
     org.example.storemanager.modules.inventory.dto.StockTransferDTO shipStockTransfer(Long id);
+
+    // StockOut methods
+    List<org.example.storemanager.modules.inventory.dto.StockOutDTO> getAllStockOuts();
+    org.example.storemanager.modules.inventory.dto.StockOutDTO getStockOutById(Long id);
+    org.example.storemanager.modules.inventory.dto.StockOutDTO createStockOut(org.example.storemanager.modules.inventory.dto.StockOutDTO dto);
+    org.example.storemanager.modules.inventory.dto.StockOutDTO updateStockOut(Long id, org.example.storemanager.modules.inventory.dto.StockOutDTO dto);
+    void deleteStockOut(Long id);
 }

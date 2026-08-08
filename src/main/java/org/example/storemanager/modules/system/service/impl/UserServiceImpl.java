@@ -32,6 +32,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import org.example.storemanager.modules.system.entity.Branch;
+import org.example.storemanager.modules.system.repository.BranchRepository;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -41,7 +44,9 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final BranchRepository branchRepository;
     private final PasswordEncoder passwordEncoder;
+
 
     @Override
     @Transactional
@@ -281,9 +286,36 @@ public class UserServiceImpl implements UserService {
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .status(user.getStatus())
-                .status(user.getStatus())
+                .roleId(user.getRole() != null ? user.getRole().getId() : null)
+                .roleName(user.getRole() != null ? user.getRole().getRoleName() : null)
+                .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
+                .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
                 .updatedBy(user.getUpdatedBy())
                 .updatedAt(user.getUpdatedAt() != null ? user.getUpdatedAt() : LocalDateTime.now())
                 .build();
     }
-}
+
+    @Override
+    @Transactional
+    @LogActivity(actionType = "UPDATE_ROLE_BRANCH", entityName = "User", entityClass = User.class)
+    public UpdateUserResponse updateRoleAndBranch(Long id, Long roleId, Long branchId) {
+        User user = userRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+
+        if (roleId != null) {
+            Role role = roleRepository.findByIdAndIsDeletedFalse(roleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "id", roleId));
+            user.setRole(role);
+        }
+
+        if (branchId != null) {
+            Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
+            user.setBranch(branch);
+        }
+
+        user.setUpdatedBy(getCurrentUsername());
+        User updatedUser = userRepository.save(user);
+        return mapToUpdateResponse(updatedUser);
+    }
+}

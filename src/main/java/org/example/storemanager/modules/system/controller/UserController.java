@@ -16,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import org.example.storemanager.modules.system.dto.request.user.UpdateUserRoleBranchRequest;
+
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -41,7 +43,21 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật thông tin người dùng thành công", response));
     }
 
+    // ========== CẬP NHẬT VAI TRÒ & CHI NHÁNH (DEDICATED API) ==========
+    @PutMapping("/{id}/role-branch")
+    @PreAuthorize("@securityEvaluator.hasPermission('system:user:update')")
+    public ResponseEntity<ApiResponse<UpdateUserResponse>> updateRoleAndBranch(
+            @PathVariable Long id,
+            @RequestBody UpdateUserRoleBranchRequest request) {
+        Long rId = request != null ? request.getRoleId() : null;
+        Long bId = request != null ? request.getBranchId() : null;
+        UpdateUserResponse response = userService.updateRoleAndBranch(id, rId, bId);
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật vai trò và chi nhánh người dùng thành công", response));
+    }
+
+
     // ========== CẬP NHẬT TRẠNG THÁI ==========
+
     @PutMapping("/{id}/status")
     @PreAuthorize("@securityEvaluator.hasPermission('system:user:update-status')")
     public ResponseEntity<ApiResponse<UpdateUserResponse>> updateStatus(
@@ -79,7 +95,7 @@ public class UserController {
 
     // ========== DANH SÁCH (phân trang hoặc tất cả) ==========
     @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('system:user:view')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<?>> getUsers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,

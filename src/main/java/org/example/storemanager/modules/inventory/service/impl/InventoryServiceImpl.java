@@ -40,8 +40,11 @@ import org.example.storemanager.modules.wms.service.WarehouseService;
 import org.example.storemanager.shared.config.LogActivity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -81,6 +84,9 @@ public class InventoryServiceImpl implements InventoryService {
     private final org.example.storemanager.modules.inventory.repository.InventoryBalanceRepository inventoryBalanceRepository;
     private final org.example.storemanager.modules.inventory.repository.InventoryTransactionRepository inventoryTransactionRepository;
     private final org.example.storemanager.modules.catalog.repository.SerialNumberRepository serialNumberRepository;
+    private final org.example.storemanager.modules.sales.repository.PurchaseOrderRepository purchaseOrderRepository;
+    private final StockOutRepository stockOutRepository;
+    private final org.example.storemanager.modules.inventory.mapper.StockOutMapper stockOutMapper;
 
     @Override
     public PageResponse<InventoryResponse> searchInventories(SearchInventoryRequest request, Pageable pageable) {
@@ -511,6 +517,16 @@ public class InventoryServiceImpl implements InventoryService {
                 ? supplierRepository.findById(dto.getSupplierId()).orElse(null)
                 : supplierRepository.findAll().stream().findFirst().orElse(null);
 
+        org.example.storemanager.modules.sales.entity.PurchaseOrder purchaseOrder = null;
+        if (dto.getPurchaseOrderId() != null) {
+            purchaseOrder = purchaseOrderRepository.findById(dto.getPurchaseOrderId()).orElse(null);
+        } else if (dto.getPurchaseOrderCode() != null && !dto.getPurchaseOrderCode().isBlank()) {
+            final String poCodeSearch = dto.getPurchaseOrderCode().trim();
+            purchaseOrder = purchaseOrderRepository.findAll().stream()
+                    .filter(p -> p.getPoCode() != null && p.getPoCode().equalsIgnoreCase(poCodeSearch))
+                    .findFirst().orElse(null);
+        }
+
         ImportReceipt receipt = ImportReceipt.builder()
                 .receiptCode(dto.getReceiptCode() != null ? dto.getReceiptCode() : "GRN-" + System.currentTimeMillis())
                 .receiptDate(dto.getReceiptDate() != null ? dto.getReceiptDate() : LocalDateTime.now())
@@ -520,6 +536,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .status(dto.getStatus() != null ? dto.getStatus() : "COMPLETE")
                 .branch(branch)
                 .supplier(supplier)
+                .purchaseOrder(purchaseOrder)
                 .inspectedBy(dto.getInspectedBy())
                 .note(dto.getNote())
                 .build();
@@ -636,7 +653,19 @@ public class InventoryServiceImpl implements InventoryService {
                     .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", dto.getSupplierId()));
             r.setSupplier(s);
         }
-        r.setReceiptCode(dto.getReceiptCode());
+        if (dto.getPurchaseOrderId() != null) {
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findById(dto.getPurchaseOrderId()).orElse(null);
+            if (po != null) r.setPurchaseOrder(po);
+        } else if (dto.getPurchaseOrderCode() != null && !dto.getPurchaseOrderCode().isBlank()) {
+            final String poCodeSearch = dto.getPurchaseOrderCode().trim();
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findAll().stream()
+                    .filter(p -> p.getPoCode() != null && p.getPoCode().equalsIgnoreCase(poCodeSearch))
+                    .findFirst().orElse(null);
+            if (po != null) r.setPurchaseOrder(po);
+        }
+        if (dto.getReceiptCode() != null && !dto.getReceiptCode().isBlank()) {
+            r.setReceiptCode(dto.getReceiptCode());
+        }
         r.setTotalAmount(dto.getTotalAmount());
         r.setDiscount(dto.getDiscount());
         r.setTax(dto.getTax());
@@ -714,7 +743,7 @@ public class InventoryServiceImpl implements InventoryService {
 
             // 4. Create InventoryTransaction = IMPORT
             String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "-" + String.format("%06d", inventoryTransactionRepository.count() + 1);
+                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
             InventoryTransaction tx = InventoryTransaction.builder()
                     .transactionCode(txCode)
@@ -1156,14 +1185,24 @@ public class InventoryServiceImpl implements InventoryService {
     public ProductBatchDTO updateProductBatch(Long id, ProductBatchDTO dto) {
         ProductBatch b = productBatchRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProductBatch", "id", id));
-        b.setBatchNumber(dto.getBatchNumber());
-        b.setManufactureDate(dto.getManufactureDate());
-        b.setExpiryDate(dto.getExpiryDate());
-        b.setQualityStatus(dto.getQualityStatus());
-        b.setInspector(dto.getInspector());
+
+        if (dto.getBatchNumber() != null && !dto.getBatchNumber().isBlank()) {
+            b.setBatchNumber(dto.getBatchNumber().trim());
+        }
+        if (dto.getManufactureDate() != null) b.setManufactureDate(dto.getManufactureDate());
+        if (dto.getExpiryDate() != null) b.setExpiryDate(dto.getExpiryDate());
+        if (dto.getUnitCost() != null) b.setUnitCost(dto.getUnitCost());
+        if (dto.getSupplierName() != null) b.setSupplierName(dto.getSupplierName());
+        if (dto.getLocation() != null) b.setLocation(dto.getLocation());
+        if (dto.getQualityStatus() != null) b.setQualityStatus(dto.getQualityStatus());
+        if (dto.getInspector() != null) b.setInspector(dto.getInspector());
+
+        b.setStatus(determineBatchStatus(b));
         ProductBatch saved = productBatchRepository.save(b);
         return toProductBatchDTO(saved);
     }
+
+
 
     @Override
     @Transactional
@@ -1280,7 +1319,7 @@ public class InventoryServiceImpl implements InventoryService {
 
                 // Create InventoryTransaction = TRANSFER_IN
                 String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                        + "-" + String.format("%06d", inventoryTransactionRepository.count() + 1);
+                        + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
                 InventoryTransaction tx = InventoryTransaction.builder()
                         .transactionCode(txCode)
@@ -1317,8 +1356,37 @@ public class InventoryServiceImpl implements InventoryService {
     public ProductBatchDTO adjustProductBatch(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.BatchAdjustRequest request) {
         ProductBatch b = productBatchRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProductBatch", "id", id));
-        b.setRemainingUnits(request.getAdjustedQuantity());
+
+        if (request.getAdjustedQuantity() == null || request.getAdjustedQuantity().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng điều chỉnh không được nhỏ hơn 0");
+        }
+
+        BigDecimal oldQty = b.getRemainingUnits() != null ? b.getRemainingUnits() : BigDecimal.ZERO;
+        BigDecimal newQty = request.getAdjustedQuantity();
+        BigDecimal changeQty = newQty.subtract(oldQty);
+
+        b.setRemainingUnits(newQty);
+        b.setStatus(determineBatchStatus(b));
         ProductBatch saved = productBatchRepository.save(b);
+
+        if (changeQty.compareTo(BigDecimal.ZERO) != 0 && b.getProduct() != null) {
+            Branch mainBranch = branchRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+            if (mainBranch != null) {
+                org.example.storemanager.modules.inventory.entity.StockLedger ledger =
+                        org.example.storemanager.modules.inventory.entity.StockLedger.builder()
+                                .transactionType("BATCH_ADJUSTMENT")
+                                .product(b.getProduct())
+                                .branch(mainBranch)
+                                .batch(saved)
+                                .changeQty(changeQty)
+                                .balanceAfter(newQty)
+                                .build();
+                ledger.setIsDeleted(false);
+                ledger.setCreatedBy(getCurrentUsername());
+                stockLedgerRepository.save(ledger);
+            }
+        }
+
         return toProductBatchDTO(saved);
     }
 
@@ -1331,6 +1399,21 @@ public class InventoryServiceImpl implements InventoryService {
         ProductBatch saved = productBatchRepository.save(b);
         return toProductBatchDTO(saved);
     }
+
+    private String determineBatchStatus(ProductBatch b) {
+        if ("INACTIVE".equalsIgnoreCase(b.getStatus())) {
+            return "INACTIVE";
+        }
+        if (b.getRemainingUnits() != null && b.getRemainingUnits().compareTo(BigDecimal.ZERO) <= 0) {
+            return "DEPLETED";
+        }
+        if (b.getExpiryDate() != null && b.getExpiryDate().isBefore(java.time.LocalDate.now())) {
+            return "EXPIRED";
+        }
+        return "ACTIVE";
+    }
+
+
 
     @Override
     public List<ProductBatchDTO> getExpiringProductBatches(int days) {
@@ -1708,7 +1791,7 @@ public class InventoryServiceImpl implements InventoryService {
             inventoryBalanceRepository.save(balance);
 
             String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "-" + String.format("%06d", inventoryTransactionRepository.count() + 1);
+                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
             InventoryTransaction tx = InventoryTransaction.builder()
                     .transactionCode(txCode)
@@ -1796,7 +1879,7 @@ public class InventoryServiceImpl implements InventoryService {
             inventoryBalanceRepository.save(balance);
 
             String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "-" + String.format("%06d", inventoryTransactionRepository.count() + 1);
+                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
             InventoryTransaction tx = InventoryTransaction.builder()
                     .transactionCode(txCode)
@@ -1890,7 +1973,7 @@ public class InventoryServiceImpl implements InventoryService {
                 inventoryBalanceRepository.save(balance);
 
                 String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                        + "-" + String.format("%06d", inventoryTransactionRepository.count() + 1);
+                        + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
                 InventoryTransaction tx = InventoryTransaction.builder()
                         .transactionCode(txCode)
@@ -1908,5 +1991,84 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         return toStockTransferDTO(saved);
+    }
+
+    // --- StockOut Methods ---
+    @Override
+    public List<StockOutDTO> getAllStockOuts() {
+        return stockOutRepository.findAll().stream()
+                .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                .map(stockOutMapper::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public StockOutDTO getStockOutById(Long id) {
+        StockOut s = stockOutRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("StockOut", "id", id));
+        return stockOutMapper.toDTO(s);
+    }
+
+    @Override
+    @Transactional
+    public StockOutDTO createStockOut(StockOutDTO dto) {
+        StockOut entity = stockOutMapper.toEntity(dto);
+        entity.setIsDeleted(false);
+        if (entity.getDetails() != null) {
+            entity.getDetails().forEach(d -> {
+                d.setStockOut(entity);
+                d.setIsDeleted(false);
+            });
+        }
+        StockOut saved = stockOutRepository.save(entity);
+        return stockOutMapper.toDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public StockOutDTO updateStockOut(Long id, StockOutDTO dto) {
+        StockOut existing = stockOutRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("StockOut", "id", id));
+
+        existing.setStockOutCode(dto.getStockOutCode());
+        existing.setOutType(dto.getOutType());
+        existing.setWarehouseName(dto.getWarehouseName());
+        existing.setCreator(dto.getCreator());
+        existing.setStatus(dto.getStatus());
+        existing.setNotes(dto.getNotes());
+        existing.setTotalVariants(dto.getTotalVariants());
+        existing.setTotalItems(dto.getTotalItems());
+        existing.setTotalValue(dto.getTotalValue());
+
+        if (dto.getItems() != null) {
+            existing.getDetails().clear();
+            List<StockOutDetail> newDetails = dto.getItems().stream().map(i -> {
+                StockOutDetail d = StockOutDetail.builder()
+                        .stockOut(existing)
+                        .productName(i.getProductName())
+                        .variant(i.getVariant())
+                        .sku(i.getSku())
+                        .barcode(i.getBarcode())
+                        .quantity(i.getQuantity())
+                        .unitPrice(i.getUnitPrice())
+                        .amount(i.getAmount())
+                        .build();
+                d.setIsDeleted(false);
+                return d;
+            }).collect(Collectors.toList());
+            existing.getDetails().addAll(newDetails);
+        }
+
+        StockOut saved = stockOutRepository.save(existing);
+        return stockOutMapper.toDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteStockOut(Long id) {
+        StockOut existing = stockOutRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("StockOut", "id", id));
+        existing.setIsDeleted(true);
+        stockOutRepository.save(existing);
     }
 }
