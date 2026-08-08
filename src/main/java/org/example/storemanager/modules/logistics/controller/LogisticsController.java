@@ -377,54 +377,167 @@ public class LogisticsController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    // --- OTHERS DUMMY ---
+    // --- PROMOTIONS FULL CRUD ---
+    @PostMapping("/promotions")
+    public ResponseEntity<ApiResponse<Promotion>> createPromotion(@RequestBody Promotion req) {
+        req.setIsDeleted(false);
+        if (req.getStatus() == null) req.setStatus("ACTIVE");
+        if (req.getUsedCount() == null) req.setUsedCount(0);
+        return ResponseEntity.status(201).body(ApiResponse.created(promotionRepository.save(req)));
+    }
+
+    @PutMapping("/promotions/{id}")
+    public ResponseEntity<ApiResponse<Promotion>> updatePromotion(@PathVariable Long id, @RequestBody Promotion req) {
+        Promotion p = promotionRepository.findById(id)
+                .orElseThrow(() -> new org.example.storemanager.shared.exception.ResourceNotFoundException("Promotion", "id", id));
+        p.setPromoCode(req.getPromoCode());
+        p.setPromoName(req.getPromoName());
+        p.setType(req.getType());
+        p.setValue(req.getValue());
+        p.setMinOrderAmount(req.getMinOrderAmount());
+        p.setMaxDiscountAmount(req.getMaxDiscountAmount());
+        p.setStartDate(req.getStartDate());
+        p.setEndDate(req.getEndDate());
+        p.setDescription(req.getDescription());
+        p.setStatus(req.getStatus());
+        p.setUsageLimit(req.getUsageLimit());
+        p.setCustomerType(req.getCustomerType());
+        return ResponseEntity.ok(ApiResponse.ok(promotionRepository.save(p)));
+    }
+
+    @DeleteMapping("/promotions/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePromotion(@PathVariable Long id) {
+        Promotion p = promotionRepository.findById(id)
+                .orElseThrow(() -> new org.example.storemanager.shared.exception.ResourceNotFoundException("Promotion", "id", id));
+        p.setIsDeleted(true);
+        promotionRepository.save(p);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- CHARGES CRUD ---
+    private static final List<Map<String, Object>> shippingCharges = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Map<String, Object>> shippingFeeRates = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Map<String, Object>> shippingFeeGroups = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Map<String, Object>> shipments = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Map<String, Object>> packingLists = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final List<Map<String, Object>> deliveryNotes = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     @GetMapping("/charges")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingCharges() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(shippingCharges));
     }
 
+    @PostMapping("/charges")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createShippingCharge(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        shippingCharges.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @DeleteMapping("/charges/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteShippingCharge(@PathVariable String id) {
+        shippingCharges.removeIf(c -> id.equals(String.valueOf(c.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- FEE-RATES CRUD ---
     @GetMapping("/fee-rates")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingFeeRates() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(shippingFeeRates));
     }
 
+    @PostMapping("/fee-rates")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createShippingFeeRate(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        shippingFeeRates.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @DeleteMapping("/fee-rates/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteShippingFeeRate(@PathVariable String id) {
+        shippingFeeRates.removeIf(r -> id.equals(String.valueOf(r.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- FEE-GROUPS CRUD ---
     @GetMapping("/fee-groups")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingFeeGroups() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(shippingFeeGroups));
     }
 
+    @PostMapping("/fee-groups")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createShippingFeeGroup(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        shippingFeeGroups.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @DeleteMapping("/fee-groups/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteShippingFeeGroup(@PathVariable String id) {
+        shippingFeeGroups.removeIf(g -> id.equals(String.valueOf(g.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- SHIPMENTS CRUD ---
     @GetMapping("/shipments")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShipments() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(shipments));
     }
 
-    @GetMapping("/notes")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingNotes() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+    @PostMapping("/shipments")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createShipment(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        shipments.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
     }
 
-    @GetMapping("/orders")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingOrders() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+    @DeleteMapping("/shipments/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteShipment(@PathVariable String id) {
+        shipments.removeIf(s -> id.equals(String.valueOf(s.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
-    @GetMapping("/locations")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingLocations() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
-    }
-
-    @GetMapping("/contacts")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getShippingContacts() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
-    }
-
+    // --- PACKING LISTS CRUD ---
     @GetMapping("/packing-lists")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPackingLists() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(packingLists));
     }
 
+    @PostMapping("/packing-lists")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createPackingList(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        packingLists.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @DeleteMapping("/packing-lists/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePackingList(@PathVariable String id) {
+        packingLists.removeIf(p -> id.equals(String.valueOf(p.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // --- DELIVERY NOTES CRUD ---
     @GetMapping("/delivery-notes")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDeliveryNotes() {
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>()));
+        return ResponseEntity.ok(ApiResponse.ok(deliveryNotes));
+    }
+
+    @PostMapping("/delivery-notes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createDeliveryNote(@RequestBody Map<String, Object> req) {
+        Map<String, Object> item = new HashMap<>(req);
+        item.put("id", String.valueOf(System.currentTimeMillis()));
+        deliveryNotes.add(item);
+        return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @DeleteMapping("/delivery-notes/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDeliveryNote(@PathVariable String id) {
+        deliveryNotes.removeIf(n -> id.equals(String.valueOf(n.get("id"))));
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

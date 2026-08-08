@@ -29,10 +29,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token) && jwtUtil.isTokenValid(token)) {
             String username = jwtUtil.extractUsername(token);
+            java.util.List<String> roles = jwtUtil.extractRoles(token);
+            
+            java.util.List<org.springframework.security.core.GrantedAuthority> authorities = new java.util.ArrayList<>();
+            if (roles != null && !roles.isEmpty()) {
+                for (String role : roles) {
+                    authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                        role.startsWith("ROLE_") ? role : "ROLE_" + role
+                    ));
+                }
+            } else {
+                authorities.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER"));
+            }
 
-            // Set Authentication vào SecurityContext để các service gọi được getCurrentUser()
+            // Set Authentication vào SecurityContext với đầy đủ Authorities
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(username, null, Collections.emptyList());
+                    new UsernamePasswordAuthenticationToken(username, null, authorities);
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }

@@ -35,18 +35,18 @@ public class SupplierController {
         return ResponseEntity.ok(ApiResponse.ok("Thành công", service.getById(id)));
     }
 
-    // 3. POST: Tạo mới (Dùng consumes form-data)
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    // 3. POST: Tạo mới
+    @PostMapping
     public ResponseEntity<ApiResponse<CreateSupplierResponse>> create(
-            @Valid @ModelAttribute CreateSupplierRequest req) {
+            @Valid @RequestBody CreateSupplierRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Tạo thành công", service.create(req)));
     }
 
     // 4. PUT: Cập nhật
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UpdateSupplierResponse>> update(
             @PathVariable Long id,
-            @Valid @ModelAttribute CreateSupplierRequest req) {
+            @Valid @RequestBody CreateSupplierRequest req) {
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật thành công", service.update(id, req)));
     }
 

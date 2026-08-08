@@ -15,6 +15,11 @@ public class SupplierListResponse {
     private String contactPerson;
 
     private String phone;
+    private String email;
+    private String address;
+    private String taxCode;
+    private Long groupId;
+    private Long areaId;
     private BigDecimal creditLimit;
 
     private Boolean isActive;
