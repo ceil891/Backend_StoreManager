@@ -1,14 +1,10 @@
 package org.example.storemanager.shared.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * KafkaConfig - Topic constants only.
- * Topic auto-creation disabled (spring.kafka.admin.auto-create=false)
- * to prevent AdminClient connection attempts when Kafka broker is not running locally.
- * Kafka listeners are also disabled via spring.kafka.listener.auto-startup=false.
- */
 @Configuration
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class KafkaConfig {
 
     public static final String TOPIC_ORDER_CREATED = "storemanager.order.created";

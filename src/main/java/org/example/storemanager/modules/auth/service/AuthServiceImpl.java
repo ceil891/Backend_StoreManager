@@ -250,6 +250,15 @@ public class AuthServiceImpl implements AuthService {
 
         String roleName = user.getRole() != null ? user.getRole().getRoleName() : "USER";
 
+        // Lấy danh sách quyền từ vai trò của user
+        List<String> permissions = Collections.emptyList();
+        if (user.getRole() != null) {
+            List<RolePermission> rolePermissions = rolePermissionRepository.findByRoleId(user.getRole().getId());
+            permissions = rolePermissions.stream()
+                    .map(rp -> rp.getPermission().getPermissionCode())
+                    .collect(Collectors.toList());
+        }
+
         UserInfoResponse userInfo = UserInfoResponse.builder()
                 .id(user.getId())
                 .name(user.getFullName())
@@ -257,6 +266,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(roleName)
                 .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
                 .branchName(user.getBranch() != null ? user.getBranch().toString() : null)
+                .permissions(permissions)
                 .build();
 
         return LoginResponse.builder()

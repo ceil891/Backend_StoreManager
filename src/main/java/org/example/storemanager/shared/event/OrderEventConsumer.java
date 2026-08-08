@@ -5,12 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.shared.config.KafkaConfig;
 import org.example.storemanager.shared.event.base.DomainEvent;
 import org.example.storemanager.shared.event.idempotency.IdempotencyService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class OrderEventConsumer {
 
     private final IdempotencyService idempotencyService;

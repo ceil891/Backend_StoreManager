@@ -63,16 +63,19 @@ public class ProductServiceImpl implements ProductService {
     @Autowired private BranchRepository branchRepository;
     @Autowired private ProductVariantRepository productVariantRepository;
     @Autowired private InventoryBalanceRepository inventoryBalanceRepository;
+    @Autowired private org.example.storemanager.modules.catalog.service.ProductVariantService productVariantService;
+    @Autowired private org.example.storemanager.modules.inventory.repository.StockLedgerRepository stockLedgerRepository;
+    @Autowired private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Autowired
     public ProductServiceImpl(ProductRepository productRepository,
-                              CategoriesRepository categoriesRepository,
-                              UnitRepository unitRepository,
-                              ProductUnitRepository productUnitRepository,
-                              SizeInventoryRepository sizeInventoryRepository,
-                              ProductUnitService productUnitService,
-                              CloudinaryService cloudinaryService,
-                              org.springframework.context.ApplicationEventPublisher eventPublisher) {
+                               CategoriesRepository categoriesRepository,
+                               UnitRepository unitRepository,
+                               ProductUnitRepository productUnitRepository,
+                               SizeInventoryRepository sizeInventoryRepository,
+                               ProductUnitService productUnitService,
+                               CloudinaryService cloudinaryService,
+                               org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.categoriesRepository = categoriesRepository;
         this.unitRepository = unitRepository;
@@ -83,11 +86,58 @@ public class ProductServiceImpl implements ProductService {
         this.eventPublisher = eventPublisher;
     }
 
+    private String generateProductCode() {
+        String dateStr = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
+        for (int i = 0; i < 10; i++) {
+            String code = String.format("PRD-%s-%06d", dateStr, java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 999999));
+            if (!productRepository.existsByProductCodeAndIsDeletedFalse(code)) {
+                return code;
+            }
+        }
+        throw new IllegalStateException("Không thể tự động sinh mã sản phẩm (productCode) duy nhất sau 10 lần thử.");
+    }
+
+    private String generateInternalEan13() {
+        for (int i = 0; i < 10; i++) {
+            StringBuilder sb = new StringBuilder("8938");
+            for (int j = 0; j < 8; j++) {
+                sb.append(java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 10));
+            }
+            String data12 = sb.toString();
+            int sum = 0;
+            for (int k = 0; k < 12; k++) {
+                int digit = Character.getNumericValue(data12.charAt(k));
+                sum += (k % 2 == 0) ? digit : digit * 3;
+            }
+            int checkDigit = (10 - (sum % 10)) % 10;
+            String barcode = data12 + checkDigit;
+
+            if (!productVariantRepository.existsByBarcodeAndIsDeletedFalse(barcode)) {
+                return barcode;
+            }
+        }
+        throw new IllegalStateException("Không thể tự động sinh mã Barcode duy nhất sau 10 lần thử.");
+    }
+
     @Override
     @LogActivity(actionType = "CREATE", entityName = "Product", entityClass = Product.class)
     public CreateProductResponse createProduct(CreateProductRequest request) {
-        if (productRepository.existsByProductCodeAndIsDeletedFalse(request.getProductCode())) {
-            throw new DuplicateResourceException("Product", "productCode", request.getProductCode());
+        String productCode = request.getProductCode();
+        if (productCode == null || productCode.isBlank()) {
+            productCode = generateProductCode();
+        } else {
+            productCode = productCode.trim();
+            if (productRepository.existsByProductCodeAndIsDeletedFalse(productCode)) {
+                throw new DuplicateResourceException("Product", "productCode", productCode);
+            }
+        }
+
+        String barcode = request.getBarcode();
+        if (barcode == null || barcode.isBlank()) {
+            barcode = generateInternalEan13();
+        } else {
+            barcode = barcode.trim();
+            productUnitService.validateBarcode(barcode, null, null);
         }
 
         ProductCategory category = categoriesRepository.findByIdAndIsDeletedFalse(request.getCategoryId())
@@ -98,23 +148,32 @@ public class ProductServiceImpl implements ProductService {
 
         String username = getCurrentUsername();
 
-        productUnitService.validateBarcode(request.getBarcode(), null, null);
+        // Resolve structured variants
+        List<CreateProductRequest.CreateVariantInput> variantInputs = request.getVariants();
+        if ((variantInputs == null || variantInputs.isEmpty()) && request.getVariantsRaw() != null && !request.getVariantsRaw().isBlank()) {
+            try {
+                variantInputs = objectMapper.readValue(request.getVariantsRaw(),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, CreateProductRequest.CreateVariantInput.class));
+            } catch (Exception ignored) {}
+        }
+
+        boolean hasVariants = variantInputs != null && !variantInputs.isEmpty();
 
         Product product = Product.builder()
-                .productCode(request.getProductCode())
-                .name(request.getName())
+                .productCode(productCode)
+                .name(request.getName().trim())
                 .description(request.getDescription())
                 .basePrice(request.getBasePrice())
                 .costPrice(request.getCostPrice())
                 .brand(request.getBrand())
                 .mainImageUrl(request.getMainImageUrl())
-                .barcode(request.getBarcode())
+                .barcode(barcode)
                 .weight(request.getWeight())
                 .reorderPoint(request.getReorderPoint())
                 .minStock(request.getMinStock())
                 .maxStock(request.getMaxStock())
                 .galleryImages(request.getGalleryImages())
-                .variants(request.getVariants())
+                .variantStrategy(hasVariants ? org.example.storemanager.shared.enums.catalog.VariantStrategy.ATTRIBUTE_BASED : org.example.storemanager.shared.enums.catalog.VariantStrategy.NONE)
                 .category(category)
                 .baseUnit(baseUnit)
                 .build();
@@ -153,47 +212,40 @@ public class ProductServiceImpl implements ProductService {
                 productUnitRepository.save(pu);
             }
         }
-        // ----------------------------------------------------
-        // ERP WMS AUTOMATIC INVENTORY BALANCE INITIALIZATION
-        // ----------------------------------------------------
-        List<ProductVariant> variants = productVariantRepository.findByProductIdAndIsDeletedFalse(savedProduct.getId());
-        if (variants.isEmpty()) {
-            String defaultCode = savedProduct.getProductCode() + "-DEF";
-            String defaultSku = savedProduct.getProductCode();
-            
-            ProductVariant defaultVariant = ProductVariant.builder()
-                    .variantCode(defaultCode)
-                    .sku(defaultSku)
-                    .barcode(savedProduct.getBarcode())
-                    .price(savedProduct.getBasePrice())
-                    .status(org.example.storemanager.shared.enums.catalog.VariantStatus.ACTIVE)
-                    .isActive(true)
-                    .product(savedProduct)
-                    .build();
-            defaultVariant.setIsDeleted(false);
-            defaultVariant.setCreatedBy(username);
-            defaultVariant = productVariantRepository.save(defaultVariant);
-            variants = List.of(defaultVariant);
-        }
 
-        List<Branch> branches = branchRepository.findByIsDeletedFalse();
-        for (ProductVariant variant : variants) {
-            for (Branch branch : branches) {
-                if (inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId()).isEmpty()) {
-                    InventoryBalance balance = InventoryBalance.builder()
-                            .productVariant(variant)
-                            .branch(branch)
-                            .availableQuantity(BigDecimal.ZERO)
-                            .reservedQuantity(BigDecimal.ZERO)
-                            .damagedQuantity(BigDecimal.ZERO)
-                            .minimumQuantity(savedProduct.getMinStock() != null ? savedProduct.getMinStock() : BigDecimal.ZERO)
-                            .reorderPoint(savedProduct.getReorderPoint() != null ? savedProduct.getReorderPoint() : BigDecimal.ZERO)
-                            .lastUpdated(LocalDateTime.now())
-                            .build();
-                    balance.setIsDeleted(false);
-                    balance.setCreatedBy(username);
-                    inventoryBalanceRepository.save(balance);
+        // ----------------------------------------------------
+        // ERP WMS AUTOMATIC INVENTORY INITIALIZATION & STOCK LEDGER
+        // ----------------------------------------------------
+        List<Branch> activeBranches = branchRepository.findByIsDeletedFalse();
+        java.util.Map<Long, Branch> branchMap = activeBranches.stream()
+                .collect(Collectors.toMap(Branch::getId, b -> b));
+
+        if (hasVariants) {
+            List<ProductVariant> createdVariants = new java.util.ArrayList<>();
+            for (CreateProductRequest.CreateVariantInput vInput : variantInputs) {
+                ProductVariant variant = productVariantService.buildVariantFromInput(savedProduct, vInput);
+                productVariantService.createAttributeMappings(variant, vInput.getAttributeValueIds(), username);
+                createdVariants.add(variant);
+            }
+
+            // Bulk initialize balances for all created variants across active branches (Zero N+1)
+            productVariantService.bulkInitializeBalances(createdVariants, activeBranches, username);
+
+            // Apply initial stocks per variant
+            for (int i = 0; i < createdVariants.size(); i++) {
+                ProductVariant variant = createdVariants.get(i);
+                CreateProductRequest.CreateVariantInput vInput = variantInputs.get(i);
+
+                if (vInput.getInitialStocks() != null && !vInput.getInitialStocks().isEmpty()) {
+                    applyInitialStockEntries(savedProduct, variant, vInput.getInitialStocks(), branchMap, username);
                 }
+            }
+        } else {
+            // Strategy NONE: check if initial stocks passed at top level
+            if (request.getInitialStocks() != null && !request.getInitialStocks().isEmpty()) {
+                ProductVariant defVariant = productVariantService.ensureDefaultVariant(savedProduct, username);
+                productVariantService.bulkInitializeBalances(List.of(defVariant), activeBranches, username);
+                applyInitialStockEntries(savedProduct, defVariant, request.getInitialStocks(), branchMap, username);
             }
         }
 
@@ -213,8 +265,63 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
+    private void applyInitialStockEntries(Product product, ProductVariant variant,
+                                           List<CreateProductRequest.InitialStockInput> initialStocks,
+                                           java.util.Map<Long, Branch> branchMap,
+                                           String username) {
+        if (initialStocks == null || initialStocks.isEmpty()) return;
+
+        for (CreateProductRequest.InitialStockInput stockInput : initialStocks) {
+            if (stockInput.getQuantity() == null || stockInput.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            Branch branch = branchMap.get(stockInput.getBranchId());
+            if (branch == null) {
+                throw new ResourceNotFoundException("Branch", "id", stockInput.getBranchId());
+            }
+
+            InventoryBalance balance = inventoryBalanceRepository
+                    .findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
+                    .orElseGet(() -> {
+                        InventoryBalance newBal = InventoryBalance.builder()
+                                .productVariant(variant)
+                                .branch(branch)
+                                .availableQuantity(BigDecimal.ZERO)
+                                .reservedQuantity(BigDecimal.ZERO)
+                                .damagedQuantity(BigDecimal.ZERO)
+                                .minimumQuantity(BigDecimal.ZERO)
+                                .reorderPoint(BigDecimal.ZERO)
+                                .lastUpdated(LocalDateTime.now())
+                                .build();
+                        newBal.setIsDeleted(false);
+                        newBal.setCreatedBy(username);
+                        return newBal;
+                    });
+
+            balance.setAvailableQuantity(balance.getAvailableQuantity().add(stockInput.getQuantity()));
+            balance.setLastUpdated(LocalDateTime.now());
+            balance.setUpdatedBy(username);
+            inventoryBalanceRepository.save(balance);
+
+            org.example.storemanager.modules.inventory.entity.StockLedger ledger =
+                    org.example.storemanager.modules.inventory.entity.StockLedger.builder()
+                            .transactionType("OPENING_BALANCE")
+                            .product(product)
+                            .productVariant(variant)
+                            .branch(branch)
+                            .changeQty(stockInput.getQuantity())
+                            .balanceAfter(balance.getAvailableQuantity())
+                            .build();
+            ledger.setIsDeleted(false);
+            ledger.setCreatedBy(username);
+            stockLedgerRepository.save(ledger);
+        }
+    }
+
     @Override
     @LogActivity(actionType = "UPDATE", entityName = "Product", entityClass = Product.class)
+
     public UpdateProductResponse updateProduct(Long id, UpdateProductRequest request) {
         Product product = productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));

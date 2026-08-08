@@ -1,5 +1,7 @@
 package org.example.storemanager.modules.catalog.dto.request.product;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -12,7 +14,6 @@ import java.util.List;
 @Data
 public class CreateProductRequest {
 
-    @NotBlank(message = "Mã sản phẩm không được để trống")
     @Size(max = 50, message = "Mã sản phẩm không được quá 50 ký tự")
     private String productCode;
 
@@ -48,7 +49,12 @@ public class CreateProductRequest {
 
     private String galleryImages;
 
-    private String variants;
+    // Structured variants list (preferred)
+    @Valid
+    private List<CreateVariantInput> variants;
+
+    // Raw variants string fallback for legacy clients
+    private String variantsRaw;
 
     @NotNull(message = "ID danh mục không được để trống")
     private Long categoryId;
@@ -57,4 +63,30 @@ public class CreateProductRequest {
     private Long baseUnitId;
 
     private List<ProductUnitRequest> conversionUnits;
+
+    // Top-level initial stock entries (for products with variantStrategy NONE)
+    @Valid
+    private List<InitialStockInput> initialStocks;
+
+    @Data
+    public static class CreateVariantInput {
+        private List<Long> attributeValueIds;
+        private String customSku;
+        private String barcode;
+        private BigDecimal price;
+        private String imageUrl;
+        @Valid
+        private List<InitialStockInput> initialStocks;
+    }
+
+    @Data
+    public static class InitialStockInput {
+        @NotNull(message = "ID chi nhánh không được để trống")
+        private Long branchId;
+
+        @NotNull(message = "Số lượng không được để trống")
+        @DecimalMin(value = "0", message = "Số lượng không được âm")
+        private BigDecimal quantity;
+    }
 }
+

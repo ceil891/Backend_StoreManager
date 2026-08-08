@@ -5,8 +5,11 @@ import org.example.storemanager.modules.catalog.dto.request.variant.CreateVarian
 import org.example.storemanager.modules.catalog.dto.request.variant.UpdateVariantRequest;
 import org.example.storemanager.modules.catalog.dto.response.variant.CreateVariantResponse;
 import org.example.storemanager.modules.catalog.dto.response.variant.VariantResponse;
+import org.example.storemanager.modules.catalog.entity.Product;
+import org.example.storemanager.modules.catalog.entity.ProductVariant;
 
 import java.util.List;
+
 
 public interface ProductVariantService {
 
@@ -50,4 +53,13 @@ public interface ProductVariantService {
     VariantResponse createSingleVariant(Long productId, CreateSingleVariantRequest request);
 
     List<VariantResponse> getAllVariants();
+
+    ProductVariant buildVariantFromInput(Product product, org.example.storemanager.modules.catalog.dto.request.product.CreateProductRequest.CreateVariantInput input);
+
+    void createAttributeMappings(ProductVariant variant, List<Long> attributeValueIds, String username);
+
+    void bulkInitializeBalances(List<ProductVariant> variants, List<org.example.storemanager.modules.system.entity.Branch> activeBranches, String username);
+
+    ProductVariant ensureDefaultVariant(Product product, String username);
 }
+

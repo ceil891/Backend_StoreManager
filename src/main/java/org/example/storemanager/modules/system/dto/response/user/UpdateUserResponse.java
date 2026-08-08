@@ -14,6 +14,10 @@ public class UpdateUserResponse {
     private String email;
     private String phone;
     private String status;
+    private Long roleId;
+    private String roleName;
+    private Long branchId;
+    private String branchName;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

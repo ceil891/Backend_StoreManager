@@ -14,5 +14,8 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
 
     List<InventoryBalance> findByProductVariantIdAndIsDeletedFalse(Long productVariantId);
 
+    List<InventoryBalance> findByProductVariantIdInAndIsDeletedFalse(List<Long> productVariantIds);
+
     List<InventoryBalance> findByBranchIdAndIsDeletedFalse(Long branchId);
+
 }

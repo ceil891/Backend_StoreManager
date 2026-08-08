@@ -5,6 +5,8 @@ import lombok.*;
 import org.example.storemanager.shared.base.BaseEntity;
 import org.example.storemanager.modules.system.entity.User;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 @Entity
 @Table(name = "departments")
 @Data
@@ -12,6 +14,7 @@ import org.example.storemanager.modules.system.entity.User;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Department extends BaseEntity {
 
     @Column(name = "dept_code", nullable = false, unique = true, length = 50)

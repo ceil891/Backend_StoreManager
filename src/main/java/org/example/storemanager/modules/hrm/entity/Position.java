@@ -6,6 +6,8 @@ import org.example.storemanager.shared.base.BaseEntity;
 
 import java.math.BigDecimal;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 @Entity
 @Table(name = "positions")
 @Data
@@ -13,6 +15,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Position extends BaseEntity {
 
     @Column(name = "position_code", nullable = false, unique = true, length = 50)

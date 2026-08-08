@@ -19,6 +19,8 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
     // BỔ SUNG HÀM NÀY ĐỂ SỬA LỖI findAllByIsDeletedFalse
     List<Permission> findAllByIsDeletedFalse();
 
+    List<Permission> findByPermissionCodeIn(java.util.Collection<String> permissionCodes);
+
     // Bổ sung hàm tìm kiếm, lọc và phân trang (dành cho getAllPermissions và getPermissionsPaginated)
     @Query("SELECT p FROM Permission p WHERE " +
             "(CAST(:search AS string) IS NULL OR LOWER(p.permissionCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +

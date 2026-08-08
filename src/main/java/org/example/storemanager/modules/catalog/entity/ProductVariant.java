@@ -30,6 +30,9 @@ public class ProductVariant extends BaseEntity {
     @Column(length = 100)
     private String barcode;
 
+    @Column(name = "attribute_signature", length = 500)
+    private String attributeSignature;
+
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 

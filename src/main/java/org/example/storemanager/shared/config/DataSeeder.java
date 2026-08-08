@@ -49,7 +49,23 @@ public class DataSeeder implements CommandLineRunner {
         // 1. Quét tất cả các RestControllers trong ứng dụng để thu thập các mã quyền từ @PreAuthorize
         Set<String> scannedPermissionCodes = scanControllerPermissions();
 
+        // Bổ sung danh sách các quyền POS mặc định vào hệ thống
+        List<String> posPermissions = List.of(
+            "pos:terminal:access",
+            "pos:session:view",
+            "pos:session:open",
+            "pos:session:close",
+            "pos:payment:process",
+            "pos:order:discount",
+            "pos:order:cancel",
+            "pos:inventory:negative-sell",
+            "pos:price:override",
+            "pos:branch:change"
+        );
+        scannedPermissionCodes.addAll(posPermissions);
+
         // 2. Thêm các quyền mới phát hiện vào DB nếu chưa tồn tại
+
         List<Permission> pendingPermissions = new ArrayList<>();
         for (String code : scannedPermissionCodes) {
             if (!permissionRepository.existsByPermissionCode(code)) {
@@ -112,7 +128,54 @@ public class DataSeeder implements CommandLineRunner {
             log.info("Đã gán bổ sung {} quyền mới cho vai trò SUPER_ADMIN.", newPermissionsToAssign.size());
         }
 
+        // 4b. ĐẢM BẢO CÁC VAI TRÒ KHÔNG PHẢI SUPER_ADMIN (ví dụ: "Nhân viên") CÓ QUYỀN MẶC ĐỊNH NẾU ĐANG RỖNG
+        List<String> defaultStaffPermissionCodes = List.of(
+            "pos:terminal:access",
+            "pos:session:view",
+            "pos:session:open",
+            "pos:session:close",
+            "pos:payment:process",
+            "pos:order:discount",
+            "pos:order:cancel",
+            "pos:inventory:negative-sell",
+            "pos:price:override",
+            "catalog:product:view",
+            "catalog:category:view",
+            "catalog:pricelist:view",
+            "sales:invoice:view",
+            "sales:invoice:create",
+            "crm:customer:view"
+        );
+
+        final Long targetSuperAdminId = superAdminRole.getId();
+        List<Role> nonSuperAdminRoles = roleRepository.findAll().stream()
+                .filter(r -> !r.getId().equals(targetSuperAdminId))
+                .collect(Collectors.toList());
+
+        for (Role roleItem : nonSuperAdminRoles) {
+            List<RolePermission> existingPerms = rolePermissionRepository.findByRoleId(roleItem.getId());
+            if (existingPerms.isEmpty()) {
+                // Nếu vai trò chưa có quyền nào, tự động gán bộ quyền mặc định
+                List<Permission> defaultPerms = permissionRepository.findByPermissionCodeIn(defaultStaffPermissionCodes);
+                List<RolePermission> newRolePerms = defaultPerms.stream()
+                        .map(p -> {
+                            RolePermission rp = RolePermission.builder()
+                                    .role(roleItem)
+                                    .permission(p)
+                                    .build();
+                            rp.setIsDeleted(false);
+                            return rp;
+                        })
+                        .collect(Collectors.toList());
+                if (!newRolePerms.isEmpty()) {
+                    rolePermissionRepository.saveAllAndFlush(newRolePerms);
+                    log.info("Đã gán tự động {} quyền mặc định cho vai trò [{}].", newRolePerms.size(), roleItem.getRoleName());
+                }
+            }
+        }
+
         // 5. TẠO TÀI KHOẢN ADMIN MẶC ĐỊNH
+
         if (!userRepository.existsByUsername("admin")) {
             User adminUser = User.builder()
                     .username("admin")
@@ -276,6 +339,7 @@ public class DataSeeder implements CommandLineRunner {
             case "inventory"        -> "Inventory - Kho hàng";
             case "purchase"         -> "Purchase - Mua hàng";
             case "sales"            -> "Sales - Bán hàng";
+            case "pos"              -> "POS - Bán hàng tại quầy";
             case "crm"              -> "CRM - Khách hàng";
             case "hrm"              -> "HRM - Nhân sự";
             case "finance"          -> "Finance - Tài chính";
@@ -286,6 +350,7 @@ public class DataSeeder implements CommandLineRunner {
             case "omnichannel"      -> "Omnichannel - Đa kênh";
             default                 -> capitalize(prefix);
         };
+
     }
 
     private String capitalize(String s) {

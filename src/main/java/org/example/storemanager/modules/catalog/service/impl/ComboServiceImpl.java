@@ -46,6 +46,7 @@ public class ComboServiceImpl implements ComboService {
     private final ComboRepository comboRepository;
     private final ComboDetailRepository comboDetailRepository;
     private final ProductRepository productRepository;
+    private final org.example.storemanager.modules.catalog.repository.ProductVariantRepository productVariantRepository;
     private final InventoryService inventoryService;
 
     @Override
@@ -77,7 +78,13 @@ public class ComboServiceImpl implements ComboService {
         if (comboRepository.existsByComboCodeAndIsDeletedFalse(request.getComboCode())) {
             throw new DuplicateResourceException("Combo", "comboCode", request.getComboCode());
         }
+        if (request.getBarcode() != null && !request.getBarcode().isBlank()) {
+            if (productVariantRepository.existsByBarcodeAndIsDeletedFalse(request.getBarcode().trim())) {
+                throw new DuplicateResourceException("Combo", "barcode", request.getBarcode());
+            }
+        }
         validateDetails(request.getDetails());
+
 
         String username = getCurrentUsername();
         Combo combo = Combo.builder()
