@@ -30,6 +30,8 @@ public class ApiResponse<T> {
 
     private String path;
 
+    private String traceId;
+
     private Map<String, String> errors;
 
     // ==================== Success ====================
@@ -100,6 +102,7 @@ public class ApiResponse<T> {
                 .errorCode(errorCode)
                 .message(message)
                 .path(path)
+                .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
     }
@@ -112,6 +115,7 @@ public class ApiResponse<T> {
                 .message(message)
                 .path(path)
                 .errors(errors)
+                .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
     }
@@ -121,6 +125,7 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .message(message)
+                .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
     }

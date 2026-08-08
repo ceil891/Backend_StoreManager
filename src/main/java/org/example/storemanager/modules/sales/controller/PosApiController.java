@@ -42,13 +42,24 @@ public class PosApiController {
     @PutMapping("/sessions/{id}/close")
     public ResponseEntity<ApiResponse<PosSession>> closeSession(
             @PathVariable Long id,
-            @RequestParam java.math.BigDecimal actualClosingCash) {
+            @RequestParam(required = false) java.math.BigDecimal actualClosingCash) {
         PosSession existing = posSessionRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PosSession", "id", id));
         existing.setEndTime(LocalDateTime.now());
-        existing.setActualClosingCash(actualClosingCash);
+        if (actualClosingCash != null) {
+            existing.setActualClosingCash(actualClosingCash);
+        }
         existing.setStatus("CLOSED");
         return ResponseEntity.ok(ApiResponse.ok("Đóng phiên bán hàng thành công", posSessionRepository.save(existing)));
+    }
+
+    @DeleteMapping("/sessions/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteSession(@PathVariable Long id) {
+        PosSession existing = posSessionRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("PosSession", "id", id));
+        existing.setIsDeleted(true);
+        posSessionRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa ca làm việc thành công", null));
     }
 
     // --- PAYMENT METHODS ---

@@ -41,3 +41,10 @@ ALTER TABLE delivery_assignment_histories ADD COLUMN IF NOT EXISTS tenant_id BIG
 UPDATE delivery_assignment_histories SET version = 0 WHERE version IS NULL;
 UPDATE delivery_assignment_histories SET is_deleted = false WHERE is_deleted IS NULL;
 UPDATE delivery_assignment_histories SET is_locked = false WHERE is_locked IS NULL;
+
+-- Migration: Add Indexes for foreign keys to optimize query performance
+CREATE INDEX IF NOT EXISTS idx_sale_od_order ON sale_order_details(order_id);
+CREATE INDEX IF NOT EXISTS idx_sale_od_sale_order ON sale_order_details(sale_order_id);
+CREATE INDEX IF NOT EXISTS idx_sale_od_variant ON sale_order_details(product_variant_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_supplier_code ON suppliers(supplier_code);
+CREATE INDEX IF NOT EXISTS idx_sale_orders_customer_id ON sale_orders(customer_id);

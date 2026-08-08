@@ -256,13 +256,13 @@ public class GlobalExceptionHandler {
         return buildResponse(ErrorCode.RESOURCE_NOT_FOUND, message, request);
     }
 
-    // ==================== Illegal Argument ====================
+    // ==================== Illegal Argument & Illegal State ====================
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(
-            IllegalArgumentException ex, HttpServletRequest request) {
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentAndState(
+            RuntimeException ex, HttpServletRequest request) {
 
-        log.warn("IllegalArgument: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+        log.warn("BusinessRuleViolation: {} | Path: {}", ex.getMessage(), request.getRequestURI());
 
         return buildResponse(ErrorCode.VALIDATION_ERROR, ex.getMessage(), request);
     }

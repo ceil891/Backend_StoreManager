@@ -81,6 +81,38 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * Tạo Access Token kèm danh sách roles.
+     */
+    public String generateAccessToken(String username, java.util.List<String> roles) {
+        long now = System.currentTimeMillis();
+        return Jwts.builder()
+                .subject(username)
+                .claim("type", "access")
+                .claim("roles", roles != null ? roles : java.util.Collections.emptyList())
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + accessTokenExpiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    /**
+     * Trích xuất danh sách roles từ token.
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> extractRoles(String token) {
+        try {
+            Claims claims = extractClaims(token);
+            Object rolesObj = claims.get("roles");
+            if (rolesObj instanceof java.util.List<?>) {
+                return (java.util.List<String>) rolesObj;
+            }
+        } catch (Exception e) {
+            // fallback
+        }
+        return java.util.Collections.emptyList();
+    }
+
     private Claims extractClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
