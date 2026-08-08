@@ -25,6 +25,18 @@ public class Area extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "province", length = 100)
+    private String province;
+
+    @Column(name = "district", length = 100)
+    private String district;
+
+    @Column(name = "ward", length = 100)
+    private String ward;
+
+    @Column(name = "address_detail", length = 255)
+    private String addressDetail;
+
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
