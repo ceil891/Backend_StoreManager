@@ -33,6 +33,20 @@ public class CrmController {
     private final WarrantyClaimRepository warrantyClaimRepository;
     private final PartnerGroupRepository partnerGroupRepository;
     private final MarketingCampaignRepository marketingCampaignRepository;
+    private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
+
+    // --- LOYALTY CALCULATION & CUSTOMER HISTORY ---
+    @PostMapping("/loyalty/calculate")
+    public ResponseEntity<ApiResponse<org.example.storemanager.modules.crm.dto.LoyaltyCalculateResponse>> calculateLoyalty(
+            @RequestBody org.example.storemanager.modules.crm.dto.LoyaltyCalculateRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(loyaltyService.calculateExpectedPoints(req)));
+    }
+
+    @GetMapping("/customers/{customerId}/loyalty-history")
+    public ResponseEntity<ApiResponse<List<org.example.storemanager.modules.crm.dto.LoyaltyTransactionResponse>>> getCustomerLoyaltyHistory(
+            @PathVariable Long customerId) {
+        return ResponseEntity.ok(ApiResponse.ok(loyaltyService.getCustomerLoyaltyHistory(customerId)));
+    }
 
     // --- LOYALTY TIERS ---
     @GetMapping("/tiers")

@@ -12,6 +12,9 @@ public class CreateCustomerReturnRequest {
     @NotBlank(message = "Mã phiếu trả không được để trống")
     private String returnCode;
 
+    private Long returnRequestId;
+    private String returnRequestCode;
+
     @NotNull(message = "Ngày trả hàng không được để trống")
     private LocalDateTime returnDate;
 

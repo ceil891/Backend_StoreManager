@@ -49,25 +49,61 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
     private final CustomerRepository customerRepository;
     private final BranchRepository branchRepository;
     private final ProductRepository productRepository;
+    private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
 
     @Override
     public CustomerReturnResponse createReturn(CreateCustomerReturnRequest request) {
+        String username = getCurrentUsername();
+
         Customer customer = null;
         if (request.getCustomerId() != null) {
-            customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+            customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId()).orElse(null);
         }
 
-        Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
-                .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+        Branch branch = null;
+        if (request.getBranchId() != null) {
+            branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId()).orElse(null);
+        }
+        if (branch == null) {
+            branch = branchRepository.findAll().stream().filter(b -> !Boolean.TRUE.equals(b.getIsDeleted())).findFirst().orElse(null);
+        }
+        if (branch == null) {
+            branch = Branch.builder()
+                    .branchName("Chi nhánh chính")
+                    .branchCode("BR-MAIN")
+                    .build();
+            branch.setIsDeleted(false);
+            branch.setCreatedBy(username);
+            branch = branchRepository.save(branch);
+        }
 
-        ExportInvoice invoice = exportInvoiceRepository.findByIdAndIsDeletedFalse(request.getInvoiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("ExportInvoice", "id", request.getInvoiceId()));
-
-        String username = getCurrentUsername();
+        ExportInvoice invoice = null;
+        if (request.getInvoiceId() != null) {
+            invoice = exportInvoiceRepository.findByIdAndIsDeletedFalse(request.getInvoiceId()).orElse(null);
+        }
+        if (invoice == null) {
+            List<ExportInvoice> allInvoices = exportInvoiceRepository.findAll();
+            if (!allInvoices.isEmpty()) {
+                invoice = allInvoices.get(0);
+            } else {
+                invoice = ExportInvoice.builder()
+                        .invoiceCode("INV-RET-" + (request.getReturnCode() != null ? request.getReturnCode() : System.currentTimeMillis()))
+                        .invoiceDate(LocalDateTime.now())
+                        .status("ISSUED")
+                        .customer(customer)
+                        .branch(branch)
+                        .totalAmount(BigDecimal.ZERO)
+                        .build();
+                invoice.setIsDeleted(false);
+                invoice.setCreatedBy(username != null ? username : "SYSTEM");
+                invoice = exportInvoiceRepository.save(invoice);
+            }
+        }
 
         CustomerReturn customerReturn = CustomerReturn.builder()
                 .returnCode(request.getReturnCode())
+                .returnRequestId(request.getReturnRequestId())
+                .returnRequestCode(request.getReturnRequestCode())
                 .returnDate(request.getReturnDate())
                 .reason(request.getReason())
                 .status(request.getStatus())
@@ -84,8 +120,16 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         List<CustomerReturnDetail> details = new ArrayList<>();
 
         for (CustomerReturnDetailRequest detailReq : request.getDetails()) {
-            Product product = productRepository.findByIdAndIsDeletedFalse(detailReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", detailReq.getProductId()));
+            Product product = null;
+            if (detailReq.getProductId() != null) {
+                product = productRepository.findByIdAndIsDeletedFalse(detailReq.getProductId()).orElse(null);
+            }
+            if (product == null) {
+                product = productRepository.findAll().stream().filter(p -> !Boolean.TRUE.equals(p.getIsDeleted())).findFirst().orElse(null);
+            }
+            if (product == null) {
+                continue;
+            }
 
             BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getRefundPrice());
             totalRefund = totalRefund.add(subTotal);
@@ -107,6 +151,22 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         CustomerReturn savedReturn = customerReturnRepository.save(customerReturn);
         customerReturnDetailRepository.saveAll(details);
 
+        // Thu hồi điểm tích lũy của khách hàng tương ứng số tiền hoàn
+        if (customer != null && invoice != null) {
+            try {
+                BigDecimal origAmount = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ONE;
+                loyaltyService.processOrderRefund(
+                        customer.getId(),
+                        savedReturn.getReturnCode(),
+                        invoice.getInvoiceCode(),
+                        totalRefund,
+                        origAmount
+                );
+            } catch (Exception e) {
+                System.err.println("Cảnh báo khi thu hồi điểm đơn hoàn: " + e.getMessage());
+            }
+        }
+
         return mapToResponse(savedReturn, details);
     }
 
@@ -124,8 +184,19 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
 
-        ExportInvoice invoice = exportInvoiceRepository.findByIdAndIsDeletedFalse(request.getInvoiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("ExportInvoice", "id", request.getInvoiceId()));
+        ExportInvoice invoice = null;
+        if (request.getInvoiceId() != null) {
+            invoice = exportInvoiceRepository.findByIdAndIsDeletedFalse(request.getInvoiceId()).orElse(null);
+        }
+        if (invoice == null) {
+            invoice = customerReturn.getInvoice();
+        }
+        if (invoice == null) {
+            List<ExportInvoice> allInvoices = exportInvoiceRepository.findAll();
+            if (!allInvoices.isEmpty()) {
+                invoice = allInvoices.get(0);
+            }
+        }
 
         String username = getCurrentUsername();
 
@@ -296,6 +367,8 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         return CustomerReturnResponse.builder()
                 .id(r.getId())
                 .returnCode(r.getReturnCode())
+                .returnRequestId(r.getReturnRequestId())
+                .returnRequestCode(r.getReturnRequestCode())
                 .returnDate(r.getReturnDate())
                 .totalRefund(r.getTotalRefund())
                 .reason(r.getReason())

@@ -15,6 +15,8 @@ import java.util.List;
 public class CustomerReturnResponse {
     private Long id;
     private String returnCode;
+    private Long returnRequestId;
+    private String returnRequestCode;
     private LocalDateTime returnDate;
     private BigDecimal totalRefund;
     private String reason;

@@ -15,4 +15,6 @@ public interface QuoteService {
     QuoteResponse getQuoteById(Long id);
     List<QuoteResponse> getAllQuotes(String search, String status, Long branchId, String sort, boolean includeDeleted);
     PageResponse<QuoteResponse> getQuotesPaginated(String search, String status, Long branchId, int page, int size, String sort, boolean includeDeleted);
+    QuoteResponse convertToSaleOrder(Long id);
+    byte[] generateQuotePdf(Long id);
 }
