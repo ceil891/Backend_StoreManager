@@ -21,6 +21,12 @@ public class CustomerReturn extends BaseEntity {
     @Column(name = "return_code", nullable = false, unique = true, length = 50)
     private String returnCode;
 
+    @Column(name = "return_request_id")
+    private Long returnRequestId;
+
+    @Column(name = "return_request_code", length = 50)
+    private String returnRequestCode; // Nullable - NULL if direct walk-in return
+
     @Column(name = "return_date", nullable = false)
     private LocalDateTime returnDate;
 

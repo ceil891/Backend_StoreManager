@@ -50,6 +50,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     private final org.example.storemanager.modules.inventory.service.InventoryService inventoryService;
     private final org.example.storemanager.modules.wms.service.WarehouseService warehouseService;
     private final org.example.storemanager.modules.logistics.repository.DeliveryAssignmentHistoryRepository deliveryAssignmentHistoryRepository;
+    private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
@@ -144,6 +145,20 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             } catch (Exception e) {
                 // Log warning nếu có lỗi khi trừ tồn kho nhưng vẫn cho đơn tạo thành công
                 System.err.println("Cảnh báo khi trừ tồn kho đơn hàng: " + e.getMessage());
+            }
+        }
+
+        // Tự động tích điểm cho khách hàng khi đơn hoàn tất hoặc đã thanh toán
+        if (customer != null && ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus()))) {
+            try {
+                loyaltyService.processOrderLoyaltyEarn(
+                        customer.getId(),
+                        savedOrder.getOrderCode(),
+                        savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : savedOrder.getTotalAmount(),
+                        savedOrder
+                );
+            } catch (Exception e) {
+                System.err.println("Cảnh báo khi tích điểm tự động: " + e.getMessage());
             }
         }
 
@@ -328,6 +343,21 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         }
 
         List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(id);
+
+        // Tự động tích điểm cho khách khi chuyển đơn sang COMPLETED
+        if (savedOrder.getCustomer() != null && "COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
+            try {
+                loyaltyService.processOrderLoyaltyEarn(
+                        savedOrder.getCustomer().getId(),
+                        savedOrder.getOrderCode(),
+                        savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : savedOrder.getTotalAmount(),
+                        savedOrder
+                );
+            } catch (Exception e) {
+                System.err.println("Cảnh báo khi tích điểm tự động khi chuyển trạng thái: " + e.getMessage());
+            }
+        }
+
         return mapToResponse(savedOrder, details);
     }
 

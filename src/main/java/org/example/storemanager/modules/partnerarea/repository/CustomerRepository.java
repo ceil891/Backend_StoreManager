@@ -9,10 +9,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Optional<Customer> findByIdAndIsDeletedFalse(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Customer c WHERE c.id = :id AND (c.isDeleted = false OR c.isDeleted IS NULL)")
+    Optional<Customer> findByIdForUpdate(@Param("id") Long id);
 
     // 1. Khai báo phương thức search đã dùng trong Service
     // Lưu ý: @Param("keyword") phải khớp với :keyword trong Query

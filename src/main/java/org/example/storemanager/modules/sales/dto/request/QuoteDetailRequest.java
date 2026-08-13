@@ -7,8 +7,13 @@ import java.math.BigDecimal;
 
 @Data
 public class QuoteDetailRequest {
-    @NotNull(message = "Product ID không được để trống")
+    private Long productVariantId;
     private Long productId;
+
+    private String sku;
+    private String barcode;
+    private String description;
+    private String unit;
 
     @NotNull(message = "Số lượng không được để trống")
     @Positive(message = "Số lượng phải lớn hơn 0")
@@ -18,5 +23,8 @@ public class QuoteDetailRequest {
     @Positive(message = "Đơn giá phải lớn hơn 0")
     private BigDecimal unitPrice;
 
-    private BigDecimal discount;
+    private String discountType; // PERCENT, AMOUNT
+    private BigDecimal discountValue;
+    private BigDecimal discount; // Fallback amount if provided
+    private BigDecimal taxRate;
 }

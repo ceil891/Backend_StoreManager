@@ -81,4 +81,21 @@ public class QuoteController {
             return ResponseEntity.ok(ApiResponse.ok(response));
         }
     }
+
+    @PostMapping("/{id}/convert-to-order")
+    @PreAuthorize("@securityEvaluator.hasPermission('sales:quote:update')")
+    public ResponseEntity<ApiResponse<QuoteResponse>> convertToSaleOrder(@PathVariable Long id) {
+        QuoteResponse response = quoteService.convertToSaleOrder(id);
+        return ResponseEntity.ok(ApiResponse.ok("Chuyển báo giá thành đơn bán hàng thành công", response));
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("@securityEvaluator.hasPermission('sales:quote:view')")
+    public ResponseEntity<byte[]> generateQuotePdf(@PathVariable Long id) {
+        byte[] pdfBytes = quoteService.generateQuotePdf(id);
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .header("Content-Disposition", "inline; filename=Quote-" + id + ".html")
+                .body(pdfBytes);
+    }
 }

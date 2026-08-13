@@ -10,4 +10,7 @@ import java.util.List;
 public interface LoyaltyPointHistoryRepository extends JpaRepository<LoyaltyPointHistory, Long> {
     Optional<LoyaltyPointHistory> findByIdAndIsDeletedFalse(Long id);
     List<LoyaltyPointHistory> findByIsDeletedFalse();
+    boolean existsByRefCodeAndTransactionTypeAndIsDeletedFalse(String refCode, String transactionType);
+    Optional<LoyaltyPointHistory> findByRefCodeAndTransactionTypeAndIsDeletedFalse(String refCode, String transactionType);
+    List<LoyaltyPointHistory> findByCustomerIdAndIsDeletedFalseOrderByCreatedAtDesc(Long customerId);
 }
