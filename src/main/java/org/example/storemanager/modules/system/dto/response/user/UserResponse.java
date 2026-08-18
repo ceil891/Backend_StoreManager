@@ -24,6 +24,12 @@ public class UserResponse {
     private Long branchId;
     private String branchName;
 
+    private String taxId;
+    private String identityId;
+    private String dateOfBirth;
+    private String departmentId;
+    private String positionId;
+
     private LocalDateTime createdAt;
     private String createdBy;
     private LocalDateTime updatedAt;

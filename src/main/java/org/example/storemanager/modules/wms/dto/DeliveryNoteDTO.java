@@ -20,6 +20,19 @@ public class DeliveryNoteDTO {
     private Long packingListId;
     private String packingListCode;
 
+    private String waybillCode;
+    private String customerName;
+    private String deliveryStaff;
+    private Double totalWeight;
+    private Integer packageCount;
+    private Integer productCount;
+    private String signerName;
+    private String signedAt;
+    private String conditionNotes;
+    private String attachments;
+    private String rejectionReasonType;
+    private String rejectionReasonDetail;
+
     private String carrierName;
     private String trackingNumber;
 

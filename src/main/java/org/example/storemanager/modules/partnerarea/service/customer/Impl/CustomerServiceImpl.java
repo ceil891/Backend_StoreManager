@@ -24,6 +24,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.example.storemanager.modules.system.repository.UserRepository;
+
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -31,6 +34,8 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CloudinaryService cloudinaryService;
+    private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
 
     private String getCurrentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -87,9 +92,41 @@ public class CustomerServiceImpl implements CustomerService {
                 .message("Tạo thành công").build();
     }
 
+    private Customer getOrCreateCustomerForUser(Long id) {
+        Customer c = customerRepository.findByIdAndIsDeletedFalse(id).orElse(null);
+        if (c == null) {
+            org.example.storemanager.modules.system.entity.User user = userRepository.findById(id).orElse(null);
+            if (user != null) {
+                c = customerRepository.findAll().stream()
+                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                        .filter(cust -> (user.getPhone() != null && user.getPhone().equals(cust.getPhone())) || 
+                                        (user.getEmail() != null && user.getEmail().equalsIgnoreCase(cust.getEmail())))
+                        .findFirst().orElse(null);
+                
+                if (c == null) {
+                    c = new Customer();
+                    c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
+                    c.setName(user.getFullName() != null ? user.getFullName() : user.getUsername());
+                    c.setPhone(user.getPhone());
+                    c.setEmail(user.getEmail());
+                    c.setIsActive(true);
+                    c.setPoints(0.0);
+                    c.setTotalSpend(0.0);
+                    c.setMembershipRank("Đồng");
+                    c.setCreatedBy("SYSTEM");
+                    c = customerRepository.save(c);
+                }
+            }
+        }
+        if (c == null) {
+            throw new ResourceNotFoundException("Customer", "id", id);
+        }
+        return c;
+    }
+
     @Override
     public UpdateCustomerResponse updateCustomer(Long id, UpdateCustomerRequest req) {
-        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = getOrCreateCustomerForUser(id);
 
         c.setName(req.getName());
         c.setPhone(req.getPhone());
@@ -127,7 +164,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public UpdateCustomerResponse updateStatus(Long id, Boolean isActive) {
-        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = getOrCreateCustomerForUser(id);
         c.setIsActive(isActive);
         c.setUpdatedAt(LocalDateTime.now());
         customerRepository.save(c);
@@ -139,7 +176,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public DeleteCustomerResponse deleteCustomer(Long id) {
-        Customer c = customerRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = getOrCreateCustomerForUser(id);
 
         if (Boolean.TRUE.equals(c.getIsDeleted())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khách hàng này đã bị xóa rồi!");
@@ -162,8 +199,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CustomerDetailResponse getCustomerById(Long id) {
-        Customer c = customerRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        Customer c = getOrCreateCustomerForUser(id);
         return CustomerDetailResponse.builder()
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())
@@ -198,12 +234,17 @@ public class CustomerServiceImpl implements CustomerService {
         }
     }
 
-    // Thêm hàm map này để code gọn hơn
     private CustomerListResponse mapToListResponse(Customer c) {
         return CustomerListResponse.builder()
                 .id(c.getId())
+                .customerCode(c.getCustomerCode())
                 .name(c.getName())
                 .phone(c.getPhone())
+                .email(c.getEmail())
+                .address(c.getAddress())
+                .membershipRank(c.getMembershipRank())
+                .points(c.getPoints() != null ? c.getPoints() : 0.0)
+                .totalSpend(c.getTotalSpend() != null ? c.getTotalSpend() : 0.0)
                 .isActive(c.getIsActive())
                 .avatarUrl(c.getAvatarUrl())
                 .build();
@@ -213,4 +254,26 @@ public class CustomerServiceImpl implements CustomerService {
     @Override public List<DebtResponse> getCustomerDebts(Long id) { return Collections.emptyList(); }
     @Override public String importCustomers(MultipartFile file) { return "OK"; }
     @Override public byte[] exportCustomers() { return new byte[0]; }
+
+    @Override
+    public void resetCustomerPassword(Long id, String newPassword) {
+        Customer c = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        String pwd = (newPassword != null && !newPassword.trim().isEmpty()) ? newPassword.trim() : "RetailHub@123";
+        c.setPassword(passwordEncoder.encode(pwd));
+        c.setMustChangePassword(true);
+        customerRepository.save(c);
+    }
+
+    @Override
+    public void changeCustomerPassword(Long id, String oldPassword, String newPassword) {
+        Customer c = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+        if (c.getPassword() != null && !passwordEncoder.matches(oldPassword, c.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mật khẩu cũ không chính xác!");
+        }
+        c.setPassword(passwordEncoder.encode(newPassword));
+        c.setMustChangePassword(false);
+        customerRepository.save(c);
+    }
 }

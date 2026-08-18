@@ -39,11 +39,12 @@ public class SaleOrderController {
     public ResponseEntity<ApiResponse<SaleOrderResponse>> updateStatus(
             @PathVariable Long id,
             @RequestParam String status,
+            @RequestParam(required = false) Long branchId,
             @RequestParam(required = false) String carrier,
             @RequestParam(required = false) String trackingCode,
             @RequestParam(required = false) String shipperName,
             @RequestParam(required = false) String shipperPhone) {
-        SaleOrderResponse response = saleOrderService.updateStatus(id, status, carrier, trackingCode, shipperName, shipperPhone);
+        SaleOrderResponse response = saleOrderService.updateStatus(id, status, branchId, carrier, trackingCode, shipperName, shipperPhone);
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái đơn hàng thành công", response));
     }
 

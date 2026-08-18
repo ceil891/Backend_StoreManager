@@ -19,6 +19,12 @@ import org.example.storemanager.modules.system.repository.RefreshTokenRepository
 import org.example.storemanager.modules.system.repository.RolePermissionRepository;
 import org.example.storemanager.modules.system.repository.RoleRepository;
 import org.example.storemanager.modules.system.repository.UserRepository;
+import org.example.storemanager.modules.partnerarea.entity.Customer;
+import org.example.storemanager.modules.partnerarea.repository.CustomerRepository;
+import org.example.storemanager.modules.marketing.entity.Voucher;
+import org.example.storemanager.modules.marketing.repository.VoucherRepository;
+import org.example.storemanager.modules.marketing.entity.CustomerVoucher;
+import org.example.storemanager.modules.marketing.repository.CustomerVoucherRepository;
 import org.example.storemanager.shared.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -43,19 +49,28 @@ public class AuthServiceImpl implements AuthService {
     private final RoleRepository roleRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+    private final CustomerRepository customerRepository;
+    private final VoucherRepository voucherRepository;
+    private final CustomerVoucherRepository customerVoucherRepository;
 
     @Autowired
     public AuthServiceImpl(UserRepository userRepository,
                            RefreshTokenRepository refreshTokenRepository,
                            RolePermissionRepository rolePermissionRepository,
                            RoleRepository roleRepository,
-                           JwtUtil jwtUtil) {
+                           JwtUtil jwtUtil,
+                           CustomerRepository customerRepository,
+                           VoucherRepository voucherRepository,
+                           CustomerVoucherRepository customerVoucherRepository) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.roleRepository = roleRepository;
         this.jwtUtil = jwtUtil;
         this.passwordEncoder = new BCryptPasswordEncoder();
+        this.customerRepository = customerRepository;
+        this.voucherRepository = voucherRepository;
+        this.customerVoucherRepository = customerVoucherRepository;
     }
 
     // ==================== ĐĂNG KÝ ====================
@@ -97,6 +112,92 @@ public class AuthServiceImpl implements AuthService {
 
         // Tự động đăng nhập sau khi đăng ký
         return issueTokenPair(saved);
+    }
+
+    @Override
+    @Transactional
+    public LoginResponse registerCustomer(RegisterRequest request) {
+        // Kiểm tra trùng username
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("Tài khoản", "username", request.getUsername());
+        }
+        // Kiểm tra trùng email
+        if (request.getEmail() != null && userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("Tài khoản", "email", request.getEmail());
+        }
+        // Kiểm tra trùng số điện thoại
+        if (request.getPhone() != null && userRepository.existsByPhone(request.getPhone())) {
+            throw new DuplicateResourceException("Tài khoản", "phone", request.getPhone());
+        }
+
+        Role defaultRole = roleRepository.findByRoleName("USER")
+                .or(() -> roleRepository.findByRoleName("Nguoi dung"))
+                .or(() -> roleRepository.findByRoleName("Người dùng"))
+                .or(() -> roleRepository.findByRoleName("Khách hàng"))
+                .orElse(null);
+
+        User user = User.builder()
+                .username(request.getUsername())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .role(defaultRole)
+                .status("ACTIVE")
+                .build();
+        user.setCreatedBy(request.getUsername());
+
+        User savedUser = userRepository.save(user);
+
+        // 1. Automatically create Customer
+        Customer customer = Customer.builder()
+                .customerCode("CUST-" + java.util.UUID.randomUUID().toString().substring(0, 5).toUpperCase())
+                .name(savedUser.getFullName() != null ? savedUser.getFullName() : savedUser.getUsername())
+                .phone(savedUser.getPhone())
+                .email(savedUser.getEmail())
+                .isActive(true)
+                .points(0.0)
+                .totalSpend(0.0)
+                .membershipRank("Đồng")
+                .build();
+        customer.setCreatedBy("SYSTEM");
+        Customer savedCustomer = customerRepository.save(customer);
+
+        // 2. Automatically create & issue WELCOME voucher (NEW2026)
+        Voucher v = voucherRepository.findByVoucherCode("NEW2026").orElse(null);
+        if (v == null) {
+            v = Voucher.builder()
+                    .voucherCode("NEW2026")
+                    .voucherName("Chào bạn mới")
+                    .type("PERCENTAGE")
+                    .value(new java.math.BigDecimal("10"))
+                    .maxUsage(100)
+                    .currentUsage(0)
+                    .description("Voucher chào mừng thành viên mới giảm 10%")
+                    .minOrderAmount(java.math.BigDecimal.ZERO)
+                    .maxDiscountAmount(new java.math.BigDecimal("50000"))
+                    .startDate(LocalDateTime.now())
+                    .endDate(LocalDateTime.now().plusDays(30))
+                    .status("ACTIVE")
+                    .isPublic(true)
+                    .isActive(true)
+                    .build();
+            v.setIsDeleted(false);
+            v = voucherRepository.save(v);
+        }
+
+        CustomerVoucher cv = CustomerVoucher.builder()
+                .customer(savedCustomer)
+                .voucher(v)
+                .voucherCode(v.getVoucherCode())
+                .collectedAt(LocalDateTime.now())
+                .expiredAt(LocalDateTime.now().plusDays(30))
+                .status("ACTIVE")
+                .build();
+        cv.setIsDeleted(false);
+        customerVoucherRepository.save(cv);
+
+        return issueTokenPair(savedUser);
     }
 
     // ==================== ĐĂNG NHẬP ====================
@@ -265,7 +366,8 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .role(roleName)
                 .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
-                .branchName(user.getBranch() != null ? user.getBranch().toString() : null)
+                .branchCode(user.getBranch() != null ? user.getBranch().getBranchCode() : null)
+                .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
                 .permissions(permissions)
                 .build();
 

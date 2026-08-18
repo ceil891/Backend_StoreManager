@@ -11,6 +11,7 @@ import java.util.List;
 
 public interface AuthService {
     LoginResponse register(RegisterRequest request);
+    LoginResponse registerCustomer(RegisterRequest request);
     LoginResponse login(LoginRequest request);
     LoginResponse refreshToken(RefreshTokenRequest request);
     void logout(String refreshToken);

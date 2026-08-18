@@ -3,6 +3,7 @@ package org.example.storemanager.modules.system.dto.request.role;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import java.util.List;
 
 @Data
 public class CreateRoleRequest {
@@ -12,4 +13,6 @@ public class CreateRoleRequest {
 
     private String description;
     private Boolean isActive;
+    private List<String> grantedPermissions;
+    private List<Long> permissionIds;
 }

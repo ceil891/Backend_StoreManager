@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.shared.enums.ErrorCode;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -244,6 +246,18 @@ public class GlobalExceptionHandler {
         return buildResponse(ErrorCode.DATA_INTEGRITY_VIOLATION, request);
     }
 
+    // ==================== Optimistic Locking Failure ====================
+
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockingFailureException.class})
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLocking(
+            Exception ex, HttpServletRequest request) {
+
+        log.warn("OptimisticLockingFailure | Path: {} | Cause: {}", request.getRequestURI(), getRootCauseMessage(ex));
+
+        String message = "Dữ liệu đã được cập nhật bởi một thao tác khác. Vui lòng làm mới trang và thử lại.";
+        return buildResponse(ErrorCode.DATA_INTEGRITY_VIOLATION, message, request);
+    }
+
     // ==================== 404 Endpoint Not Found ====================
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -293,7 +307,7 @@ public class GlobalExceptionHandler {
         log.error("UnhandledException | Path: {} | Type: {} | Error: {}",
                 request.getRequestURI(), ex.getClass().getSimpleName(), ex.getMessage(), ex);
 
-        return buildResponse(ErrorCode.INTERNAL_SERVER_ERROR, request);
+        return buildResponse(ErrorCode.INTERNAL_SERVER_ERROR, ex.getMessage() != null ? ex.getMessage() : ErrorCode.INTERNAL_SERVER_ERROR.getDefaultMessage(), request);
     }
 
     // ==================== Private Helpers ====================

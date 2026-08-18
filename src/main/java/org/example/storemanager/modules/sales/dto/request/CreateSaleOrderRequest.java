@@ -38,6 +38,10 @@ public class CreateSaleOrderRequest {
 
     private String note;
 
+    private Long paymentMethodId;
+
+    private String paymentMethodCode;
+
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
     private List<SaleOrderDetailRequest> details;
 }

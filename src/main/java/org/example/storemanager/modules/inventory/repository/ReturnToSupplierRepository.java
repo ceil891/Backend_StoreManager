@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface ReturnToSupplierRepository extends JpaRepository<ReturnToSupplier, Long> {
-    @Query("SELECT r FROM ReturnToSupplier r LEFT JOIN FETCH r.branch LEFT JOIN FETCH r.supplier WHERE r.isDeleted = false")
+    @Query("SELECT r FROM ReturnToSupplier r LEFT JOIN FETCH r.branch LEFT JOIN FETCH r.supplier WHERE r.isDeleted = false ORDER BY r.id DESC")
     List<ReturnToSupplier> findAllWithAssociations();
 
     Optional<ReturnToSupplier> findByIdAndIsDeletedFalse(Long id);

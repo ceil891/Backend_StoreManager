@@ -40,5 +40,7 @@ public class SaleOrderResponse {
     private String deliveryStatus;
     private LocalDateTime assignedAt;
     private String assignedBy;
+    private Long paymentMethodId;
+    private String paymentMethodCode;
     private List<SaleOrderDetailResponse> details;
 }

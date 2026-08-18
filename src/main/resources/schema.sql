@@ -72,3 +72,8 @@ WHERE is_deleted = false AND attribute_signature IS NOT NULL AND attribute_signa
 -- Migration: Index on stock_ledgers.product_variant_id
 CREATE INDEX IF NOT EXISTS idx_stock_ledger_variant ON stock_ledgers(product_variant_id);
 
+-- Migration: Add column type if not exists with default 'message' in n8n_chat_histories_ric_qlbh table
+ALTER TABLE IF EXISTS n8n_chat_histories_ric_qlbh ADD COLUMN IF NOT EXISTS "type" VARCHAR(50) DEFAULT 'message';
+
+
+

@@ -32,7 +32,10 @@ public class Banner {
     @Builder.Default
     private Boolean isActive = true;
 
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd[ HH:mm:ss]['T'HH:mm:ss][.SSS][X]")
     private LocalDateTime validFrom;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd[ HH:mm:ss]['T'HH:mm:ss][.SSS][X]")
     private LocalDateTime validUntil;
 
     private LocalDateTime createdAt;

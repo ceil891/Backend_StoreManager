@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import org.example.storemanager.modules.partnerarea.repository.CustomerRepository;
+import org.example.storemanager.modules.partnerarea.entity.Customer;
 
 @RestController
 @RequestMapping("/api/v1/crm")
@@ -22,6 +24,7 @@ import java.util.List;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class CrmController {
 
+    private final CustomerRepository customerRepository;
     private final LoyaltyTierRepository loyaltyTierRepository;
     private final LoyaltyPointHistoryRepository loyaltyPointHistoryRepository;
     private final VoucherRepository voucherRepository;
@@ -105,19 +108,38 @@ public class CrmController {
     // --- VOUCHERS ---
     @GetMapping("/vouchers")
     public ResponseEntity<ApiResponse<List<Voucher>>> getAllVouchers() {
-        return ResponseEntity.ok(ApiResponse.ok(voucherRepository.findByIsDeletedFalse()));
+        return ResponseEntity.ok(ApiResponse.ok(voucherRepository.findByIsDeletedFalseOrderByUpdatedAtDesc()));
     }
 
     @PostMapping("/vouchers")
     public ResponseEntity<ApiResponse<Voucher>> createVoucher(@RequestBody Voucher req) {
         req.setIsDeleted(false);
+        if (req.getIsActive() == null) req.setIsActive(true);
+        if (req.getIsPublic() == null) req.setIsPublic(true);
+        if (req.getCurrentUsage() == null) req.setCurrentUsage(0);
+        if (req.getStatus() == null) req.setStatus("ACTIVE");
         return ResponseEntity.status(201).body(ApiResponse.created(voucherRepository.save(req)));
     }
 
     @PutMapping("/vouchers/{id}")
     public ResponseEntity<ApiResponse<Voucher>> updateVoucher(@PathVariable Long id, @RequestBody Voucher req) {
-        req.setId(id);
-        return ResponseEntity.ok(ApiResponse.ok(voucherRepository.save(req)));
+        Voucher existing = voucherRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy voucher ID: " + id));
+        if (req.getVoucherCode() != null) existing.setVoucherCode(req.getVoucherCode());
+        if (req.getVoucherName() != null) existing.setVoucherName(req.getVoucherName());
+        if (req.getType() != null) existing.setType(req.getType());
+        if (req.getValue() != null) existing.setValue(req.getValue());
+        if (req.getMinOrderAmount() != null) existing.setMinOrderAmount(req.getMinOrderAmount());
+        if (req.getMaxDiscountAmount() != null) existing.setMaxDiscountAmount(req.getMaxDiscountAmount());
+        if (req.getMaxUsage() != null) existing.setMaxUsage(req.getMaxUsage());
+        if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getDescription() != null) existing.setDescription(req.getDescription());
+        if (req.getStartDate() != null) existing.setStartDate(req.getStartDate());
+        if (req.getEndDate() != null) existing.setEndDate(req.getEndDate());
+        if (req.getIsActive() != null) existing.setIsActive(req.getIsActive());
+        if (req.getIsPublic() != null) existing.setIsPublic(req.getIsPublic());
+        existing.setIsDeleted(false);
+        return ResponseEntity.ok(ApiResponse.ok(voucherRepository.save(existing)));
     }
 
     @DeleteMapping("/vouchers/{id}")
@@ -212,20 +234,131 @@ public class CrmController {
 
     // --- CUSTOMER VOUCHERS ---
     @GetMapping("/customer-vouchers")
-    public ResponseEntity<ApiResponse<List<CustomerVoucher>>> getAllCustomerVouchers() {
-        return ResponseEntity.ok(ApiResponse.ok(customerVoucherRepository.findByIsDeletedFalse()));
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<java.util.List<java.util.Map<String, Object>>>> getAllCustomerVouchers() {
+        java.util.List<CustomerVoucher> list = customerVoucherRepository.findByIsDeletedFalseOrderByUpdatedAtDesc();
+        java.util.List<java.util.Map<String, Object>> res = list.stream().map(cv -> {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", cv.getId().toString());
+            m.put("voucherCode", cv.getVoucherCode());
+            m.put("status", cv.getStatus());
+            m.put("issueDate", cv.getCollectedAt() != null ? cv.getCollectedAt().toLocalDate().toString() : "");
+            m.put("expiryDate", cv.getExpiredAt() != null ? cv.getExpiredAt().toLocalDate().toString() : "");
+            m.put("usedDate", cv.getUsedAt() != null ? cv.getUsedAt().toLocalDate().toString() : "");
+            m.put("notes", cv.getNote() != null ? cv.getNote() : "");
+            if (cv.getUsedOrder() != null) {
+                m.put("usedOrderId", cv.getUsedOrder().getId().toString());
+            }
+            if (cv.getCustomer() != null) {
+                m.put("customerId", cv.getCustomer().getId().toString());
+                m.put("customerName", cv.getCustomer().getName());
+                m.put("customerPhone", cv.getCustomer().getPhone());
+                m.put("customerCode", cv.getCustomer().getCustomerCode());
+            }
+            if (cv.getVoucher() != null) {
+                m.put("programId", cv.getVoucher().getId().toString());
+                m.put("programName", cv.getVoucher().getVoucherName());
+                m.put("voucherName", cv.getVoucher().getVoucherName());
+                m.put("discountType", cv.getVoucher().getType());
+                m.put("discountValue", cv.getVoucher().getValue());
+                m.put("minOrderValue", cv.getVoucher().getMinOrderAmount());
+                m.put("maxDiscount", cv.getVoucher().getMaxDiscountAmount());
+            }
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.ok(res));
     }
 
     @PostMapping("/customer-vouchers")
-    public ResponseEntity<ApiResponse<CustomerVoucher>> createCustomerVoucher(@RequestBody CustomerVoucher req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(customerVoucherRepository.save(req)));
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createCustomerVoucher(@RequestBody java.util.Map<String, Object> req) {
+        String voucherCode = req.get("voucherCode") != null ? req.get("voucherCode").toString() : "VC-" + System.currentTimeMillis();
+        String status = req.get("status") != null ? req.get("status").toString() : "ACTIVE";
+        String notes = req.get("notes") != null ? req.get("notes").toString() : "";
+
+        Long customerId = null;
+        if (req.get("customerId") != null) {
+            try { customerId = Long.valueOf(req.get("customerId").toString()); } catch (Exception ignored) {}
+        } else if (req.get("customer") instanceof java.util.Map) {
+            Object cid = ((java.util.Map<?, ?>) req.get("customer")).get("id");
+            if (cid != null) try { customerId = Long.valueOf(cid.toString()); } catch (Exception ignored) {}
+        }
+
+        Customer c = null;
+        if (customerId != null) {
+            c = customerRepository.findById(customerId).orElse(null);
+        }
+        if (c == null) {
+            java.util.List<Customer> customers = customerRepository.findAll();
+            if (!customers.isEmpty()) {
+                c = customers.get(0);
+            }
+        }
+
+        Long voucherId = null;
+        if (req.get("programId") != null) {
+            try { voucherId = Long.valueOf(req.get("programId").toString()); } catch (Exception ignored) {}
+        } else if (req.get("voucherId") != null) {
+            try { voucherId = Long.valueOf(req.get("voucherId").toString()); } catch (Exception ignored) {}
+        } else if (req.get("voucher") instanceof java.util.Map) {
+            Object vid = ((java.util.Map<?, ?>) req.get("voucher")).get("id");
+            if (vid != null) try { voucherId = Long.valueOf(vid.toString()); } catch (Exception ignored) {}
+        }
+
+        Voucher v = null;
+        if (voucherId != null) {
+            v = voucherRepository.findById(voucherId).orElse(null);
+        }
+        if (v == null) {
+            java.util.List<Voucher> vouchers = voucherRepository.findAll();
+            if (!vouchers.isEmpty()) {
+                v = vouchers.get(0);
+            }
+        }
+
+        CustomerVoucher cv = CustomerVoucher.builder()
+                .customer(c)
+                .voucher(v)
+                .voucherCode(voucherCode)
+                .collectedAt(java.time.LocalDateTime.now())
+                .expiredAt(java.time.LocalDateTime.now().plusDays(30))
+                .status(status)
+                .build();
+        cv.setIsDeleted(false);
+        cv.setNote(notes);
+
+        CustomerVoucher saved = customerVoucherRepository.save(cv);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", saved.getId().toString());
+        resp.put("voucherCode", saved.getVoucherCode());
+        resp.put("status", saved.getStatus());
+        if (c != null) {
+            resp.put("customerId", c.getId().toString());
+            resp.put("customerName", c.getName());
+            resp.put("customerPhone", c.getPhone());
+            resp.put("customerCode", c.getCustomerCode());
+        }
+        if (v != null) {
+            resp.put("programId", v.getId().toString());
+            resp.put("programName", v.getVoucherName());
+            resp.put("voucherName", v.getVoucherName());
+        }
+
+        return ResponseEntity.status(201).body(ApiResponse.created(resp));
     }
 
     @PutMapping("/customer-vouchers/{id}")
-    public ResponseEntity<ApiResponse<CustomerVoucher>> updateCustomerVoucher(@PathVariable Long id, @RequestBody CustomerVoucher req) {
-        req.setId(id);
-        return ResponseEntity.ok(ApiResponse.ok(customerVoucherRepository.save(req)));
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> updateCustomerVoucher(@PathVariable Long id, @RequestBody java.util.Map<String, Object> req) {
+        CustomerVoucher cv = customerVoucherRepository.findById(id).orElse(null);
+        if (cv != null) {
+            if (req.get("status") != null) cv.setStatus(req.get("status").toString());
+            if (req.get("notes") != null) cv.setNote(req.get("notes").toString());
+            customerVoucherRepository.save(cv);
+        }
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", id.toString());
+        return ResponseEntity.ok(ApiResponse.ok(resp));
     }
 
     @DeleteMapping("/customer-vouchers/{id}")

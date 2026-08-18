@@ -69,8 +69,10 @@ public class QuoteServiceImpl implements QuoteService {
 
         String username = getCurrentUsername();
 
+        String uniqueCode = generateUniqueQuoteCode(request.getQuoteCode());
+
         Quote quote = Quote.builder()
-                .quoteCode(request.getQuoteCode())
+                .quoteCode(uniqueCode)
                 .quoteDate(request.getQuoteDate() != null ? request.getQuoteDate() : LocalDateTime.now())
                 .validUntil(request.getValidUntil())
                 .revision(1) // Auto initial revision
@@ -607,5 +609,22 @@ public class QuoteServiceImpl implements QuoteService {
                 .createdBy(q.getCreatedBy())
                 .details(detailsResponse)
                 .build();
+    }
+
+    private String generateUniqueQuoteCode(String requestedCode) {
+        if (requestedCode != null && !requestedCode.trim().isEmpty()) {
+            String cleanCode = requestedCode.trim();
+            if (!quoteRepository.existsByQuoteCode(cleanCode)) {
+                return cleanCode;
+            }
+        }
+        String prefix = "QT-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDateTime.now()) + "-";
+        for (int i = 1; i <= 9999; i++) {
+            String candidate = prefix + String.format("%04d", i);
+            if (!quoteRepository.existsByQuoteCode(candidate)) {
+                return candidate;
+            }
+        }
+        return prefix + System.currentTimeMillis();
     }
 }

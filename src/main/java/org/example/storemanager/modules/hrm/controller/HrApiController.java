@@ -23,9 +23,41 @@ import java.util.List;
 public class HrApiController {
 
     private final PositionRepository positionRepository;
+    private final DepartmentRepository departmentRepository;
     private final EmployeeContractRepository employeeContractRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final KpiRecordRepository kpiRecordRepository;
+
+    // --- DEPARTMENTS ---
+    @GetMapping("/departments")
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<List<Department>>> getAllDepartments() {
+        return ResponseEntity.ok(ApiResponse.ok(departmentRepository.findByIsDeletedFalse()));
+    }
+
+    @PostMapping("/departments")
+    public ResponseEntity<ApiResponse<Department>> createDepartment(@RequestBody Department req) {
+        req.setIsDeleted(false);
+        return ResponseEntity.status(201).body(ApiResponse.created(departmentRepository.save(req)));
+    }
+
+    @PutMapping("/departments/{id}")
+    public ResponseEntity<ApiResponse<Department>> updateDepartment(@PathVariable Long id, @RequestBody Department req) {
+        Department d = departmentRepository.findById(id).orElseThrow();
+        if (req.getDeptCode() != null) d.setDeptCode(req.getDeptCode());
+        if (req.getDeptName() != null) d.setDeptName(req.getDeptName());
+        if (req.getDescription() != null) d.setDescription(req.getDescription());
+        if (req.getManager() != null) d.setManager(req.getManager());
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật phòng ban thành công", departmentRepository.save(d)));
+    }
+
+    @DeleteMapping("/departments/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDepartment(@PathVariable Long id) {
+        Department d = departmentRepository.findById(id).orElseThrow();
+        d.setIsDeleted(true);
+        departmentRepository.save(d);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa phòng ban thành công", null));
+    }
 
     // --- POSITIONS ---
     @GetMapping("/positions")
@@ -49,6 +81,24 @@ public class HrApiController {
     public ResponseEntity<ApiResponse<Position>> createPosition(@RequestBody Position req) {
         req.setIsDeleted(false);
         return ResponseEntity.status(201).body(ApiResponse.created(positionRepository.save(req)));
+    }
+
+    @PutMapping("/positions/{id}")
+    public ResponseEntity<ApiResponse<Position>> updatePosition(@PathVariable Long id, @RequestBody Position req) {
+        Position p = positionRepository.findById(id).orElseThrow();
+        if (req.getPositionCode() != null) p.setPositionCode(req.getPositionCode());
+        if (req.getPositionName() != null) p.setPositionName(req.getPositionName());
+        if (req.getBaseSalary() != null) p.setBaseSalary(req.getBaseSalary());
+        if (req.getDepartment() != null) p.setDepartment(req.getDepartment());
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật chức vụ thành công", positionRepository.save(p)));
+    }
+
+    @DeleteMapping("/positions/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePosition(@PathVariable Long id) {
+        Position p = positionRepository.findById(id).orElseThrow();
+        p.setIsDeleted(true);
+        positionRepository.save(p);
+        return ResponseEntity.ok(ApiResponse.ok("Xóa chức vụ thành công", null));
     }
 
     // --- LABOR CONTRACTS ---

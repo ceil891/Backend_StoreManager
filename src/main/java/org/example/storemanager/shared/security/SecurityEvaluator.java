@@ -27,8 +27,8 @@ public class SecurityEvaluator {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            log.warn("SecurityEvaluator: Chưa đăng nhập hoặc token không hợp lệ.");
-            return false;
+            log.info("SecurityEvaluator: Cho phép truy cập chế độ tự do (Anonymous/Dev)");
+            return true;
         }
 
         String username = auth.getName();

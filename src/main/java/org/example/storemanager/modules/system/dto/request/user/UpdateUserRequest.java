@@ -21,4 +21,11 @@ public class UpdateUserRequest {
     private Long roleId;
 
     private Long branchId;
+    private String status;
+
+    private String taxId;
+    private String identityId;
+    private String dateOfBirth;
+    private String departmentId;
+    private String positionId;
 }

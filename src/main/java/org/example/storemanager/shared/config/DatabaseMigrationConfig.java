@@ -273,8 +273,128 @@ public class DatabaseMigrationConfig implements ApplicationRunner {
             } catch (Exception ex) {
                 log.warn("[Migration] product_attributes seed warning: {}", ex.getMessage());
             }
+
+            // ---- colors standard seed ----
+            try {
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-RED', 'Đỏ (Red)', '#EF4444', 'Màu đỏ nổi bật', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-RED')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-NAVY', 'Xanh Đen (Navy)', '#1E3A8A', 'Màu xanh đen sang trọng', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-NAVY')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-BLACK', 'Đen (Black)', '#111827', 'Màu đen huyền bí', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-BLACK')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-WHITE', 'Trắng (White)', '#F9FAFB', 'Màu trắng tinh tế', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-WHITE')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-BLUE', 'Xanh Dương (Blue)', '#3B82F6', 'Màu xanh năng động', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-BLUE')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-GOLD', 'Vàng Gold', '#EAB308', 'Màu vàng kim quý phái', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-GOLD')");
+                jdbcTemplate.execute("INSERT INTO colors (color_code, color_name, hex_value, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'CLR-TITAN', 'Titan Tự Nhiên', '#78716C', 'Màu Titan nguyên bản', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM colors WHERE color_code = 'CLR-TITAN')");
+                log.info("[Migration] colors default seed ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] colors seed warning: {}", ex.getMessage());
+            }
+
+            // ---- sizes standard seed ----
+            try {
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-128GB', '128GB', 'Dung lượng bộ nhớ 128GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-128GB')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-256GB', '256GB', 'Dung lượng bộ nhớ 256GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-256GB')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-512GB', '512GB', 'Dung lượng bộ nhớ 512GB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-512GB')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-1TB', '1TB', 'Dung lượng bộ nhớ 1TB', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-1TB')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-S', 'Size S', 'Kích thước nhỏ (Small)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-S')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-M', 'Size M', 'Kích thước vừa (Medium)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-M')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-L', 'Size L', 'Kích thước lớn (Large)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-L')");
+                jdbcTemplate.execute("INSERT INTO sizes (size_code, size_name, description, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'SZ-XL', 'Size XL', 'Kích thước rất lớn (Extra Large)', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM sizes WHERE size_code = 'SZ-XL')");
+                log.info("[Migration] sizes default seed ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] sizes seed warning: {}", ex.getMessage());
+            }
+
+            // ---- n8n_chat_histories_ric_qlbh migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS n8n_chat_histories_ric_qlbh ALTER COLUMN \"type\" SET DEFAULT 'message'");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS n8n_chat_histories_ric_qlbh ALTER COLUMN \"type\" DROP NOT NULL");
+                log.info("[Migration] n8n_chat_histories_ric_qlbh column type default ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] n8n_chat_histories_ric_qlbh migration note: {}", ex.getMessage());
+            }
+
+            // ---- units & product base_unit migrations ----
+            try {
+                jdbcTemplate.execute(
+                    "INSERT INTO units (unit_code, unit_name, description, unit_type, conversion_factor, precision_decimals, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'UNIT-CAI', 'Cái', 'Đơn vị tính tiêu chuẩn', 'COUNT', 1, 0, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM units WHERE unit_code = 'UNIT-CAI')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO units (unit_code, unit_name, description, unit_type, conversion_factor, precision_decimals, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'UNIT-CHIE', 'Chiếc', 'Đơn vị tính máy tính, màn hình', 'COUNT', 1, 0, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM units WHERE unit_code = 'UNIT-CHIE')"
+                );
+                jdbcTemplate.execute(
+                    "INSERT INTO units (unit_code, unit_name, description, unit_type, conversion_factor, precision_decimals, is_active, is_deleted, created_at, updated_at) " +
+                    "SELECT 'UNIT-BO', 'Bộ', 'Đơn vị tính theo combo', 'PACKAGE', 1, 0, true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM units WHERE unit_code = 'UNIT-BO')"
+                );
+                // Auto link any product without base_unit_id to UNIT-CAI
+                jdbcTemplate.execute(
+                    "UPDATE products SET base_unit_id = (SELECT id FROM units WHERE unit_code = 'UNIT-CAI' LIMIT 1) " +
+                    "WHERE base_unit_id IS NULL AND EXISTS (SELECT 1 FROM units WHERE unit_code = 'UNIT-CAI')"
+                );
+                log.info("[Migration] units & product base_unit defaults ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] units seed migration warning: {}", ex.getMessage());
+            }
+
+            // ---- receipt_vouchers & payment_vouchers migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS receipt_vouchers ALTER COLUMN reason_id DROP NOT NULL");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS payment_vouchers ALTER COLUMN reason_id DROP NOT NULL");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS receipt_vouchers ALTER COLUMN branch_id DROP NOT NULL");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS payment_vouchers ALTER COLUMN branch_id DROP NOT NULL");
+                log.info("[Migration] receipt_vouchers & payment_vouchers reason_id and branch_id constraints updated OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] receipt/payment vouchers constraint migration note: {}", ex.getMessage());
+            }
+
+            // ---- delivery_notes migrations ----
+            try {
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ALTER COLUMN packing_list_id DROP NOT NULL");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS waybill_code VARCHAR(100)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS delivery_staff VARCHAR(150)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS total_weight DOUBLE PRECISION");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS package_count INTEGER");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS product_count INTEGER");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS signer_name VARCHAR(150)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS signed_at VARCHAR(100)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS condition_notes TEXT");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS attachments TEXT");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS rejection_reason_type VARCHAR(100)");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS delivery_notes ADD COLUMN IF NOT EXISTS rejection_reason_detail TEXT");
+                log.info("[Migration] delivery_notes columns ensured OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] delivery_notes migration note: {}", ex.getMessage());
+            }
+
+            // ---- Clean up old mock test orders ----
+            try {
+                jdbcTemplate.execute("DELETE FROM sale_order_details WHERE sale_order_id IN (SELECT id FROM sale_orders WHERE order_code LIKE 'ORD-POS-2026-100%' OR order_code LIKE 'ORD-ONL-2026-100%')");
+                jdbcTemplate.execute("DELETE FROM sale_orders WHERE order_code LIKE 'ORD-POS-2026-100%' OR order_code LIKE 'ORD-ONL-2026-100%'");
+                log.info("[Migration] old mock test orders cleaned up OK.");
+            } catch (Exception ex) {
+                log.warn("[Migration] clean mock orders note: {}", ex.getMessage());
+            }
         } catch (Exception e) {
-          log.warn("[Migration] sale_orders migration warning: {}", e.getMessage());
+          log.warn("[Migration] database migration warning: {}", e.getMessage());
         }
     }
 }
