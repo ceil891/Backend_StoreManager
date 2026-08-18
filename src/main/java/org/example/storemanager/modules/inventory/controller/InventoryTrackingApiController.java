@@ -37,6 +37,7 @@ public class InventoryTrackingApiController {
     private final ProductRepository productRepository;
     private final InventoryBalanceRepository inventoryBalanceRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
+    private final org.example.storemanager.modules.inventory.repository.SizeInventoryRepository sizeInventoryRepository;
 
     // ==========================================
     // --- BATCH CRUD ---
@@ -148,6 +149,25 @@ public class InventoryTrackingApiController {
 
     @GetMapping("/branches/{branchId}/inventory")
     public ResponseEntity<ApiResponse<List<InventoryBalanceDTO>>> getInventoryByBranch(@PathVariable Long branchId) {
+        List<org.example.storemanager.modules.inventory.entity.SizeInventory> sizeList = sizeInventoryRepository.findAllWithAssociations().stream()
+                .filter(si -> !Boolean.TRUE.equals(si.getIsDeleted()) && si.getWarehouseZone() != null && si.getWarehouseZone().getBranch() != null && branchId.equals(si.getWarehouseZone().getBranch().getId()))
+                .toList();
+        if (!sizeList.isEmpty()) {
+            List<InventoryBalanceDTO> dtoList = sizeList.stream().map(si -> InventoryBalanceDTO.builder()
+                    .id(si.getId())
+                    .branchId(si.getWarehouseZone().getBranch().getId())
+                    .branchName(si.getWarehouseZone().getBranch().getBranchName())
+                    .productId(si.getProduct().getId())
+                    .productName(si.getProduct().getName())
+                    .sku(si.getProduct().getProductCode())
+                    .onHandQuantity(si.getQuantityPhysical())
+                    .reservedQuantity(si.getQuantityAllocated() != null ? si.getQuantityAllocated() : BigDecimal.ZERO)
+                    .availableQuantity(si.getQuantityAvailable())
+                    .lastUpdated(si.getUpdatedAt())
+                    .build()
+            ).toList();
+            return ResponseEntity.ok(ApiResponse.ok(dtoList));
+        }
         List<InventoryBalanceDTO> list = inventoryBalanceRepository.findAll().stream()
                 .filter(b -> !Boolean.TRUE.equals(b.getIsDeleted()) && branchId.equals(b.getBranch().getId()))
                 .map(this::toBalanceDTO)

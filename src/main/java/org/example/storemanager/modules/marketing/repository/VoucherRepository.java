@@ -10,4 +10,6 @@ import java.util.List;
 public interface VoucherRepository extends JpaRepository<Voucher, Long> {
     Optional<Voucher> findByIdAndIsDeletedFalse(Long id);
     List<Voucher> findByIsDeletedFalse();
+    List<Voucher> findByIsDeletedFalseOrderByUpdatedAtDesc();
+    Optional<Voucher> findByVoucherCode(String voucherCode);
 }

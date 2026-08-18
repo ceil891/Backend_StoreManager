@@ -90,18 +90,19 @@ public class FinanceController {
     }
 
     // --- RECEIPT VOUCHERS ---
-    @GetMapping("/receipt-vouchers")
+    @GetMapping({"/receipt-vouchers", "/receipts"})
     public ResponseEntity<ApiResponse<List<ReceiptVoucher>>> getAllReceipts() {
         return ResponseEntity.ok(ApiResponse.ok(receiptVoucherRepository.findByIsDeletedFalse()));
     }
 
-    @GetMapping("/receipt-vouchers/{id}")
+    @GetMapping({"/receipt-vouchers/{id}", "/receipts/{id}"})
     public ResponseEntity<ApiResponse<ReceiptVoucher>> getReceiptById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(receiptVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id))));
     }
 
-    @PostMapping("/receipt-vouchers")
+    @PostMapping({"/receipt-vouchers", "/receipts"})
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<ReceiptVoucher>> createReceipt(@RequestBody ReceiptVoucher req) {
         req.setIsDeleted(false);
         if (req.getVoucherCode() == null || req.getVoucherCode().trim().isEmpty()) {
@@ -117,7 +118,7 @@ public class FinanceController {
         return ResponseEntity.status(201).body(ApiResponse.created(saved));
     }
 
-    @PutMapping("/receipt-vouchers/{id}")
+    @PutMapping({"/receipt-vouchers/{id}", "/receipts/{id}"})
     public ResponseEntity<ApiResponse<ReceiptVoucher>> updateReceipt(@PathVariable Long id, @RequestBody ReceiptVoucher req) {
         ReceiptVoucher existing = receiptVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id));
@@ -140,7 +141,7 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(saved));
     }
 
-    @DeleteMapping("/receipt-vouchers/{id}")
+    @DeleteMapping({"/receipt-vouchers/{id}", "/receipts/{id}"})
     public ResponseEntity<ApiResponse<Void>> deleteReceipt(@PathVariable Long id) {
         ReceiptVoucher existing = receiptVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id));
@@ -153,34 +154,37 @@ public class FinanceController {
     }
 
     // --- PAYMENT VOUCHERS ---
-    @GetMapping("/payment-vouchers")
+    @GetMapping({"/payment-vouchers", "/payments"})
     public ResponseEntity<ApiResponse<List<PaymentVoucher>>> getAllPayments() {
         return ResponseEntity.ok(ApiResponse.ok(paymentVoucherRepository.findByIsDeletedFalse()));
     }
 
-    @GetMapping("/payment-vouchers/{id}")
+    @GetMapping({"/payment-vouchers/{id}", "/payments/{id}"})
     public ResponseEntity<ApiResponse<PaymentVoucher>> getPaymentById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(paymentVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id))));
     }
 
-    @PostMapping("/payment-vouchers")
+    @PostMapping({"/payment-vouchers", "/payments"})
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<PaymentVoucher>> createPayment(@RequestBody PaymentVoucher req) {
         req.setIsDeleted(false);
         if (req.getVoucherCode() == null || req.getVoucherCode().trim().isEmpty()) {
-            req.setVoucherCode("PC-PAY-" + System.currentTimeMillis());
+            String dateStr = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now());
+            req.setVoucherCode("PAY-PUR-" + dateStr + "-" + String.format("%03d", (int)(Math.random() * 900 + 100)));
         }
         if (req.getVoucherDate() == null) {
             req.setVoucherDate(LocalDateTime.now());
         }
         PaymentVoucher saved = paymentVoucherRepository.save(req);
-        if ("COMPLETED".equalsIgnoreCase(saved.getStatus())) {
+        if ("COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) {
             createJournalEntryForPayment(saved);
         }
         return ResponseEntity.status(201).body(ApiResponse.created(saved));
     }
 
-    @PutMapping("/payment-vouchers/{id}")
+    @PutMapping({"/payment-vouchers/{id}", "/payments/{id}"})
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<PaymentVoucher>> updatePayment(@PathVariable Long id, @RequestBody PaymentVoucher req) {
         PaymentVoucher existing = paymentVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id));
@@ -188,13 +192,21 @@ public class FinanceController {
         String oldStatus = existing.getStatus();
         existing.setReceiverName(req.getReceiverName());
         existing.setAmount(req.getAmount());
+        if (req.getInvoiceCode() != null) existing.setInvoiceCode(req.getInvoiceCode());
+        if (req.getPaymentMethod() != null) existing.setPaymentMethod(req.getPaymentMethod());
+        if (req.getFundAccountName() != null) existing.setFundAccountName(req.getFundAccountName());
+        if (req.getAttachmentUrl() != null) existing.setAttachmentUrl(req.getAttachmentUrl());
+        if (req.getHandler() != null) existing.setHandler(req.getHandler());
         if (req.getStatus() != null) {
             existing.setStatus(req.getStatus());
         }
         
         PaymentVoucher saved = paymentVoucherRepository.save(existing);
         
-        if ("COMPLETED".equalsIgnoreCase(saved.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+        boolean isNowDone = "COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus());
+        boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
+
+        if (isNowDone && !wasDone) {
             createJournalEntryForPayment(saved);
         } else if ("CANCELLED".equalsIgnoreCase(saved.getStatus()) && !"CANCELLED".equalsIgnoreCase(oldStatus)) {
             createStornoEntry(saved.getVoucherCode());
@@ -203,7 +215,7 @@ public class FinanceController {
         return ResponseEntity.ok(ApiResponse.ok(saved));
     }
 
-    @DeleteMapping("/payment-vouchers/{id}")
+    @DeleteMapping({"/payment-vouchers/{id}", "/payments/{id}"})
     public ResponseEntity<ApiResponse<Void>> deletePayment(@PathVariable Long id) {
         PaymentVoucher existing = paymentVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id));
@@ -216,9 +228,37 @@ public class FinanceController {
     }
 
     // --- DEBT LEDGERS ---
-    @GetMapping("/debt-ledgers")
+    @GetMapping({"/debt-ledgers", "/debts"})
     public ResponseEntity<ApiResponse<List<DebtLedger>>> getAllDebts() {
         return ResponseEntity.ok(ApiResponse.ok(debtLedgerRepository.findByIsDeletedFalse()));
+    }
+
+    @PostMapping({"/debt-ledgers", "/debts"})
+    public ResponseEntity<ApiResponse<DebtLedger>> createDebt(@RequestBody DebtLedger req) {
+        req.setIsDeleted(false);
+        return ResponseEntity.status(201).body(ApiResponse.created(debtLedgerRepository.save(req)));
+    }
+
+    @PutMapping({"/debt-ledgers/{id}", "/debts/{id}"})
+    public ResponseEntity<ApiResponse<DebtLedger>> updateDebt(@PathVariable Long id, @RequestBody DebtLedger req) {
+        DebtLedger existing = debtLedgerRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DebtLedger", "id", id));
+        if (req.getPartnerId() != null) existing.setPartnerId(req.getPartnerId());
+        if (req.getRefCode() != null) existing.setRefCode(req.getRefCode());
+        if (req.getIncrease() != null) existing.setIncrease(req.getIncrease());
+        if (req.getDecrease() != null) existing.setDecrease(req.getDecrease());
+        if (req.getBalance() != null) existing.setBalance(req.getBalance());
+        if (req.getTransactionDate() != null) existing.setTransactionDate(req.getTransactionDate());
+        return ResponseEntity.ok(ApiResponse.ok(debtLedgerRepository.save(existing)));
+    }
+
+    @DeleteMapping({"/debt-ledgers/{id}", "/debts/{id}"})
+    public ResponseEntity<ApiResponse<Void>> deleteDebt(@PathVariable Long id) {
+        DebtLedger existing = debtLedgerRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DebtLedger", "id", id));
+        existing.setIsDeleted(true);
+        debtLedgerRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // --- OPERATING COSTS ---
@@ -240,7 +280,7 @@ public class FinanceController {
     }
 
     // --- FUND BALANCES ---
-    @GetMapping("/fund-balances")
+    @GetMapping({"/fund-balances", "/fund-cash"})
     public ResponseEntity<ApiResponse<List<FundBalance>>> getAllFunds() {
         return ResponseEntity.ok(ApiResponse.ok(fundBalanceRepository.findByIsDeletedFalse()));
     }

@@ -15,6 +15,7 @@ public class UserInfoResponse {
     private String email;
     private String role;
     private Long branchId;
+    private String branchCode;
     private String branchName;
     private String avatar;
     private java.util.List<String> permissions;

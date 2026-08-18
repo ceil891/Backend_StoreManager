@@ -25,11 +25,47 @@ public class DeliveryNote extends BaseEntity {
     private String recipientName; // Tên người ký nhận hàng thực tế
 
     @Column(nullable = false, length = 30)
-    private String status; // DRAFT, DISPATCHED, IN_TRANSIT, DELIVERED, FAILED, CANCELLED
+    private String status; // DRAFT, CHO_BAN_GIAO, DA_BAN_GIAO, BI_TU_CHOI, DISPATCHED, IN_TRANSIT, DELIVERED, FAILED, CANCELLED
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "packing_list_id", nullable = false)
+    @JoinColumn(name = "packing_list_id", nullable = true)
     private PackingList packingList;
+
+    @Column(name = "waybill_code", length = 100)
+    private String waybillCode;
+
+    @Column(name = "customer_name", length = 200)
+    private String customerName;
+
+    @Column(name = "delivery_staff", length = 150)
+    private String deliveryStaff;
+
+    @Column(name = "total_weight")
+    private Double totalWeight;
+
+    @Column(name = "package_count")
+    private Integer packageCount;
+
+    @Column(name = "product_count")
+    private Integer productCount;
+
+    @Column(name = "signer_name", length = 150)
+    private String signerName;
+
+    @Column(name = "signed_at", length = 100)
+    private String signedAt;
+
+    @Column(name = "condition_notes", columnDefinition = "TEXT")
+    private String conditionNotes;
+
+    @Column(name = "attachments", columnDefinition = "TEXT")
+    private String attachments;
+
+    @Column(name = "rejection_reason_type", length = 100)
+    private String rejectionReasonType;
+
+    @Column(name = "rejection_reason_detail", columnDefinition = "TEXT")
+    private String rejectionReasonDetail;
 
     @Column(name = "carrier_name", length = 150)
     private String carrierName;

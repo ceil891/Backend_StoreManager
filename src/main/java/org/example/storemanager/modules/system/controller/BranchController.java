@@ -58,14 +58,14 @@ public class BranchController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('system:branch:view')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<BranchResponse>> getBranchById(@PathVariable Long id) {
         BranchResponse response = branchService.getBranchById(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @GetMapping
-    @PreAuthorize("@securityEvaluator.hasPermission('system:branch:view')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<?>> getBranches(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean isActive,

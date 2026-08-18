@@ -12,6 +12,7 @@ import org.example.storemanager.modules.catalog.entity.Department;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Shipper extends BaseEntity {
 
     @Column(name = "shipper_code", nullable = false, unique = true, length = 50)

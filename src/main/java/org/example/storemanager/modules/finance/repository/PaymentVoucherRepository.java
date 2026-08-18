@@ -10,4 +10,5 @@ import java.util.List;
 public interface PaymentVoucherRepository extends JpaRepository<PaymentVoucher, Long> {
     Optional<PaymentVoucher> findByIdAndIsDeletedFalse(Long id);
     List<PaymentVoucher> findByIsDeletedFalse();
+    List<PaymentVoucher> findByIsDeletedFalseOrderByIdDesc();
 }

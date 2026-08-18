@@ -66,17 +66,36 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
 
     @Override
     public DeliveryNoteDTO create(DeliveryNoteDTO dto) {
-        PackingList pl = packingListRepository.findByIdAndIsDeletedFalse(dto.getPackingListId())
-                .orElseThrow(() -> new ResourceNotFoundException("PackingList", "id", dto.getPackingListId()));
+        PackingList pl = null;
+        if (dto.getPackingListId() != null) {
+            pl = packingListRepository.findByIdAndIsDeletedFalse(dto.getPackingListId()).orElse(null);
+        }
 
-        String noteCode = "DN-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                + "-" + String.format("%04d", deliveryNoteRepository.count() + 1);
+        String noteCode = dto.getNoteCode();
+        if (noteCode == null || noteCode.trim().isEmpty()) {
+            noteCode = "BB-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                    + "-" + String.format("%04d", deliveryNoteRepository.count() + 1);
+        }
 
         DeliveryNote dn = DeliveryNote.builder()
                 .noteCode(noteCode)
-                .deliveryDate(LocalDateTime.now())
-                .recipientName(dto.getRecipientName())
-                .status("DRAFT")
+                .waybillCode(dto.getWaybillCode())
+                .customerName(dto.getCustomerName() != null ? dto.getCustomerName() : dto.getRecipientName())
+                .deliveryStaff(dto.getDeliveryStaff())
+                .totalWeight(dto.getTotalWeight())
+                .packageCount(dto.getPackageCount())
+                .productCount(dto.getProductCount())
+                .deliveryDate(dto.getDeliveryDate() != null ? dto.getDeliveryDate() : LocalDateTime.now())
+                .recipientName(dto.getRecipientName() != null ? dto.getRecipientName() : dto.getCustomerName())
+                .status(dto.getStatus() != null ? dto.getStatus() : "CHO_BAN_GIAO")
+                .signerName(dto.getSignerName())
+                .signedAt(dto.getSignedAt())
+                .conditionNotes(dto.getConditionNotes())
+                .attachments(dto.getAttachments())
+                .rejectionReasonType(dto.getRejectionReasonType())
+                .rejectionReasonDetail(dto.getRejectionReasonDetail())
+                .carrierName(dto.getCarrierName())
+                .trackingNumber(dto.getTrackingNumber())
                 .packingList(pl)
                 .build();
         dn.setIsDeleted(false);
@@ -90,13 +109,24 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
         DeliveryNote dn = deliveryNoteRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("DeliveryNote", "id", id));
 
-        if (!"DRAFT".equals(dn.getStatus())) {
-            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Chỉ có thể sửa đổi phiếu ở trạng thái DRAFT");
-        }
+        if (dto.getNoteCode() != null) dn.setNoteCode(dto.getNoteCode());
+        if (dto.getWaybillCode() != null) dn.setWaybillCode(dto.getWaybillCode());
+        if (dto.getCustomerName() != null) dn.setCustomerName(dto.getCustomerName());
+        if (dto.getRecipientName() != null) dn.setRecipientName(dto.getRecipientName());
+        if (dto.getDeliveryStaff() != null) dn.setDeliveryStaff(dto.getDeliveryStaff());
+        if (dto.getTotalWeight() != null) dn.setTotalWeight(dto.getTotalWeight());
+        if (dto.getPackageCount() != null) dn.setPackageCount(dto.getPackageCount());
+        if (dto.getProductCount() != null) dn.setProductCount(dto.getProductCount());
+        if (dto.getStatus() != null) dn.setStatus(dto.getStatus());
+        if (dto.getSignerName() != null) dn.setSignerName(dto.getSignerName());
+        if (dto.getSignedAt() != null) dn.setSignedAt(dto.getSignedAt());
+        if (dto.getConditionNotes() != null) dn.setConditionNotes(dto.getConditionNotes());
+        if (dto.getAttachments() != null) dn.setAttachments(dto.getAttachments());
+        if (dto.getRejectionReasonType() != null) dn.setRejectionReasonType(dto.getRejectionReasonType());
+        if (dto.getRejectionReasonDetail() != null) dn.setRejectionReasonDetail(dto.getRejectionReasonDetail());
+        if (dto.getCarrierName() != null) dn.setCarrierName(dto.getCarrierName());
+        if (dto.getTrackingNumber() != null) dn.setTrackingNumber(dto.getTrackingNumber());
 
-        if (dto.getRecipientName() != null) {
-            dn.setRecipientName(dto.getRecipientName());
-        }
         dn.setUpdatedBy(getCurrentUsername());
         return toDTO(deliveryNoteRepository.save(dn));
     }
@@ -290,6 +320,18 @@ public class DeliveryNoteServiceImpl implements DeliveryNoteService {
                 .status(dn.getStatus())
                 .packingListId(dn.getPackingList() != null ? dn.getPackingList().getId() : null)
                 .packingListCode(dn.getPackingList() != null ? dn.getPackingList().getPackCode() : null)
+                .waybillCode(dn.getWaybillCode())
+                .customerName(dn.getCustomerName())
+                .deliveryStaff(dn.getDeliveryStaff())
+                .totalWeight(dn.getTotalWeight())
+                .packageCount(dn.getPackageCount())
+                .productCount(dn.getProductCount())
+                .signerName(dn.getSignerName())
+                .signedAt(dn.getSignedAt())
+                .conditionNotes(dn.getConditionNotes())
+                .attachments(dn.getAttachments())
+                .rejectionReasonType(dn.getRejectionReasonType())
+                .rejectionReasonDetail(dn.getRejectionReasonDetail())
                 .carrierName(dn.getCarrierName())
                 .trackingNumber(dn.getTrackingNumber())
                 .dispatchedBy(dn.getDispatchedBy())

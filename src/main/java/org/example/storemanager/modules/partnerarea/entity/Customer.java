@@ -52,6 +52,12 @@ public class Customer extends BaseEntity {
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
+    @Column(name = "password", length = 255)
+    private String password;
+
+    @Column(name = "must_change_password", columnDefinition = "boolean default false")
+    private Boolean mustChangePassword = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "group_id")
     private PartnerGroup group;

@@ -119,4 +119,10 @@ public class SaleOrder extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = true)
     private Branch branch;
+
+    @Column(name = "payment_method_id")
+    private Long paymentMethodId;
+
+    @Column(name = "payment_method_code", length = 50)
+    private String paymentMethodCode;
 }

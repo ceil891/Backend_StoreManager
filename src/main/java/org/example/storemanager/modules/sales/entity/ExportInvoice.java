@@ -7,6 +7,8 @@ import org.example.storemanager.modules.system.entity.Branch;
 import org.example.storemanager.modules.system.entity.PosSession;
 import org.example.storemanager.modules.partnerarea.entity.Customer;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -17,6 +19,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class ExportInvoice extends BaseEntity {
 
     @Column(name = "invoice_code", nullable = false, unique = true, length = 50)

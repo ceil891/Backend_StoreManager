@@ -66,6 +66,15 @@ public class UserServiceImpl implements UserService {
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
         user.setRole(role);
+        if (request.getBranchId() != null) {
+            Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId()).orElse(null);
+            user.setBranch(branch);
+        }
+        user.setTaxId(request.getTaxId());
+        user.setIdentityId(request.getIdentityId());
+        user.setDateOfBirth(request.getDateOfBirth());
+        user.setDepartmentId(request.getDepartmentId());
+        user.setPositionId(request.getPositionId());
         user.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE");
 
         user.setIsDeleted(false);
@@ -82,15 +91,30 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
 
-        if (!user.getRole().getId().equals(request.getRoleId())) {
+        if (request.getRoleId() != null && (user.getRole() == null || !user.getRole().getId().equals(request.getRoleId()))) {
             Role role = roleRepository.findByIdAndIsDeletedFalse(request.getRoleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Role", "id", request.getRoleId()));
             user.setRole(role);
         }
 
+        if (request.getBranchId() != null) {
+            Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+            user.setBranch(branch);
+        }
+
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            user.setStatus(request.getStatus().toUpperCase());
+        }
+
         user.setFullName(request.getFullName());
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
+        user.setTaxId(request.getTaxId());
+        user.setIdentityId(request.getIdentityId());
+        user.setDateOfBirth(request.getDateOfBirth());
+        user.setDepartmentId(request.getDepartmentId());
+        user.setPositionId(request.getPositionId());
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
@@ -257,6 +281,13 @@ public class UserServiceImpl implements UserService {
                 .status(user.getStatus())
                 .roleId(user.getRole() != null ? user.getRole().getId() : null)
                 .roleName(user.getRole() != null ? user.getRole().getRoleName() : null)
+                .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
+                .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
+                .taxId(user.getTaxId())
+                .identityId(user.getIdentityId())
+                .dateOfBirth(user.getDateOfBirth())
+                .departmentId(user.getDepartmentId())
+                .positionId(user.getPositionId())
                 .createdAt(user.getCreatedAt())
                 .createdBy(user.getCreatedBy())
                 .updatedAt(user.getUpdatedAt())

@@ -12,6 +12,7 @@ public interface SaleOrderService {
     SaleOrderResponse updateOrder(Long id, UpdateSaleOrderRequest request);
     SaleOrderResponse updateStatus(Long id, String status);
     SaleOrderResponse updateStatus(Long id, String status, String carrier, String trackingCode, String shipperName, String shipperPhone);
+    SaleOrderResponse updateStatus(Long id, String status, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone);
     void deleteOrder(Long id);
     SaleOrderResponse getOrderById(Long id);
     List<SaleOrderResponse> getAllOrders(String search, String status, Long branchId, String sort, boolean includeDeleted);

@@ -556,7 +556,7 @@ public class ProductServiceImpl implements ProductService {
 
     private Sort parseSort(String sortParam) {
         if (sortParam == null || sortParam.isEmpty()) {
-            return Sort.by("id").descending();
+            return Sort.by(Sort.Direction.DESC, "updatedAt", "id");
         }
         String[] parts = sortParam.split(",");
         String property = parts[0];
@@ -611,12 +611,12 @@ public class ProductServiceImpl implements ProductService {
                 .createdBy(product.getCreatedBy())
                 .updatedBy(product.getUpdatedBy())
                 .updatedAt(product.getUpdatedAt())
-                .categoryId(product.getCategory().getId())
-                .categoryCode(product.getCategory().getCategoryCode())
-                .categoryName(product.getCategory().getCategoryName())
-                .baseUnitId(product.getBaseUnit().getId())
-                .baseUnitCode(product.getBaseUnit().getUnitCode())
-                .baseUnitName(product.getBaseUnit().getUnitName())
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryCode(product.getCategory() != null ? product.getCategory().getCategoryCode() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getCategoryName() : null)
+                .baseUnitId(product.getBaseUnit() != null ? product.getBaseUnit().getId() : null)
+                .baseUnitCode(product.getBaseUnit() != null ? product.getBaseUnit().getUnitCode() : null)
+                .baseUnitName(product.getBaseUnit() != null ? product.getBaseUnit().getUnitName() : null)
                 .units(units)
                 .onHand(onHand != null ? onHand : BigDecimal.ZERO)
                 .build();
@@ -640,11 +640,11 @@ public class ProductServiceImpl implements ProductService {
                 .updatedBy(product.getUpdatedBy())
                 .updatedAt(product.getUpdatedAt())
                 .isDeleted(product.getIsDeleted())
-                .categoryId(product.getCategory().getId())
-                .categoryName(product.getCategory().getCategoryName())
-                .baseUnitId(product.getBaseUnit().getId())
-                .baseUnitCode(product.getBaseUnit().getUnitCode())
-                .baseUnitName(product.getBaseUnit().getUnitName())
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getCategoryName() : null)
+                .baseUnitId(product.getBaseUnit() != null ? product.getBaseUnit().getId() : null)
+                .baseUnitCode(product.getBaseUnit() != null ? product.getBaseUnit().getUnitCode() : null)
+                .baseUnitName(product.getBaseUnit() != null ? product.getBaseUnit().getUnitName() : null)
                 .onHand(onHand != null ? onHand : java.math.BigDecimal.ZERO)
                 .build();
     }

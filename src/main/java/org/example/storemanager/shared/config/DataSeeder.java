@@ -27,6 +27,28 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.example.storemanager.modules.sales.repository.SaleOrderRepository;
+import org.example.storemanager.modules.sales.repository.SaleOrderDetailRepository;
+import org.example.storemanager.modules.sales.entity.SaleOrder;
+import org.example.storemanager.modules.sales.entity.SaleOrderDetail;
+import org.example.storemanager.modules.finance.entity.BankAccount;
+import org.example.storemanager.modules.finance.entity.TransactionReason;
+import org.example.storemanager.modules.finance.entity.ReceiptVoucher;
+import org.example.storemanager.modules.finance.entity.PaymentVoucher;
+import org.example.storemanager.modules.finance.repository.BankAccountRepository;
+import org.example.storemanager.modules.finance.repository.TransactionReasonRepository;
+import org.example.storemanager.modules.finance.repository.ReceiptVoucherRepository;
+import org.example.storemanager.modules.finance.repository.PaymentVoucherRepository;
+import org.example.storemanager.modules.marketing.entity.Banner;
+import org.example.storemanager.modules.marketing.repository.BannerRepository;
+import org.example.storemanager.modules.catalog.entity.ProductCategory;
+import org.example.storemanager.modules.catalog.entity.Product;
+import org.example.storemanager.modules.catalog.repository.CategoriesRepository;
+import org.example.storemanager.modules.catalog.repository.ProductRepository;
+import org.example.storemanager.modules.system.entity.Branch;
+import org.example.storemanager.modules.system.repository.BranchRepository;
+import java.time.LocalDateTime;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -37,8 +59,18 @@ public class DataSeeder implements CommandLineRunner {
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
     private final LoyaltyTierRepository loyaltyTierRepository;
+    private final SaleOrderRepository saleOrderRepository;
+    private final SaleOrderDetailRepository saleOrderDetailRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationContext applicationContext;
+    private final BranchRepository branchRepository;
+    private final BankAccountRepository bankAccountRepository;
+    private final TransactionReasonRepository transactionReasonRepository;
+    private final ReceiptVoucherRepository receiptVoucherRepository;
+    private final PaymentVoucherRepository paymentVoucherRepository;
+    private final BannerRepository bannerRepository;
+    private final CategoriesRepository categoriesRepository;
+    private final ProductRepository productRepository;
 
     private static final Pattern PERMISSION_PATTERN = Pattern.compile("hasPermission\\s*\\(\\s*'([^']+)'\\s*\\)");
 
@@ -321,6 +353,34 @@ public class DataSeeder implements CommandLineRunner {
             log.info("Đã tạo tài khoản 'admin' mặc định.");
         }
 
+        // TẠO / CẬP NHẬT TÀI KHOẢN SUPERADMIN luuhung261125@storemanager.com
+        String superAdminEmail = "luuhung261125@storemanager.com";
+        String superAdminUsername = "luuhung261125";
+        User superUser = userRepository.findByEmail(superAdminEmail)
+                .or(() -> userRepository.findByUsername(superAdminUsername))
+                .orElse(null);
+
+        if (superUser == null) {
+            superUser = User.builder()
+                    .username(superAdminUsername)
+                    .password(passwordEncoder.encode("123456"))
+                    .fullName("Lưu Hưng")
+                    .email(superAdminEmail)
+                    .phone("0988888888")
+                    .status("ACTIVE")
+                    .role(superAdminRole)
+                    .build();
+            userRepository.save(superUser);
+            log.info("Đã tạo tài khoản Super Admin [{}] thành công với quyền SUPER_ADMIN.", superAdminEmail);
+        } else {
+            superUser.setPassword(passwordEncoder.encode("123456"));
+            superUser.setRole(superAdminRole);
+            superUser.setStatus("ACTIVE");
+            userRepository.save(superUser);
+            log.info("Đã cập nhật tài khoản Super Admin [{}] với quyền SUPER_ADMIN và mật khẩu mới.", superAdminEmail);
+        }
+
+
         // 6. KHỞI TẠO HẠNG THÀNH VIÊN LOYALTY MẶC ĐỊNH (NẾU CHƯA CÓ)
         if (loyaltyTierRepository.count() == 0) {
             List<LoyaltyTier> defaultTiers = List.of(
@@ -418,6 +478,319 @@ public class DataSeeder implements CommandLineRunner {
             defaultTiers.forEach(t -> t.setIsDeleted(false));
             loyaltyTierRepository.saveAll(defaultTiers);
             log.info("Đã khởi tạo 6 hạng thành viên Loyalty mặc định vào Database.");
+        }
+
+        // 7. KHỞI TẠO CHI NHÁNH MẶC ĐỊNH
+        Branch branchHN = branchRepository.findByIdAndIsDeletedFalse(1L).orElse(null);
+        if (branchHN == null && branchRepository.count() == 0) {
+            branchHN = Branch.builder()
+                    .branchCode("CN-HN-01")
+                    .branchName("Chi nhánh Kho chính Hà Nội")
+                    .address("128 Cầu Giấy, Quận Cầu Giấy, Hà Nội")
+                    .phone("02438889999")
+                    .isActive(true)
+                    .build();
+            branchHN.setIsDeleted(false);
+            branchHN = branchRepository.save(branchHN);
+
+            Branch branchHCM = Branch.builder()
+                    .branchCode("CN-HCM-01")
+                    .branchName("Chi nhánh Quận 1 TP.HCM")
+                    .address("45 Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM")
+                    .phone("02839998888")
+                    .isActive(true)
+                    .build();
+            branchHCM.setIsDeleted(false);
+            branchRepository.save(branchHCM);
+
+            Branch branchDN = Branch.builder()
+                    .branchCode("CN-DN-01")
+                    .branchName("Chi nhánh Hải Châu Đà Nẵng")
+                    .address("72 Nguyễn Văn Linh, Quận Hải Châu, Đà Nẵng")
+                    .phone("02363778899")
+                    .isActive(true)
+                    .build();
+            branchDN.setIsDeleted(false);
+            branchRepository.save(branchDN);
+            log.info("Đã khởi tạo 3 chi nhánh mặc định vào Database.");
+        }
+
+        // 8. KHỞI TẠO TÀI KHOẢN NGÂN HÀNG & QUỸ TIỀN MẶT
+        if (bankAccountRepository.count() == 0) {
+            List<BankAccount> defaultBankAccounts = List.of(
+                BankAccount.builder()
+                    .bankName("Techcombank")
+                    .accountNumber("1902838392")
+                    .accountHolder("Công ty CP Bán Lẻ StoreManager")
+                    .branchName("Hội Sở Ba Đình Hà Nội")
+                    .isActive(true)
+                    .branch(branchHN)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("Vietcombank")
+                    .accountNumber("0918273645")
+                    .accountHolder("Công ty CP Bán Lẻ StoreManager")
+                    .branchName("Hội Sở Quận 1 TP.HCM")
+                    .isActive(true)
+                    .branch(branchHN)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("MBBank (Quân Đội)")
+                    .accountNumber("888899992026")
+                    .accountHolder("StoreManager POS Retail")
+                    .branchName("Chi nhánh Đà Nẵng")
+                    .isActive(true)
+                    .branch(branchHN)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("Quỹ tiền mặt")
+                    .accountNumber("CASH-HN")
+                    .accountHolder("Quỹ tiền mặt Kho chính Hà Nội")
+                    .branchName("Kho chính Hà Nội")
+                    .isActive(true)
+                    .branch(branchHN)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("Quỹ tiền mặt")
+                    .accountNumber("CASH-HCM")
+                    .accountHolder("Quỹ tiền mặt Chi nhánh TP.HCM")
+                    .branchName("Chi nhánh Quận 1 TP.HCM")
+                    .isActive(true)
+                    .branch(branchHN)
+                    .build()
+            );
+            defaultBankAccounts.forEach(b -> b.setIsDeleted(false));
+            bankAccountRepository.saveAll(defaultBankAccounts);
+            log.info("Đã khởi tạo 5 tài khoản ngân hàng & quỹ tiền mặt vào Database.");
+        }
+
+        // 9. KHỞI TẠO LÝ DO THU / CHI (TRANSACTION REASONS)
+        if (transactionReasonRepository.count() == 0) {
+            List<TransactionReason> defaultReasons = List.of(
+                TransactionReason.builder().reasonCode("SALES_REVENUE").reasonName("Thu tiền bán hàng (Sales Revenue)").type("RECEIPT").build(),
+                TransactionReason.builder().reasonCode("DEBT_COLLECTION").reasonName("Thu hồi công nợ khách hàng").type("RECEIPT").build(),
+                TransactionReason.builder().reasonCode("INVESTMENT").reasonName("Thu vốn góp / Đầu tư kinh doanh").type("RECEIPT").build(),
+                TransactionReason.builder().reasonCode("FUND_SURPLUS").reasonName("Thu chênh lệch thừa quỹ kiểm kê").type("RECEIPT").build(),
+                TransactionReason.builder().reasonCode("SUPPLIER_PAYMENT").reasonName("Thanh toán tiền hàng nhà cung cấp").type("PAYMENT").build(),
+                TransactionReason.builder().reasonCode("UTILITIES").reasonName("Chi phí điện nước & mặt bằng kinh doanh").type("PAYMENT").build(),
+                TransactionReason.builder().reasonCode("PAYROLL").reasonName("Chi trả lương & phụ cấp nhân viên").type("PAYMENT").build(),
+                TransactionReason.builder().reasonCode("TAXES").reasonName("Nộp thuế VAT, TNDN & lệ phí nhà nước").type("PAYMENT").build(),
+                TransactionReason.builder().reasonCode("LOGISTICS").reasonName("Chi phí vận chuyển & bốc dỡ kho bãi").type("PAYMENT").build()
+            );
+            defaultReasons.forEach(r -> r.setIsDeleted(false));
+            transactionReasonRepository.saveAll(defaultReasons);
+            log.info("Đã khởi tạo các lý do thu/chi tài chính vào Database.");
+        }
+
+        // 10. PHIẾU THU & PHIẾU CHI: Để trống hoàn toàn, người dùng tự tạo dữ liệu thực tế
+        log.info("Hệ thống quản trị tài chính sẵn sàng tiếp nhận phiếu thu / phiếu chi mới từ người dùng.");
+
+        // 12. KHỞI TẠO BANNER QUẢNG CÁO MẶC ĐỊNH (ACTIVE)
+        if (bannerRepository.count() == 0) {
+            List<Banner> defaultBanners = List.of(
+                Banner.builder()
+                    .title("Lễ hội Công nghệ AuraMart 2026 - Giảm tới 50%")
+                    .imageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1600&auto=format&fit=crop&q=80")
+                    .linkUrl("/listing")
+                    .sortOrder(1)
+                    .isActive(true)
+                    .validFrom(LocalDateTime.now().minusDays(1))
+                    .validUntil(LocalDateTime.now().plusMonths(6))
+                    .build(),
+                Banner.builder()
+                    .title("Bộ Sưu Tập Giày Sneaker & Phụ Kiện Thể Thao Chính Hãng")
+                    .imageUrl("https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=1600&auto=format&fit=crop&q=80")
+                    .linkUrl("/listing")
+                    .sortOrder(2)
+                    .isActive(true)
+                    .validFrom(LocalDateTime.now().minusDays(1))
+                    .validUntil(LocalDateTime.now().plusMonths(6))
+                    .build(),
+                Banner.builder()
+                    .title("Đồng Hồ & Thiết Bị Đeo Thông Minh Thế Hệ Mới")
+                    .imageUrl("https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1600&auto=format&fit=crop&q=80")
+                    .linkUrl("/listing")
+                    .sortOrder(3)
+                    .isActive(true)
+                    .validFrom(LocalDateTime.now().minusDays(1))
+                    .validUntil(LocalDateTime.now().plusMonths(6))
+                    .build()
+            );
+            bannerRepository.saveAll(defaultBanners);
+            log.info("Đã khởi tạo {} banner quảng cáo active mặc định vào Database.", defaultBanners.size());
+        }
+
+        // 13. KHỞI TẠO DANH MỤC & SẢN PHẨM MẶC ĐỊNH CHO FE_WEBONLINE & RETAILHUB
+        if (categoriesRepository.count() == 0) {
+            ProductCategory catBev = ProductCategory.builder()
+                    .categoryCode("CAT-BEV")
+                    .categoryName("Đồ Uống & Giải Khát")
+                    .description("Nước ngọt, trà, sữa, nước ép, cà phê...")
+                    .imageUrl("https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop&q=80")
+                    .isActive(true)
+                    .build();
+            catBev.setIsDeleted(false);
+            catBev = categoriesRepository.save(catBev);
+
+            ProductCategory catFood = ProductCategory.builder()
+                    .categoryCode("CAT-FOOD")
+                    .categoryName("Bánh Kẹo & Thực Phẩm")
+                    .description("Bánh quy, đồ ăn vặt, gia vị, thực phẩm đóng hộp...")
+                    .imageUrl("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80")
+                    .isActive(true)
+                    .build();
+            catFood.setIsDeleted(false);
+            catFood = categoriesRepository.save(catFood);
+
+            ProductCategory catFashion = ProductCategory.builder()
+                    .categoryCode("CAT-FASHION")
+                    .categoryName("Thời Trang & Phụ Kiện")
+                    .description("Quần áo thời trang, giày sneaker, phụ kiện...")
+                    .imageUrl("https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80")
+                    .isActive(true)
+                    .build();
+            catFashion.setIsDeleted(false);
+            catFashion = categoriesRepository.save(catFashion);
+
+            ProductCategory catElec = ProductCategory.builder()
+                    .categoryCode("CAT-ELEC")
+                    .categoryName("Thiết Bị Điện Tử & Âm Thanh")
+                    .description("Tai nghe, loa bluetooth, phụ kiện công nghệ...")
+                    .imageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80")
+                    .isActive(true)
+                    .build();
+            catElec.setIsDeleted(false);
+            catElec = categoriesRepository.save(catElec);
+
+            log.info("Đã khởi tạo 4 danh mục sản phẩm vào Database.");
+
+            if (productRepository.count() == 0) {
+                List<Product> defaultProducts = List.of(
+                    Product.builder()
+                        .productCode("SP-COCA-330")
+                        .name("Nước ngọt Coca-Cola vị nguyên bản lon 330ml")
+                        .description("Nước giải khát có gas Coca-Cola lon 330ml vị nguyên bản sảng khoái, nhập chính hãng.")
+                        .basePrice(new BigDecimal("10000"))
+                        .costPrice(new BigDecimal("7500"))
+                        .brand("Coca-Cola")
+                        .mainImageUrl("https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560111111")
+                        .category(catBev)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("20"))
+                        .minStock(new BigDecimal("10"))
+                        .maxStock(new BigDecimal("500"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-PEPSI-330")
+                        .name("Nước ngọt Pepsi chanh không calo lon 330ml")
+                        .description("Nước giải khát có gas Pepsi Zero Calories hương vị chanh thanh mát bùng nổ năng lượng.")
+                        .basePrice(new BigDecimal("10000"))
+                        .costPrice(new BigDecimal("7500"))
+                        .brand("Suntory PepsiCo")
+                        .mainImageUrl("https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560222222")
+                        .category(catBev)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("20"))
+                        .minStock(new BigDecimal("10"))
+                        .maxStock(new BigDecimal("500"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-VINA-1L")
+                        .name("Sữa tươi tiệt trùng Vinamilk 100% nguyên chất 1L")
+                        .description("Sữa tươi tiệt trùng Vinamilk 100% sữa tươi từ trang trại chuẩn quốc tế, giàu canxi & vitamin D3.")
+                        .basePrice(new BigDecimal("36000"))
+                        .costPrice(new BigDecimal("29000"))
+                        .brand("Vinamilk")
+                        .mainImageUrl("https://images.unsplash.com/photo-1550583724-b2692b85b150?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560333333")
+                        .category(catBev)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("15"))
+                        .minStock(new BigDecimal("5"))
+                        .maxStock(new BigDecimal("200"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-OREO-133")
+                        .name("Bánh quy kẹp kem Vani Oreo cây 133g")
+                        .description("Bánh quy sôcôla kẹp kem vani thơm ngon giòn rụm, phong cách thưởng thức Xoay - Liếm - Nhúng sữa.")
+                        .basePrice(new BigDecimal("18000"))
+                        .costPrice(new BigDecimal("13500"))
+                        .brand("Mondelez")
+                        .mainImageUrl("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560444444")
+                        .category(catFood)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("25"))
+                        .minStock(new BigDecimal("10"))
+                        .maxStock(new BigDecimal("300"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-CHINSU-250")
+                        .name("Tương ớt Chinsu đượm vị cay bùng nổ chai 250g")
+                        .description("Tương ớt Chinsu thơm cay hảo hạng, món gia vị không thể thiếu cho các bữa ăn Việt.")
+                        .basePrice(new BigDecimal("15000"))
+                        .costPrice(new BigDecimal("11000"))
+                        .brand("Masan")
+                        .mainImageUrl("https://images.unsplash.com/photo-1588644525273-f37b60d78512?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560555555")
+                        .category(catFood)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("30"))
+                        .minStock(new BigDecimal("10"))
+                        .maxStock(new BigDecimal("400"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-AOTHUN-COTTON")
+                        .name("Áo thun nam Cotton Compact cao cấp Co- giãn thoáng khí")
+                        .description("Chất liệu 100% sợi Cotton Compact 2 chiều chải kỹ, không bai xù, thấm hút mồ hôi tối đa.")
+                        .basePrice(new BigDecimal("189000"))
+                        .costPrice(new BigDecimal("110000"))
+                        .brand("Coolmate")
+                        .mainImageUrl("https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560666666")
+                        .category(catFashion)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("10"))
+                        .minStock(new BigDecimal("5"))
+                        .maxStock(new BigDecimal("150"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-GIAY-SNEAKER")
+                        .name("Giày thể thao nam nữ Sneaker Dynamic thế hệ mới")
+                        .description("Đế đệm khí êm ái đàn hồi cao, thiết kế thể thao trẻ trung năng động phù hợp chạy bộ và đi học, đi làm.")
+                        .basePrice(new BigDecimal("450000"))
+                        .costPrice(new BigDecimal("280000"))
+                        .brand("Biti's Hunter")
+                        .mainImageUrl("https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560777777")
+                        .category(catFashion)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("8"))
+                        .minStock(new BigDecimal("3"))
+                        .maxStock(new BigDecimal("100"))
+                        .build(),
+                    Product.builder()
+                        .productCode("SP-TAINGHE-BLUETOOTH")
+                        .name("Tai nghe không dây Bluetooth True Wireless khử tiếng ồn")
+                        .description("Âm thanh vòm sống động, thời lượng pin 24h, công nghệ chống ồn chủ động ANC tiên tiến.")
+                        .basePrice(new BigDecimal("320000"))
+                        .costPrice(new BigDecimal("210000"))
+                        .brand("SoundCore")
+                        .mainImageUrl("https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80")
+                        .barcode("8934560888888")
+                        .category(catElec)
+                        .isActive(true)
+                        .reorderPoint(new BigDecimal("10"))
+                        .minStock(new BigDecimal("5"))
+                        .maxStock(new BigDecimal("100"))
+                        .build()
+                );
+                defaultProducts.forEach(p -> p.setIsDeleted(false));
+                productRepository.saveAll(defaultProducts);
+                log.info("Đã khởi tạo 8 sản phẩm chuẩn vào Database.");
+            }
         }
 
     }

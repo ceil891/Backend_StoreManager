@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
     Optional<Quote> findByIdAndIsDeletedFalse(Long id);
+    boolean existsByQuoteCode(String quoteCode);
 
     @Query("SELECT q FROM Quote q WHERE " +
            "(:includeDeleted = true OR q.isDeleted = false) AND " +

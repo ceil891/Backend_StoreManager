@@ -278,11 +278,16 @@ public class ProductVariantServiceImpl implements ProductVariantService {
 
     /**
      * Sinh variantCode duy nhất theo định dạng PV000001.
-     * Đơn giản hoá: dùng max(id)+1. Production nên dùng sequence DB.
      */
     private String generateVariantCode() {
-        long count = productVariantRepository.count() + 1;
-        return String.format("PV%06d", count);
+        String code;
+        int attempts = 0;
+        do {
+            long count = productVariantRepository.count() + 1 + attempts;
+            code = String.format("PV%06d", count);
+            attempts++;
+        } while (productVariantRepository.existsByVariantCodeAndIsDeletedFalse(code));
+        return code;
     }
 
     /** SKU mặc định cho SP không có biến thể: <productCode>-DEFAULT */
@@ -446,7 +451,10 @@ public class ProductVariantServiceImpl implements ProductVariantService {
                 throw new DuplicateResourceException("ProductVariant", "sku", sku);
             }
         } else {
-            sku = (product.getProductCode() != null ? product.getProductCode() : "PV") + "-V" + String.format("%04d", java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 10000));
+            String baseSku = (product.getProductCode() != null ? product.getProductCode() : "PV");
+            do {
+                sku = baseSku + "-V" + String.format("%04d", java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 10000));
+            } while (productVariantRepository.existsBySkuAndIsDeletedFalse(sku));
         }
 
         String barcode = request.getBarcode();
@@ -477,10 +485,19 @@ public class ProductVariantServiceImpl implements ProductVariantService {
         ProductVariant saved = productVariantRepository.save(variant);
 
         if (request.getAttributes() != null) {
+            java.util.Set<Long> seenAttributeIds = new java.util.HashSet<>();
             for (CreateSingleVariantRequest.AttributeInput attrInput : request.getAttributes()) {
+                if (attrInput.getValueId() == null) continue;
                 AttributeValue av = attributeValueRepository.findByIdAndIsDeletedFalse(attrInput.getValueId())
                         .orElseThrow(() -> new ResourceNotFoundException("AttributeValue", "id", attrInput.getValueId()));
                 
+                Long attrId = av.getProductAttribute() != null ? av.getProductAttribute().getId() : null;
+                if (attrId != null && !seenAttributeIds.add(attrId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Một biến thể không thể có nhiều hơn 1 giá trị cho cùng nhóm thuộc tính '" 
+                        + av.getProductAttribute().getAttributeName() + "'. Vui lòng tạo từng biến thể riêng biệt.");
+                }
+
                 VariantAttributeValue vav = VariantAttributeValue.builder()
                         .productVariant(saved)
                         .productAttribute(av.getProductAttribute())

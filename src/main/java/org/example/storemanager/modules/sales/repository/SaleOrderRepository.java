@@ -30,4 +30,15 @@ public interface SaleOrderRepository extends JpaRepository<SaleOrder, Long> {
             @Param("branchId") Long branchId,
             @Param("includeDeleted") boolean includeDeleted,
             Pageable pageable);
+
+    /**
+     * Tính tổng doanh thu YTD theo mã phương thức thanh toán (chỉ đơn hàng không bị hủy và không bị xóa)
+     */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM SaleOrder o " +
+           "WHERE o.paymentMethodCode = :methodCode " +
+           "AND FUNCTION('YEAR', o.createdAt) = :year " +
+           "AND (o.isDeleted = false OR o.isDeleted IS NULL) " +
+           "AND o.status <> 'CANCELLED'")
+    Double sumYtdByPaymentMethodCode(@Param("methodCode") String methodCode, @Param("year") int year);
 }
+

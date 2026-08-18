@@ -45,4 +45,19 @@ public class User extends BaseEntity {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id")
     private Role role;
+
+    @Column(name = "tax_id", length = 50)
+    private String taxId;
+
+    @Column(name = "identity_id", length = 50)
+    private String identityId;
+
+    @Column(name = "date_of_birth", length = 30)
+    private String dateOfBirth;
+
+    @Column(name = "department_id", length = 50)
+    private String departmentId;
+
+    @Column(name = "position_id", length = 50)
+    private String positionId;
 }

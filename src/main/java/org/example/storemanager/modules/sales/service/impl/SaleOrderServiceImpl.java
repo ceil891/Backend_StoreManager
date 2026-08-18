@@ -32,10 +32,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -54,8 +56,18 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
-        Customer customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId())
-                .orElseGet(() -> customerRepository.findAll().stream().filter(c -> Boolean.FALSE.equals(c.getIsDeleted())).findFirst().orElse(null));
+        Customer customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId()).orElse(null);
+        if (customer == null && request.getCustomerPhone() != null && !request.getCustomerPhone().trim().isEmpty()) {
+            customer = customerRepository.findAll().stream()
+                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
+                    .filter(c -> request.getCustomerPhone().trim().equals(c.getPhone()))
+                    .findFirst().orElse(null);
+        }
+        if (customer == null) {
+            customer = customerRepository.findAll().stream()
+                    .filter(c -> Boolean.FALSE.equals(c.getIsDeleted()))
+                    .findFirst().orElse(null);
+        }
 
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
                 .orElseGet(() -> branchRepository.findAll().stream().filter(b -> Boolean.FALSE.equals(b.getIsDeleted())).findFirst().orElse(null));
@@ -69,6 +81,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .status(request.getStatus() != null ? request.getStatus() : "PENDING")
                 .customer(customer)
                 .branch(branch)
+                .paymentMethodId(request.getPaymentMethodId())
+                .paymentMethodCode(request.getPaymentMethodCode())
                 .build();
 
         order.setIsDeleted(false);
@@ -89,8 +103,16 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
         if (request.getDetails() != null) {
             for (SaleOrderDetailRequest detailReq : request.getDetails()) {
-                ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(detailReq.getProductVariantId())
-                        .orElseGet(() -> productVariantRepository.findAll().stream().filter(v -> Boolean.FALSE.equals(v.getIsDeleted())).findFirst().orElse(null));
+                ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(detailReq.getProductVariantId()).orElse(null);
+                if (variant == null) {
+                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(detailReq.getProductVariantId());
+                    if (!pvs.isEmpty()) {
+                        variant = pvs.get(0);
+                    }
+                }
+                if (variant == null) {
+                    variant = productVariantRepository.findAll().stream().filter(v -> Boolean.FALSE.equals(v.getIsDeleted())).findFirst().orElse(null);
+                }
 
                 if (variant != null) {
                     BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPriceSnapshot());
@@ -163,23 +185,29 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         }
 
         // Transactional Outbox Pattern: Save Event to Outbox table in the SAME DB Transaction
-        org.example.storemanager.shared.event.payload.OrderCreatedEventPayload payload = 
-                org.example.storemanager.shared.event.payload.OrderCreatedEventPayload.builder()
-                .orderId(savedOrder.getId().toString())
-                .customerId(customer.getId())
-                .branchId(branch.getId())
-                .totalAmount(savedOrder.getTotalAmount())
-                .createdAt(savedOrder.getCreatedAt() != null ? savedOrder.getCreatedAt() : LocalDateTime.now())
-                .build();
+        try {
+            if (outboxService != null) {
+                org.example.storemanager.shared.event.payload.OrderCreatedEventPayload payload = 
+                        org.example.storemanager.shared.event.payload.OrderCreatedEventPayload.builder()
+                        .orderId(savedOrder.getId().toString())
+                        .customerId(customer != null ? customer.getId() : (savedOrder.getCustomer() != null ? savedOrder.getCustomer().getId() : null))
+                        .branchId(branch != null ? branch.getId() : (savedOrder.getBranch() != null ? savedOrder.getBranch().getId() : null))
+                        .totalAmount(savedOrder.getTotalAmount())
+                        .createdAt(savedOrder.getCreatedAt() != null ? savedOrder.getCreatedAt() : LocalDateTime.now())
+                        .build();
 
-        org.example.storemanager.shared.event.base.DomainEvent<org.example.storemanager.shared.event.payload.OrderCreatedEventPayload> domainEvent = 
-                org.example.storemanager.shared.event.base.DomainEvent.create(
-                        "ORDER_CREATED", "SALE_ORDER", 
-                        savedOrder.getId().toString(), 
-                        payload
-                );
+                org.example.storemanager.shared.event.base.DomainEvent<org.example.storemanager.shared.event.payload.OrderCreatedEventPayload> domainEvent = 
+                        org.example.storemanager.shared.event.base.DomainEvent.create(
+                                "ORDER_CREATED", "SALE_ORDER", 
+                                savedOrder.getId().toString(), 
+                                payload
+                        );
 
-        outboxService.saveEventToOutbox(domainEvent);
+                outboxService.saveEventToOutbox(domainEvent);
+            }
+        } catch (Exception e) {
+            log.warn("Outbox save failed: {}", e.getMessage());
+        }
 
         return mapToResponse(savedOrder, details);
     }
@@ -259,11 +287,16 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     @Override
     public SaleOrderResponse updateStatus(Long id, String status) {
-        return updateStatus(id, status, null, null, null, null);
+        return updateStatus(id, status, null, null, null, null, null);
     }
 
     @Override
     public SaleOrderResponse updateStatus(Long id, String status, String carrier, String trackingCode, String shipperName, String shipperPhone) {
+        return updateStatus(id, status, null, carrier, trackingCode, shipperName, shipperPhone);
+    }
+
+    @Override
+    public SaleOrderResponse updateStatus(Long id, String status, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone) {
         SaleOrder order = saleOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SaleOrder", "id", id));
 
@@ -272,6 +305,13 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         String normalizedStatus = normalizeOrderStatus(status);
         order.setStatus(normalizedStatus);
         String effectiveStatus = normalizedStatus; // used for delivery logic below
+
+        if (branchId != null) {
+            Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId).orElse(null);
+            if (branch != null) {
+                order.setBranch(branch);
+            }
+        }
 
         boolean isShippingUpdated = false;
         if (carrier != null && !carrier.trim().isEmpty()) {
@@ -343,6 +383,32 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         }
 
         List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(id);
+        
+        // Tự động trừ tồn kho thực tế nếu chuyển sang COMPLETED và trước đó không phải COMPLETED
+        if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+            try {
+                org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
+                        warehouseService.getOrCreateDefaultZone(savedOrder.getBranch());
+                for (SaleOrderDetail detail : details) {
+                    ProductVariant pv = detail.getProductVariant();
+                    if (pv != null && pv.getProduct() != null) {
+                        inventoryService.deductStock(
+                                defaultZone.getId(),
+                                savedOrder.getBranch().getId(),
+                                pv.getProduct().getId(),
+                                null,
+                                null,
+                                detail.getQuantity(),
+                                "EXPORT",
+                                savedOrder.getOrderCode(),
+                                savedOrder.getId()
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Cảnh báo khi trừ tồn kho đơn hàng khi chuyển trạng thái: " + e.getMessage());
+            }
+        }
 
         // Tự động tích điểm cho khách khi chuyển đơn sang COMPLETED
         if (savedOrder.getCustomer() != null && "COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
@@ -479,7 +545,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     private Sort parseSort(String sortParam) {
         if (sortParam == null || sortParam.isEmpty()) {
-            return Sort.by("id").descending();
+            return Sort.by(Sort.Direction.DESC, "updatedAt", "id");
         }
         String[] parts = sortParam.split(",");
         String property = parts[0];
@@ -534,6 +600,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .deliveryStatus(o.getDeliveryStatus() != null ? o.getDeliveryStatus() : "UNASSIGNED")
                 .assignedAt(o.getAssignedAt())
                 .assignedBy(o.getAssignedBy())
+                .paymentMethodId(o.getPaymentMethodId())
+                .paymentMethodCode(o.getPaymentMethodCode())
                 .details(detailsResponse)
                 .build();
     }

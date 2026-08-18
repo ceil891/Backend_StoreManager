@@ -28,4 +28,8 @@ public interface CustomerService {
     // --- Import/Export ---
     String importCustomers(MultipartFile file);
     byte[] exportCustomers();
+
+    // --- Quản lý Mật khẩu & Cấp lại ---
+    void resetCustomerPassword(Long id, String newPassword);
+    void changeCustomerPassword(Long id, String oldPassword, String newPassword);
 }

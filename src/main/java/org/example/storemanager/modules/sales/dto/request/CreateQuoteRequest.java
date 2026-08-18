@@ -10,7 +10,6 @@ import java.util.List;
 
 @Data
 public class CreateQuoteRequest {
-    @NotBlank(message = "Mã báo giá không được để trống")
     private String quoteCode;
 
     @NotNull(message = "Ngày báo giá không được để trống")

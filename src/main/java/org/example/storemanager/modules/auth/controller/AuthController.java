@@ -38,6 +38,13 @@ public class AuthController {
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
 
+    @PostMapping("/register-customer")
+    public ResponseEntity<ApiResponse<LoginResponse>> registerCustomer(
+            @Valid @RequestBody RegisterRequest request) {
+        LoginResponse response = authService.registerCustomer(request);
+        return ResponseEntity.status(201).body(ApiResponse.created(response));
+    }
+
     /**
      * POST /api/v1/auth/login
      * Đăng nhập — trả về access token (1h) + refresh token (7 ngày).

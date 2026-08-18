@@ -26,14 +26,17 @@ public class CustomerVoucher extends BaseEntity {
     @JoinColumn(name = "voucher_id", nullable = false)
     private Voucher voucher;
 
+    @Column(name = "voucher_code", length = 50)
+    private String voucherCode; // Mã voucher cụ thể cấp cho khách hàng
+
     @Column(name = "collected_at", nullable = false)
-    private LocalDateTime collectedAt; // Ngày khách lưu mã
+    private LocalDateTime collectedAt; // Ngày khách lưu mã / ngày phát hành
 
     @Column(name = "used_at")
     private LocalDateTime usedAt; // Ngày khách sử dụng mã (null nếu chưa dùng)
 
     @Column(nullable = false, length = 30)
-    private String status; // UNUSED, USED, EXPIRED
+    private String status; // ACTIVE, USED, EXPIRED, CANCELLED
 
     @Column(name = "expired_at")
     private LocalDateTime expiredAt; // Ngày hết hạn voucher

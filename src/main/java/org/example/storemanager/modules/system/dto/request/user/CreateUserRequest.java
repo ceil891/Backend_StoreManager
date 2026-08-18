@@ -31,4 +31,10 @@ public class CreateUserRequest {
     private Long branchId;
 
     private String status; // ACTIVE, SUSPENDED, TERMINATED...
+
+    private String taxId;
+    private String identityId;
+    private String dateOfBirth;
+    private String departmentId;
+    private String positionId;
 }

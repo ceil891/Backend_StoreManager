@@ -65,7 +65,10 @@ public class RoleServiceImpl implements RoleService {
         // 2. Lưu và hứng lại đối tượng đã persist
         Role savedRole = roleRepository.save(role);
 
-        // 3. Map chính xác đối tượng đã lưu
+        // 3. Tự động lưu phân quyền nếu có
+        saveRolePermissions(savedRole, request.getGrantedPermissions(), request.getPermissionIds());
+
+        // 4. Map chính xác đối tượng đã lưu
         return mapToCreateResponse(savedRole);
     }
 
@@ -86,7 +89,36 @@ public class RoleServiceImpl implements RoleService {
         role.setUpdatedAt(LocalDateTime.now());
 
         Role updatedRole = roleRepository.save(role);
+
+        // Tự động lưu phân quyền nếu có trong request
+        saveRolePermissions(updatedRole, request.getGrantedPermissions(), request.getPermissionIds());
+
         return mapToUpdateResponse(updatedRole);
+    }
+
+    private void saveRolePermissions(Role role, List<String> grantedPermissions, List<Long> permissionIds) {
+        if (grantedPermissions == null && permissionIds == null) {
+            return;
+        }
+        rolePermissionRepository.deleteByRoleId(role.getId());
+
+        java.util.Set<Permission> targetPermissions = new java.util.HashSet<>();
+        if (permissionIds != null && !permissionIds.isEmpty()) {
+            targetPermissions.addAll(permissionRepository.findAllById(permissionIds));
+        }
+        if (grantedPermissions != null && !grantedPermissions.isEmpty()) {
+            targetPermissions.addAll(permissionRepository.findByPermissionCodeIn(grantedPermissions));
+        }
+
+        if (!targetPermissions.isEmpty()) {
+            List<RolePermission> rolePermissions = targetPermissions.stream()
+                    .map(p -> RolePermission.builder()
+                            .role(role)
+                            .permission(p)
+                            .build())
+                    .collect(Collectors.toList());
+            rolePermissionRepository.saveAll(rolePermissions);
+        }
     }
 
     @Override

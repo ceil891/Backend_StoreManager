@@ -62,4 +62,21 @@ public class CustomerController {
     public ResponseEntity<?> getSalesHistory(@PathVariable Long id) {
         return ResponseEntity.ok(customerService.getSalesHistory(id));
     }
+
+    @PutMapping("/{id}/reset-password")
+    public ResponseEntity<ApiResponse<?>> resetPassword(
+            @PathVariable Long id,
+            @RequestParam(required = false) String newPassword) {
+        customerService.resetCustomerPassword(id, newPassword);
+        return ResponseEntity.ok(ApiResponse.success(null, "Cấp lại mật khẩu khách hàng thành công! Khách hàng sẽ phải đổi mật khẩu ở lần đăng nhập tiếp theo."));
+    }
+
+    @PutMapping("/{id}/change-password")
+    public ResponseEntity<ApiResponse<?>> changePassword(
+            @PathVariable Long id,
+            @RequestParam String oldPassword,
+            @RequestParam String newPassword) {
+        customerService.changeCustomerPassword(id, oldPassword, newPassword);
+        return ResponseEntity.ok(ApiResponse.success(null, "Đổi mật khẩu thành công!"));
+    }
 }
