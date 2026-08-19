@@ -12,8 +12,6 @@ public class CreateUserRequest {
     @Size(min = 4, max = 50, message = "Username phải từ 4 đến 50 ký tự")
     private String username;
 
-    @NotBlank(message = "Mật khẩu không được để trống")
-    @Size(min = 6, message = "Mật khẩu phải có ít nhất 6 ký tự")
     private String password;
 
     @NotBlank(message = "Họ tên không được để trống")

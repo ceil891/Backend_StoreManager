@@ -15,6 +15,7 @@ public interface SaleOrderRepository extends JpaRepository<SaleOrder, Long> {
     Optional<SaleOrder> findByIdAndIsDeletedFalse(Long id);
     java.util.List<SaleOrder> findByIsDeletedFalse();
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"customer", "branch"})
     @Query("SELECT o FROM SaleOrder o WHERE " +
            "(:includeDeleted = true OR o.isDeleted = false) AND " +
            "(:status IS NULL OR :status = '' OR o.status = :status) AND " +

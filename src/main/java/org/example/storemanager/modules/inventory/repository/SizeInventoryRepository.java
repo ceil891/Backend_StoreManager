@@ -107,4 +107,10 @@ public interface SizeInventoryRepository extends JpaRepository<SizeInventory, Lo
     @Query("SELECT COALESCE(SUM(si.quantityPhysical), 0) FROM SizeInventory si " +
            "WHERE si.product.id = :productId AND si.isDeleted = false")
     java.math.BigDecimal sumOnHandByProductId(@Param("productId") Long productId);
+
+    /** Tổng tồn kho vật lý theo lô sản phẩm */
+    @Query("SELECT si.product.id, COALESCE(SUM(si.quantityPhysical), 0) FROM SizeInventory si " +
+           "WHERE si.product.id IN :productIds AND si.isDeleted = false " +
+           "GROUP BY si.product.id")
+    List<Object[]> sumOnHandByProductIds(@Param("productIds") List<Long> productIds);
 }

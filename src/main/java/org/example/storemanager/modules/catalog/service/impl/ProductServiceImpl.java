@@ -520,8 +520,20 @@ public class ProductServiceImpl implements ProductService {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<Product> pageResult = productRepository.findAllProductsIncludeDeleted(search, categoryId, isActive, includeDeleted, pageable);
-        return pageResult.getContent().stream()
-                .map(this::mapToMapProductResponse)
+        
+        List<Product> products = pageResult.getContent();
+        List<Long> productIds = products.stream().map(Product::getId).collect(Collectors.toList());
+        List<Object[]> stockSummaries = productIds.isEmpty() ? java.util.Collections.emptyList() :
+                sizeInventoryRepository.sumOnHandByProductIds(productIds);
+        java.util.Map<Long, java.math.BigDecimal> stockMap = stockSummaries.stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (java.math.BigDecimal) row[1],
+                        (v1, v2) -> v1
+                ));
+
+        return products.stream()
+                .map(p -> mapToMapProductResponse(p, stockMap.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
                 .collect(Collectors.toList());
     }
 
@@ -532,8 +544,19 @@ public class ProductServiceImpl implements ProductService {
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Product> pageResult = productRepository.findAllProductsIncludeDeleted(search, categoryId, isActive, includeDeleted, pageable);
 
-        List<MapProductResponse> content = pageResult.getContent().stream()
-                .map(this::mapToMapProductResponse)
+        List<Product> products = pageResult.getContent();
+        List<Long> productIds = products.stream().map(Product::getId).collect(Collectors.toList());
+        List<Object[]> stockSummaries = productIds.isEmpty() ? java.util.Collections.emptyList() :
+                sizeInventoryRepository.sumOnHandByProductIds(productIds);
+        java.util.Map<Long, java.math.BigDecimal> stockMap = stockSummaries.stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (java.math.BigDecimal) row[1],
+                        (v1, v2) -> v1
+                ));
+
+        List<MapProductResponse> content = products.stream()
+                .map(p -> mapToMapProductResponse(p, stockMap.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
                 .collect(Collectors.toList());
 
         return PageResponse.<MapProductResponse>builder()
@@ -622,9 +645,7 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    private MapProductResponse mapToMapProductResponse(Product product) {
-        // Query tổng tồn kho vật lý từ size_inventory
-        java.math.BigDecimal onHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
+    private MapProductResponse mapToMapProductResponse(Product product, java.math.BigDecimal onHand) {
         return MapProductResponse.builder()
                 .id(product.getId())
                 .productCode(product.getProductCode())

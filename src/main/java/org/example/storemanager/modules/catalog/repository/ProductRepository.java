@@ -23,6 +23,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     boolean existsByBarcodeAndIdNotAndIsDeletedFalse(String barcode, Long id);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"category", "baseUnit"})
     @Query("SELECT p FROM Product p WHERE " +
            "(:includeDeleted = true OR p.isDeleted = false) AND " +
            "(:isActive IS NULL OR p.isActive = :isActive) AND " +

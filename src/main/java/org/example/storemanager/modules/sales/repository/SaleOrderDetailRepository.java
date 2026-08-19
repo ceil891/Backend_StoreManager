@@ -11,4 +11,7 @@ import java.util.Optional;
 public interface SaleOrderDetailRepository extends JpaRepository<SaleOrderDetail, Long> {
     Optional<SaleOrderDetail> findByIdAndIsDeletedFalse(Long id);
     List<SaleOrderDetail> findByOrderIdAndIsDeletedFalse(Long orderId);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"productVariant"})
+    List<SaleOrderDetail> findByOrderIdInAndIsDeletedFalse(List<Long> orderIds);
 }
