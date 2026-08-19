@@ -46,6 +46,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final BranchRepository branchRepository;
     private final PasswordEncoder passwordEncoder;
+    private final org.example.storemanager.shared.service.EmailService emailService;
 
 
     @Override
@@ -59,9 +60,13 @@ public class UserServiceImpl implements UserService {
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", request.getRoleId()));
 
+        String rawPassword = (request.getPassword() != null && !request.getPassword().isBlank()) 
+                ? request.getPassword() 
+                : generateRandomPassword();
+
         User user = new User();
         user.setUsername(request.getUsername());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPassword(passwordEncoder.encode(rawPassword));
         user.setFullName(request.getFullName());
         user.setEmail(request.getEmail());
         user.setPhone(request.getPhone());
@@ -81,7 +86,23 @@ public class UserServiceImpl implements UserService {
         user.setCreatedBy(getCurrentUsername());
 
         User savedUser = userRepository.save(user);
+
+        // Gửi email thông tin tài khoản nếu email không trống
+        if (savedUser.getEmail() != null && !savedUser.getEmail().isBlank()) {
+            emailService.sendAccountInfoEmail(savedUser.getEmail(), savedUser.getFullName(), savedUser.getUsername(), rawPassword);
+        }
+
         return mapToCreateResponse(savedUser);
+    }
+
+    private String generateRandomPassword() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 
     @Override

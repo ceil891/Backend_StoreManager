@@ -501,11 +501,17 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<SaleOrder> pageResult = saleOrderRepository.findAllOrders(search, status, branchId, includeDeleted, pageable);
-        return pageResult.getContent().stream()
-                .map(o -> {
-                    List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(o.getId());
-                    return mapToResponse(o, details);
-                })
+        
+        List<SaleOrder> orders = pageResult.getContent();
+        List<Long> orderIds = orders.stream().map(SaleOrder::getId).collect(Collectors.toList());
+        List<SaleOrderDetail> allDetails = orderIds.isEmpty() ? java.util.Collections.emptyList() :
+                saleOrderDetailRepository.findByOrderIdInAndIsDeletedFalse(orderIds);
+        java.util.Map<Long, List<SaleOrderDetail>> detailsMap = allDetails.stream()
+                .filter(d -> d.getOrder() != null)
+                .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
+
+        return orders.stream()
+                .map(o -> mapToResponse(o, detailsMap.getOrDefault(o.getId(), java.util.Collections.emptyList())))
                 .collect(Collectors.toList());
     }
 
@@ -516,11 +522,16 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<SaleOrder> pageResult = saleOrderRepository.findAllOrders(search, status, branchId, includeDeleted, pageable);
 
-        List<SaleOrderResponse> content = pageResult.getContent().stream()
-                .map(o -> {
-                    List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(o.getId());
-                    return mapToResponse(o, details);
-                })
+        List<SaleOrder> orders = pageResult.getContent();
+        List<Long> orderIds = orders.stream().map(SaleOrder::getId).collect(Collectors.toList());
+        List<SaleOrderDetail> allDetails = orderIds.isEmpty() ? java.util.Collections.emptyList() :
+                saleOrderDetailRepository.findByOrderIdInAndIsDeletedFalse(orderIds);
+        java.util.Map<Long, List<SaleOrderDetail>> detailsMap = allDetails.stream()
+                .filter(d -> d.getOrder() != null)
+                .collect(Collectors.groupingBy(d -> d.getOrder().getId()));
+
+        List<SaleOrderResponse> content = orders.stream()
+                .map(o -> mapToResponse(o, detailsMap.getOrDefault(o.getId(), java.util.Collections.emptyList())))
                 .collect(Collectors.toList());
 
         return PageResponse.<SaleOrderResponse>builder()
