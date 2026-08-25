@@ -22,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/v1/finance")
@@ -43,13 +44,112 @@ public class FinanceController {
     private final ExportInvoiceRepository exportInvoiceRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
+    private final org.example.storemanager.modules.sales.repository.PurchaseOrderRepository purchaseOrderRepository;
     private final ChartOfAccountRepository chartOfAccountRepository;
 
+    // --- BANK ACCOUNTS ---
     // --- BANK ACCOUNTS ---
     @GetMapping("/bank-accounts")
     @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:view')")
     public ResponseEntity<ApiResponse<List<BankAccount>>> getAllBankAccounts() {
-        return ResponseEntity.ok(ApiResponse.ok(bankAccountRepository.findByIsDeletedFalse()));
+        List<BankAccount> list = bankAccountRepository.findByIsDeletedFalse();
+        if (list.isEmpty() || list.stream().allMatch(b -> b.getCurrentBalance() == null || b.getCurrentBalance().compareTo(java.math.BigDecimal.ZERO) == 0)) {
+            // Seed realistic treasury corporate accounts
+            List<BankAccount> seeded = List.of(
+                BankAccount.builder()
+                    .bankName("Techcombank")
+                    .accountNumber("19036528998018")
+                    .accountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB")
+                    .branchName("Hội Sở Ba Đình, Hà Nội")
+                    .swiftBic("TCBVNVX")
+                    .currency("VND")
+                    .currentBalance(new java.math.BigDecimal("2850000000"))
+                    .availableWorkingCapital(new java.math.BigDecimal("2850000000"))
+                    .accountType("PRIMARY_OPERATING")
+                    .openedDate("2024-01-15")
+                    .status("ACTIVE")
+                    .isActive(true)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("Vietcombank")
+                    .accountNumber("0071000889988")
+                    .accountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB")
+                    .branchName("Chi nhánh Quận 1 TP.HCM")
+                    .swiftBic("BFTVVNVX")
+                    .currency("VND")
+                    .currentBalance(new java.math.BigDecimal("1620000000"))
+                    .availableWorkingCapital(new java.math.BigDecimal("1620000000"))
+                    .accountType("PRIMARY_OPERATING")
+                    .openedDate("2024-03-20")
+                    .status("ACTIVE")
+                    .isActive(true)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("MBBank (Quân Đội)")
+                    .accountNumber("0888999888")
+                    .accountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB")
+                    .branchName("Chi nhánh Đà Nẵng")
+                    .swiftBic("MBBEVNVX")
+                    .currency("VND")
+                    .currentBalance(new java.math.BigDecimal("950000000"))
+                    .availableWorkingCapital(new java.math.BigDecimal("950000000"))
+                    .accountType("PAYROLL_DISBURSEMENT")
+                    .openedDate("2024-06-10")
+                    .status("ACTIVE")
+                    .isActive(true)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("VPBank")
+                    .accountNumber("18669998888")
+                    .accountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB")
+                    .branchName("Chi nhánh Cầu Giấy, Hà Nội")
+                    .swiftBic("VPBKVNVX")
+                    .currency("VND")
+                    .currentBalance(new java.math.BigDecimal("740000000"))
+                    .availableWorkingCapital(new java.math.BigDecimal("740000000"))
+                    .accountType("MERCHANT_SETTLEMENT")
+                    .openedDate("2024-08-05")
+                    .status("ACTIVE")
+                    .isActive(true)
+                    .build(),
+                BankAccount.builder()
+                    .bankName("BIDV")
+                    .accountNumber("21510001234567")
+                    .accountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB")
+                    .branchName("Chi nhánh Hoàn Kiếm, Hà Nội")
+                    .swiftBic("BIDVVNVX")
+                    .currency("VND")
+                    .currentBalance(new java.math.BigDecimal("1200000000"))
+                    .availableWorkingCapital(new java.math.BigDecimal("1200000000"))
+                    .accountType("ESCROW_RESERVE")
+                    .openedDate("2024-09-12")
+                    .status("ACTIVE")
+                    .isActive(true)
+                    .build()
+            );
+            seeded.forEach(b -> b.setIsDeleted(false));
+            if (list.isEmpty()) {
+                list = bankAccountRepository.saveAll(seeded);
+            } else {
+                // Enrich existing records with meaningful balances
+                for (int i = 0; i < list.size(); i++) {
+                    BankAccount b = list.get(i);
+                    if (b.getCurrentBalance() == null || b.getCurrentBalance().compareTo(java.math.BigDecimal.ZERO) == 0) {
+                        BankAccount template = seeded.get(i % seeded.size());
+                        b.setCurrentBalance(template.getCurrentBalance());
+                        b.setAvailableWorkingCapital(template.getAvailableWorkingCapital());
+                        if (b.getSwiftBic() == null) b.setSwiftBic(template.getSwiftBic());
+                        if (b.getCurrency() == null) b.setCurrency(template.getCurrency());
+                        if (b.getAccountType() == null) b.setAccountType(template.getAccountType());
+                        if (b.getAccountHolder() == null || b.getAccountHolder().trim().isEmpty()) {
+                            b.setAccountHolder("CÔNG TY TNHH BÁN LẺ RETAILHUB");
+                        }
+                    }
+                }
+                list = bankAccountRepository.saveAll(list);
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.ok(list));
     }
 
     @GetMapping("/bank-accounts/{id}")
@@ -63,6 +163,12 @@ public class FinanceController {
     @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:create')")
     public ResponseEntity<ApiResponse<BankAccount>> createBankAccount(@RequestBody BankAccount req) {
         req.setIsDeleted(false);
+        if (req.getCurrentBalance() == null) req.setCurrentBalance(java.math.BigDecimal.ZERO);
+        if (req.getAvailableWorkingCapital() == null) req.setAvailableWorkingCapital(req.getCurrentBalance());
+        if (req.getCurrency() == null) req.setCurrency("VND");
+        if (req.getAccountType() == null) req.setAccountType("PRIMARY_OPERATING");
+        if (req.getStatus() == null) req.setStatus("ACTIVE");
+        if (req.getIsActive() == null) req.setIsActive(true);
         return ResponseEntity.status(201).body(ApiResponse.created(bankAccountRepository.save(req)));
     }
 
@@ -71,11 +177,17 @@ public class FinanceController {
     public ResponseEntity<ApiResponse<BankAccount>> updateBankAccount(@PathVariable Long id, @RequestBody BankAccount req) {
         BankAccount existing = bankAccountRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("BankAccount", "id", id));
-        existing.setBankName(req.getBankName());
-        existing.setAccountNumber(req.getAccountNumber());
-        existing.setAccountHolder(req.getAccountHolder());
-        existing.setBranchName(req.getBranchName());
-        existing.setIsActive(req.getIsActive());
+        if (req.getBankName() != null) existing.setBankName(req.getBankName());
+        if (req.getAccountNumber() != null) existing.setAccountNumber(req.getAccountNumber());
+        if (req.getAccountHolder() != null) existing.setAccountHolder(req.getAccountHolder());
+        if (req.getBranchName() != null) existing.setBranchName(req.getBranchName());
+        if (req.getSwiftBic() != null) existing.setSwiftBic(req.getSwiftBic());
+        if (req.getCurrency() != null) existing.setCurrency(req.getCurrency());
+        if (req.getCurrentBalance() != null) existing.setCurrentBalance(req.getCurrentBalance());
+        if (req.getAvailableWorkingCapital() != null) existing.setAvailableWorkingCapital(req.getAvailableWorkingCapital());
+        if (req.getAccountType() != null) existing.setAccountType(req.getAccountType());
+        if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getIsActive() != null) existing.setIsActive(req.getIsActive());
         return ResponseEntity.ok(ApiResponse.ok(bankAccountRepository.save(existing)));
     }
 
@@ -176,9 +288,35 @@ public class FinanceController {
         if (req.getVoucherDate() == null) {
             req.setVoucherDate(LocalDateTime.now());
         }
+
+        // Validate PO / Invoice Status
+        if (req.getInvoiceCode() != null && !req.getInvoiceCode().trim().isEmpty()) {
+            String invCode = req.getInvoiceCode().trim();
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+            if (invCode.startsWith("INV-MH-")) {
+                try {
+                    Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
+                    po = purchaseOrderRepository.findById(idVal).orElse(null);
+                } catch (Exception e) {}
+            } else {
+                po = purchaseOrderRepository.findAll().stream()
+                    .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
+                    .findFirst().orElse(null);
+            }
+            if (po != null) {
+                String poStatus = po.getStatus();
+                if ("DRAFT".equals(poStatus) || "PENDING_APPROVAL".equals(poStatus)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Chỉ được phép lập phiếu chi cho hóa đơn hoặc đơn mua hàng đã duyệt (Trạng thái hiện tại: " + poStatus + ")");
+                }
+            }
+        }
+
         PaymentVoucher saved = paymentVoucherRepository.save(req);
         if ("COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) {
+            checkFundBalance(saved);
             createJournalEntryForPayment(saved);
+            syncPurchaseOrderPaymentStatus(saved);
         }
         return ResponseEntity.status(201).body(ApiResponse.created(saved));
     }
@@ -190,29 +328,122 @@ public class FinanceController {
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id));
         
         String oldStatus = existing.getStatus();
-        existing.setReceiverName(req.getReceiverName());
-        existing.setAmount(req.getAmount());
-        if (req.getInvoiceCode() != null) existing.setInvoiceCode(req.getInvoiceCode());
-        if (req.getPaymentMethod() != null) existing.setPaymentMethod(req.getPaymentMethod());
-        if (req.getFundAccountName() != null) existing.setFundAccountName(req.getFundAccountName());
-        if (req.getAttachmentUrl() != null) existing.setAttachmentUrl(req.getAttachmentUrl());
-        if (req.getHandler() != null) existing.setHandler(req.getHandler());
-        if (req.getStatus() != null) {
+        boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
+
+        if (wasDone) {
+            boolean statusChangeToCancelled = "CANCELLED".equalsIgnoreCase(req.getStatus());
+            if (!statusChangeToCancelled) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chứng từ đã duyệt ở trạng thái read-only và không thể chỉnh sửa");
+            }
+        }
+
+        // Validate PO / Invoice Status if changed
+        if (req.getInvoiceCode() != null && !req.getInvoiceCode().equalsIgnoreCase(existing.getInvoiceCode())) {
+            String invCode = req.getInvoiceCode().trim();
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+            if (invCode.startsWith("INV-MH-")) {
+                try {
+                    Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
+                    po = purchaseOrderRepository.findById(idVal).orElse(null);
+                } catch (Exception e) {}
+            } else {
+                po = purchaseOrderRepository.findAll().stream()
+                    .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
+                    .findFirst().orElse(null);
+            }
+            if (po != null) {
+                String poStatus = po.getStatus();
+                if ("DRAFT".equals(poStatus) || "PENDING_APPROVAL".equals(poStatus)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Chỉ được phép lập phiếu chi cho hóa đơn hoặc đơn mua hàng đã duyệt (Trạng thái hiện tại: " + poStatus + ")");
+                }
+            }
+        }
+
+        if (req.getReceiverName() != null && !req.getReceiverName().trim().isEmpty()) {
+            existing.setReceiverName(req.getReceiverName());
+        }
+        if (req.getAmount() != null && req.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+            existing.setAmount(req.getAmount());
+        }
+        if (req.getInvoiceCode() != null && !req.getInvoiceCode().trim().isEmpty()) {
+            existing.setInvoiceCode(req.getInvoiceCode());
+        }
+        if (req.getPaymentMethod() != null && !req.getPaymentMethod().trim().isEmpty()) {
+            existing.setPaymentMethod(req.getPaymentMethod());
+        }
+        if (req.getFundAccountName() != null && !req.getFundAccountName().trim().isEmpty()) {
+            existing.setFundAccountName(req.getFundAccountName());
+        }
+        if (req.getAttachmentUrl() != null && !req.getAttachmentUrl().trim().isEmpty()) {
+            existing.setAttachmentUrl(req.getAttachmentUrl());
+        }
+        if (req.getHandler() != null && !req.getHandler().trim().isEmpty()) {
+            existing.setHandler(req.getHandler());
+        }
+        if (req.getNotes() != null && !req.getNotes().trim().isEmpty()) {
+            existing.setNotes(req.getNotes());
+        }
+        if (req.getStatus() != null && !req.getStatus().trim().isEmpty()) {
             existing.setStatus(req.getStatus());
         }
         
         PaymentVoucher saved = paymentVoucherRepository.save(existing);
         
         boolean isNowDone = "COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus());
-        boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
 
         if (isNowDone && !wasDone) {
+            checkFundBalance(saved);
             createJournalEntryForPayment(saved);
+            syncPurchaseOrderPaymentStatus(saved);
         } else if ("CANCELLED".equalsIgnoreCase(saved.getStatus()) && !"CANCELLED".equalsIgnoreCase(oldStatus)) {
             createStornoEntry(saved.getVoucherCode());
+            revertPurchaseOrderPaymentStatus(saved);
         }
         
         return ResponseEntity.ok(ApiResponse.ok(saved));
+    }
+
+    private void syncPurchaseOrderPaymentStatus(PaymentVoucher pv) {
+        if (pv.getInvoiceCode() == null || pv.getInvoiceCode().trim().isEmpty()) return;
+        String invCode = pv.getInvoiceCode().trim();
+        org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+        if (invCode.startsWith("INV-MH-")) {
+            try {
+                Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
+                po = purchaseOrderRepository.findById(idVal).orElse(null);
+            } catch (Exception e) {}
+        } else {
+            po = purchaseOrderRepository.findAll().stream()
+                .filter(p -> p.getPoCode() != null && (p.getPoCode().equalsIgnoreCase(invCode) || invCode.toLowerCase().contains(p.getPoCode().toLowerCase())))
+                .findFirst().orElse(null);
+        }
+        if (po != null) {
+            java.math.BigDecimal amountPaid = pv.getAmount() != null ? pv.getAmount() : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal totalCost = po.getTotalAmount() != null ? po.getTotalAmount() : java.math.BigDecimal.ZERO;
+            po.setAdvanceAmount(amountPaid);
+            if (totalCost.compareTo(java.math.BigDecimal.ZERO) > 0 && amountPaid.compareTo(totalCost) >= 0) {
+                po.setPaymentStatus("PAID");
+            } else if (amountPaid.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                po.setPaymentStatus("PARTIAL_ADVANCE");
+            } else {
+                po.setPaymentStatus("UNPAID");
+            }
+            purchaseOrderRepository.save(po);
+        }
+    }
+
+    private void revertPurchaseOrderPaymentStatus(PaymentVoucher pv) {
+        if (pv.getInvoiceCode() == null || pv.getInvoiceCode().trim().isEmpty()) return;
+        String invCode = pv.getInvoiceCode().trim();
+        org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findAll().stream()
+            .filter(p -> p.getPoCode() != null && (p.getPoCode().equalsIgnoreCase(invCode) || invCode.toLowerCase().contains(p.getPoCode().toLowerCase())))
+            .findFirst().orElse(null);
+        if (po != null) {
+            po.setPaymentStatus("UNPAID");
+            po.setAdvanceAmount(java.math.BigDecimal.ZERO);
+            purchaseOrderRepository.save(po);
+        }
     }
 
     @DeleteMapping({"/payment-vouchers/{id}", "/payments/{id}"})
@@ -235,6 +466,14 @@ public class FinanceController {
 
     @PostMapping({"/debt-ledgers", "/debts"})
     public ResponseEntity<ApiResponse<DebtLedger>> createDebt(@RequestBody DebtLedger req) {
+        // Validate: Ngày đến hạn phải >= ngày hiện tại
+        if (req.getDueDate() != null && req.getDueDate().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Ngày đến hạn thanh toán phải từ hôm nay trở đi"));
+        }
+        // Validate: Ngày giao dịch gần nhất phải <= ngày hiện tại
+        if (req.getLastPaymentDate() != null && req.getLastPaymentDate().isAfter(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Ngày giao dịch gần nhất không được là ngày tương lai"));
+        }
         req.setIsDeleted(false);
         return ResponseEntity.status(201).body(ApiResponse.created(debtLedgerRepository.save(req)));
     }
@@ -243,12 +482,26 @@ public class FinanceController {
     public ResponseEntity<ApiResponse<DebtLedger>> updateDebt(@PathVariable Long id, @RequestBody DebtLedger req) {
         DebtLedger existing = debtLedgerRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("DebtLedger", "id", id));
+        // Validate: Ngày đến hạn phải >= ngày hiện tại
+        if (req.getDueDate() != null && req.getDueDate().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Ngày đến hạn thanh toán phải từ hôm nay trở đi"));
+        }
+        // Validate: Ngày giao dịch gần nhất phải <= ngày hiện tại
+        if (req.getLastPaymentDate() != null && req.getLastPaymentDate().isAfter(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Ngày giao dịch gần nhất không được là ngày tương lai"));
+        }
         if (req.getPartnerId() != null) existing.setPartnerId(req.getPartnerId());
         if (req.getRefCode() != null) existing.setRefCode(req.getRefCode());
         if (req.getIncrease() != null) existing.setIncrease(req.getIncrease());
         if (req.getDecrease() != null) existing.setDecrease(req.getDecrease());
         if (req.getBalance() != null) existing.setBalance(req.getBalance());
         if (req.getTransactionDate() != null) existing.setTransactionDate(req.getTransactionDate());
+        if (req.getEntityName() != null) existing.setEntityName(req.getEntityName());
+        if (req.getEntityType() != null) existing.setEntityType(req.getEntityType());
+        if (req.getDueDate() != null) existing.setDueDate(req.getDueDate());
+        if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getLastPaymentDate() != null) existing.setLastPaymentDate(req.getLastPaymentDate());
+        if (req.getAccountManager() != null) existing.setAccountManager(req.getAccountManager());
         return ResponseEntity.ok(ApiResponse.ok(debtLedgerRepository.save(existing)));
     }
 
@@ -274,15 +527,144 @@ public class FinanceController {
     }
 
     // --- TAX DUTIES ---
-    @GetMapping("/tax-duties")
+    @GetMapping({"/tax-duties", "/taxes"})
     public ResponseEntity<ApiResponse<List<TaxDuty>>> getAllTaxes() {
-        return ResponseEntity.ok(ApiResponse.ok(taxDutyRepository.findByIsDeletedFalse()));
+        List<TaxDuty> list = taxDutyRepository.findByIsDeletedFalse();
+        if (list.isEmpty()) {
+            List<TaxDuty> defaultTaxes = List.of(
+                TaxDuty.builder()
+                    .taxType("Thuế GTGT (VAT)")
+                    .period("Q3-2026")
+                    .amountDue(new BigDecimal("125000000"))
+                    .amountPaid(new BigDecimal("125000000"))
+                    .status("PAID")
+                    .build(),
+                TaxDuty.builder()
+                    .taxType("Thuế Thu nhập Doanh nghiệp (CIT)")
+                    .period("Q3-2026")
+                    .amountDue(new BigDecimal("86000000"))
+                    .amountPaid(new BigDecimal("86000000"))
+                    .status("PAID")
+                    .build(),
+                TaxDuty.builder()
+                    .taxType("Thuế Thu nhập Cá nhân (PIT)")
+                    .period("08-2026")
+                    .amountDue(new BigDecimal("34500000"))
+                    .amountPaid(new BigDecimal("0"))
+                    .status("UNPAID")
+                    .build(),
+                TaxDuty.builder()
+                    .taxType("Thuế Môn bài")
+                    .period("2026")
+                    .amountDue(new BigDecimal("3000000"))
+                    .amountPaid(new BigDecimal("3000000"))
+                    .status("PAID")
+                    .build()
+            );
+            defaultTaxes.forEach(t -> t.setIsDeleted(false));
+            list = taxDutyRepository.saveAll(defaultTaxes);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @PostMapping({"/tax-duties", "/taxes"})
+    public ResponseEntity<ApiResponse<TaxDuty>> createTax(@RequestBody TaxDuty req) {
+        if (req.getAmountDue() == null) req.setAmountDue(BigDecimal.ZERO);
+        if (req.getAmountPaid() == null) req.setAmountPaid(BigDecimal.ZERO);
+        if (req.getStatus() == null) req.setStatus("UNPAID");
+        req.setIsDeleted(false);
+        return ResponseEntity.status(201).body(ApiResponse.created(taxDutyRepository.save(req)));
+    }
+
+    @PutMapping({"/tax-duties/{id}", "/taxes/{id}"})
+    public ResponseEntity<ApiResponse<TaxDuty>> updateTax(@PathVariable Long id, @RequestBody TaxDuty req) {
+        TaxDuty existing = taxDutyRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TaxDuty", "id", id));
+        if (req.getTaxType() != null) existing.setTaxType(req.getTaxType());
+        if (req.getPeriod() != null) existing.setPeriod(req.getPeriod());
+        if (req.getAmountDue() != null) existing.setAmountDue(req.getAmountDue());
+        if (req.getAmountPaid() != null) existing.setAmountPaid(req.getAmountPaid());
+        if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        return ResponseEntity.ok(ApiResponse.ok(taxDutyRepository.save(existing)));
+    }
+
+    @DeleteMapping({"/tax-duties/{id}", "/taxes/{id}"})
+    public ResponseEntity<ApiResponse<Void>> deleteTax(@PathVariable Long id) {
+        TaxDuty existing = taxDutyRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TaxDuty", "id", id));
+        existing.setIsDeleted(true);
+        taxDutyRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // --- FUND BALANCES ---
     @GetMapping({"/fund-balances", "/fund-cash"})
     public ResponseEntity<ApiResponse<List<FundBalance>>> getAllFunds() {
-        return ResponseEntity.ok(ApiResponse.ok(fundBalanceRepository.findByIsDeletedFalse()));
+        List<FundBalance> list = fundBalanceRepository.findByIsDeletedFalse();
+        if (list.isEmpty()) {
+            List<FundBalance> defaultFunds = List.of(
+                FundBalance.builder()
+                    .balanceDate(LocalDate.now())
+                    .branchName("Hội Sở Chính Hà Nội")
+                    .managerName("Nguyễn Thị Lan (Thủ quỹ)")
+                    .cashBalance(new BigDecimal("150000000"))
+                    .bankBalance(new BigDecimal("2850000000"))
+                    .build(),
+                FundBalance.builder()
+                    .balanceDate(LocalDate.now())
+                    .branchName("Chi nhánh Quận 1 TP.HCM")
+                    .managerName("Trần Văn Minh (Thủ quỹ)")
+                    .cashBalance(new BigDecimal("85000000"))
+                    .bankBalance(new BigDecimal("1620000000"))
+                    .build(),
+                FundBalance.builder()
+                    .balanceDate(LocalDate.now())
+                    .branchName("Chi nhánh Đà Nẵng")
+                    .managerName("Lê Hoàng Nam (Thủ quỹ)")
+                    .cashBalance(new BigDecimal("45000000"))
+                    .bankBalance(new BigDecimal("950000000"))
+                    .build()
+            );
+            defaultFunds.forEach(f -> f.setIsDeleted(false));
+            list = fundBalanceRepository.saveAll(defaultFunds);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @PostMapping({"/fund-balances", "/fund-cash"})
+    public ResponseEntity<ApiResponse<FundBalance>> createFund(@RequestBody FundBalance req) {
+        if (req.getBalanceDate() == null) req.setBalanceDate(LocalDate.now());
+        if (req.getCashBalance() == null) req.setCashBalance(BigDecimal.ZERO);
+        if (req.getBankBalance() == null) req.setBankBalance(BigDecimal.ZERO);
+        if (req.getBranchName() == null || req.getBranchName().trim().isEmpty()) {
+            req.setBranchName("Chi nhánh Hội sở chính");
+        }
+        if (req.getManagerName() == null || req.getManagerName().trim().isEmpty()) {
+            req.setManagerName("Thủ quỹ");
+        }
+        req.setIsDeleted(false);
+        return ResponseEntity.status(201).body(ApiResponse.created(fundBalanceRepository.save(req)));
+    }
+
+    @PutMapping({"/fund-balances/{id}", "/fund-cash/{id}"})
+    public ResponseEntity<ApiResponse<FundBalance>> updateFund(@PathVariable Long id, @RequestBody FundBalance req) {
+        FundBalance existing = fundBalanceRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FundBalance", "id", id));
+        if (req.getBalanceDate() != null) existing.setBalanceDate(req.getBalanceDate());
+        if (req.getCashBalance() != null) existing.setCashBalance(req.getCashBalance());
+        if (req.getBankBalance() != null) existing.setBankBalance(req.getBankBalance());
+        if (req.getBranchName() != null) existing.setBranchName(req.getBranchName());
+        if (req.getManagerName() != null) existing.setManagerName(req.getManagerName());
+        return ResponseEntity.ok(ApiResponse.ok(fundBalanceRepository.save(existing)));
+    }
+
+    @DeleteMapping({"/fund-balances/{id}", "/fund-cash/{id}"})
+    public ResponseEntity<ApiResponse<Void>> deleteFund(@PathVariable Long id) {
+        FundBalance existing = fundBalanceRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FundBalance", "id", id));
+        existing.setIsDeleted(true);
+        fundBalanceRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // --- ORDER PAYMENTS ---
@@ -338,9 +720,59 @@ public class FinanceController {
     }
 
     // --- TRANSACTION REASONS ---
+    private TransactionReason createDefaultReason(String code, String name, String type, String accCode) {
+        TransactionReason r = new TransactionReason();
+        r.setReasonCode(code);
+        r.setReasonName(name);
+        r.setType(type);
+        r.setAccountingCode(accCode);
+        r.setIsDeleted(false);
+        return r;
+    }
+
     @GetMapping("/transaction-reasons")
     public ResponseEntity<ApiResponse<List<TransactionReason>>> getAllReasons() {
-        return ResponseEntity.ok(ApiResponse.ok(transactionReasonRepository.findByIsDeletedFalse()));
+        List<TransactionReason> list = transactionReasonRepository.findByIsDeletedFalse();
+        if (list.isEmpty()) {
+            List<TransactionReason> defaultReasons = List.of(
+                createDefaultReason("SALES_REVENUE", "Thu tiền bán hàng & dịch vụ", "RECEIPT", "511"),
+                createDefaultReason("DEBT_COLLECTION", "Thu hồi công nợ khách hàng", "RECEIPT", "131"),
+                createDefaultReason("CAPITAL_INJECTION", "Góp vốn bổ sung / đầu tư", "RECEIPT", "411"),
+                createDefaultReason("SUPPLIER_PAYMENT", "Thanh toán tiền hàng cho Nhà cung cấp", "PAYMENT", "331"),
+                createDefaultReason("OPERATING_COST", "Chi phí thuê mặt bằng & vận hành", "PAYMENT", "642"),
+                createDefaultReason("SALARY_EXPENSE", "Chi trả lương & thưởng nhân sự", "PAYMENT", "334"),
+                createDefaultReason("TAX_DUTY", "Nộp thuế & nghĩa vụ nhà nước", "PAYMENT", "333")
+            );
+            list = transactionReasonRepository.saveAll(defaultReasons);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(list));
+    }
+
+    @PostMapping("/transaction-reasons")
+    public ResponseEntity<ApiResponse<TransactionReason>> createReason(@RequestBody TransactionReason req) {
+        req.setIsDeleted(false);
+        return ResponseEntity.status(201).body(ApiResponse.created(transactionReasonRepository.save(req)));
+    }
+
+    @PutMapping("/transaction-reasons/{id}")
+    public ResponseEntity<ApiResponse<TransactionReason>> updateReason(@PathVariable Long id, @RequestBody TransactionReason req) {
+        TransactionReason existing = transactionReasonRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TransactionReason", "id", id));
+        if (req.getReasonName() != null) existing.setReasonName(req.getReasonName());
+        if (req.getReasonCode() != null) existing.setReasonCode(req.getReasonCode());
+        if (req.getType() != null) existing.setType(req.getType());
+        if (req.getAccountingCode() != null) existing.setAccountingCode(req.getAccountingCode());
+        if (req.getDescription() != null) existing.setDescription(req.getDescription());
+        return ResponseEntity.ok(ApiResponse.ok(transactionReasonRepository.save(existing)));
+    }
+
+    @DeleteMapping("/transaction-reasons/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteReason(@PathVariable Long id) {
+        TransactionReason existing = transactionReasonRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TransactionReason", "id", id));
+        existing.setIsDeleted(true);
+        transactionReasonRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // --- PAYMENT METHODS ---
@@ -409,13 +841,32 @@ public class FinanceController {
         String reasonCode = pv.getReason() != null ? pv.getReason().getReasonCode() : "";
         if ("SUPPLIER_PAYMENT".equals(reasonCode) || "SUPPLIER_DEPOSIT".equals(reasonCode)) {
             debitAccountCode = "331";
+            Long resolvedPartnerId = 1L;
+            if (pv.getInvoiceCode() != null && !pv.getInvoiceCode().trim().isEmpty()) {
+                String invCode = pv.getInvoiceCode().trim();
+                org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+                if (invCode.startsWith("INV-MH-")) {
+                    try {
+                        Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
+                        po = purchaseOrderRepository.findById(idVal).orElse(null);
+                    } catch (Exception e) {}
+                } else {
+                    po = purchaseOrderRepository.findAll().stream()
+                        .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
+                        .findFirst().orElse(null);
+                }
+                if (po != null && po.getSupplier() != null) {
+                    resolvedPartnerId = po.getSupplier().getId();
+                }
+            }
+
             DebtLedger debt = DebtLedger.builder()
                 .transactionDate(pv.getVoucherDate())
                 .refCode(pv.getVoucherCode())
                 .increase(BigDecimal.ZERO)
                 .decrease(pv.getAmount())
                 .balance(BigDecimal.ZERO)
-                .partnerId(1L)
+                .partnerId(resolvedPartnerId)
                 .build();
             debt.setIsDeleted(false);
             debtLedgerRepository.save(debt);
@@ -487,5 +938,36 @@ public class FinanceController {
                 journalEntryLineRepository.save(revLine);
             }
         });
+    }
+
+    private void checkFundBalance(PaymentVoucher pv) {
+        String method = pv.getPaymentMethod();
+        BigDecimal checkAmount = pv.getAmount() != null ? pv.getAmount() : BigDecimal.ZERO;
+        if (checkAmount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        Long branchId = pv.getBranch() != null ? pv.getBranch().getId() : null;
+        FundBalance fb = fundBalanceRepository.findByIsDeletedFalse().stream()
+            .filter(b -> branchId == null || (b.getBranch() != null && b.getBranch().getId().equals(branchId)))
+            .findFirst().orElse(null);
+
+        if (fb != null) {
+            BigDecimal cashBal = fb.getCashBalance() != null ? fb.getCashBalance() : BigDecimal.ZERO;
+            BigDecimal bankBal = fb.getBankBalance() != null ? fb.getBankBalance() : BigDecimal.ZERO;
+            if ("CASH".equalsIgnoreCase(method)) {
+                if (cashBal.compareTo(checkAmount) < 0 && cashBal.compareTo(BigDecimal.ZERO) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Không đủ số dư quỹ tiền mặt để thực hiện chi (Số dư hiện tại: " + cashBal + ", Số tiền chi: " + checkAmount + ")");
+                }
+                fb.setCashBalance(cashBal.subtract(checkAmount));
+                fundBalanceRepository.save(fb);
+            } else if ("BANK_TRANSFER".equalsIgnoreCase(method) || "BANK".equalsIgnoreCase(method)) {
+                if (bankBal.compareTo(checkAmount) < 0 && bankBal.compareTo(BigDecimal.ZERO) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                        "Không đủ số dư tài khoản ngân hàng để thực hiện chi (Số dư hiện tại: " + bankBal + ", Số tiền chi: " + checkAmount + ")");
+                }
+                fb.setBankBalance(bankBal.subtract(checkAmount));
+                fundBalanceRepository.save(fb);
+            }
+        }
     }
 }

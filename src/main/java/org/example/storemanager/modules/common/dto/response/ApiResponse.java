@@ -26,6 +26,8 @@ public class ApiResponse<T> {
 
     private String errorCode;
 
+    private String code;
+
     private LocalDateTime timestamp;
 
     private String path;
@@ -100,6 +102,7 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .errorCode(errorCode)
+                .code(errorCode)
                 .message(message)
                 .path(path)
                 .traceId(org.slf4j.MDC.get("traceId"))
@@ -112,9 +115,21 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .errorCode(errorCode)
+                .code(errorCode)
                 .message(message)
                 .path(path)
                 .errors(errors)
+                .traceId(org.slf4j.MDC.get("traceId"))
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .status(400)
+                .message(message)
+                .code("BAD_REQUEST")
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
@@ -125,6 +140,7 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .message(message)
+                .code("INTERNAL_SERVER_ERROR")
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();

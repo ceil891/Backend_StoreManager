@@ -5,14 +5,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-
-
 public class CreateCustomerResponse {
     private Long id;
     private String customerCode;
@@ -28,4 +27,11 @@ public class CreateCustomerResponse {
     private String createdBy;
     private String message;
     private Boolean isActive;
+
+    private LocalDate dob;
+    private String taxCode;
+    private String gender;
+    private String note;
+    private Long groupId;
+    private Long areaId;
 }

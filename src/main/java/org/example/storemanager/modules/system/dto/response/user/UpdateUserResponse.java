@@ -18,6 +18,7 @@ public class UpdateUserResponse {
     private String roleName;
     private Long branchId;
     private String branchName;
+    private String avatar;
     private LocalDateTime updatedAt;
     private String updatedBy;
 }

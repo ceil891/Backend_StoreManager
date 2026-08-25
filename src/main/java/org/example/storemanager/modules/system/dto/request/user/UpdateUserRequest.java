@@ -28,4 +28,5 @@ public class UpdateUserRequest {
     private String dateOfBirth;
     private String departmentId;
     private String positionId;
+    private String avatar;
 }

@@ -2,30 +2,38 @@ package org.example.storemanager.shared.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.core.annotation.Order;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
-/**
- * DatabaseMigrationRunner - Runs safe idempotent ALTER TABLE migrations on startup.
- * Uses IF NOT EXISTS so it's safe to run multiple times.
- * Order(1) ensures it runs first among ApplicationRunners.
- */
+import javax.sql.DataSource;
+
 @Slf4j
-@Component
-@Lazy(false)
-@Order(1)
+@Configuration
 @RequiredArgsConstructor
-public class DatabaseMigrationConfig implements ApplicationRunner {
+public class DatabaseMigrationConfig {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final DataSource dataSource;
 
-    @Override
-    public void run(ApplicationArguments args) {
-        log.info("[Migration] Database migration check skipped (schema is managed/validated externally).");
+    @Bean
+    CommandLineRunner runMigrations() {
+        return args -> {
+            try {
+                ClassPathResource schemaResource = new ClassPathResource("schema.sql");
+                if (schemaResource.exists()) {
+                    ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+                    populator.addScript(schemaResource);
+                    populator.setContinueOnError(true);
+                    populator.execute(dataSource);
+                    log.info("[Migration] Database migration scripts executed successfully.");
+                } else {
+                    log.info("[Migration] No schema.sql found, skipping migration.");
+                }
+            } catch (Exception e) {
+                log.warn("[Migration] Database migration encountered an issue (non-fatal): {}", e.getMessage());
+            }
+        };
     }
 }
-

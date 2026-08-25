@@ -24,6 +24,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.example.storemanager.modules.partnerarea.entity.PartnerGroup;
+import org.example.storemanager.modules.partnerarea.entity.Area;
+import org.example.storemanager.modules.partnerarea.repository.PartnerGroupRepository;
+import org.example.storemanager.modules.partnerarea.repository.AreaRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.example.storemanager.modules.system.repository.UserRepository;
 
@@ -36,6 +40,8 @@ public class CustomerServiceImpl implements CustomerService {
     private final CloudinaryService cloudinaryService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
+    private final PartnerGroupRepository partnerGroupRepository;
+    private final AreaRepository areaRepository;
 
     private String getCurrentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -57,11 +63,25 @@ public class CustomerServiceImpl implements CustomerService {
         c.setPhone(req.getPhone());
         c.setEmail(req.getEmail());
         c.setAddress(req.getAddress());
-        c.setIsActive(true);
+        c.setIsActive(req.getIsActive() != null ? req.getIsActive() : true);
         c.setPoints(0.0);
         c.setTotalSpend(0.0);
-        c.setMembershipRank("Đồng");
+        c.setMembershipRank(req.getMembershipRank() != null ? req.getMembershipRank() : "Đồng");
         c.setCreatedBy(getCurrentUsername());
+        
+        c.setDob(req.getDob());
+        c.setTaxCode(req.getTaxCode());
+        c.setGender(req.getGender());
+        c.setNote(req.getNote());
+        
+        if (req.getGroupId() != null) {
+            PartnerGroup group = partnerGroupRepository.findById(req.getGroupId()).orElse(null);
+            c.setGroup(group);
+        }
+        if (req.getAreaId() != null) {
+            Area area = areaRepository.findById(req.getAreaId()).orElse(null);
+            c.setArea(area);
+        }
 
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             try {
@@ -69,6 +89,8 @@ public class CustomerServiceImpl implements CustomerService {
             } catch (java.io.IOException e) {
                 throw new RuntimeException("Lỗi tải ảnh lên Cloudinary", e);
             }
+        } else if (req.getAvatarUrl() != null && !req.getAvatarUrl().isBlank()) {
+            c.setAvatarUrl(req.getAvatarUrl().trim());
         }
 
         Customer saved = customerRepository.save(c);
@@ -89,6 +111,12 @@ public class CustomerServiceImpl implements CustomerService {
                 .totalSpend(refreshed.getTotalSpend())
                 .createdAt(refreshed.getCreatedAt())
                 .createdBy(refreshed.getCreatedBy())
+                .dob(refreshed.getDob())
+                .taxCode(refreshed.getTaxCode())
+                .gender(refreshed.getGender())
+                .note(refreshed.getNote())
+                .groupId(refreshed.getGroup() != null ? refreshed.getGroup().getId() : null)
+                .areaId(refreshed.getArea() != null ? refreshed.getArea().getId() : null)
                 .message("Tạo thành công").build();
     }
 
@@ -136,7 +164,29 @@ public class CustomerServiceImpl implements CustomerService {
 
         c.setUpdatedBy(getCurrentUsername());
         c.setUpdatedAt(LocalDateTime.now());
-        c.setMembershipRank("Đồng");
+        if (req.getMembershipRank() != null) {
+            c.setMembershipRank(req.getMembershipRank());
+        }
+        if (req.getPoints() != null) {
+            c.setPoints(req.getPoints());
+        }
+        if (req.getTotalSpend() != null) {
+            c.setTotalSpend(req.getTotalSpend());
+        }
+
+        c.setDob(req.getDob());
+        c.setTaxCode(req.getTaxCode());
+        c.setGender(req.getGender());
+        c.setNote(req.getNote());
+
+        if (req.getGroupId() != null) {
+            PartnerGroup group = partnerGroupRepository.findById(req.getGroupId()).orElse(null);
+            c.setGroup(group);
+        }
+        if (req.getAreaId() != null) {
+            Area area = areaRepository.findById(req.getAreaId()).orElse(null);
+            c.setArea(area);
+        }
 
         if (req.getAvatar() != null && !req.getAvatar().isEmpty()) {
             try {
@@ -144,6 +194,8 @@ public class CustomerServiceImpl implements CustomerService {
             } catch (java.io.IOException e) {
                 throw new RuntimeException("Lỗi tải ảnh lên Cloudinary", e);
             }
+        } else if (req.getAvatarUrl() != null && !req.getAvatarUrl().isBlank()) {
+            c.setAvatarUrl(req.getAvatarUrl().trim());
         }
         Customer saved = customerRepository.save(c);
 
@@ -155,9 +207,17 @@ public class CustomerServiceImpl implements CustomerService {
                 .address(saved.getAddress())
                 .avatarUrl(saved.getAvatarUrl())
                 .membershipRank(saved.getMembershipRank())
+                .points(saved.getPoints())
+                .totalSpend(saved.getTotalSpend())
                 .updatedAt(saved.getUpdatedAt())
                 .updatedBy(saved.getUpdatedBy())
                 .isActive(saved.getIsActive())
+                .dob(saved.getDob())
+                .taxCode(saved.getTaxCode())
+                .gender(saved.getGender())
+                .note(saved.getNote())
+                .groupId(saved.getGroup() != null ? saved.getGroup().getId() : null)
+                .areaId(saved.getArea() != null ? saved.getArea().getId() : null)
                 .message("Cập nhật thành công")
                 .build();
     }
@@ -215,7 +275,14 @@ public class CustomerServiceImpl implements CustomerService {
                 .createdBy(c.getCreatedBy())
                 .createdAt(c.getCreatedAt())
                 .deletedAt(c.getDeletedAt())
-                .deletedBy(c.getDeletedBy()).build();
+                .deletedBy(c.getDeletedBy())
+                .dob(c.getDob())
+                .taxCode(c.getTaxCode())
+                .gender(c.getGender())
+                .note(c.getNote())
+                .groupId(c.getGroup() != null ? c.getGroup().getId() : null)
+                .areaId(c.getArea() != null ? c.getArea().getId() : null)
+                .build();
     }
 
     @Override

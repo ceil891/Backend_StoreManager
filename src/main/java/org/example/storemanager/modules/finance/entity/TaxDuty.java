@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.shared.base.BaseEntity;
 import org.example.storemanager.modules.system.entity.Branch;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.math.BigDecimal;
 
@@ -13,7 +15,9 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, exclude = {"branch"})
+@ToString(callSuper = true, exclude = {"branch"})
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "branch"})
 public class TaxDuty extends BaseEntity {
 
     @Column(name = "tax_type", nullable = false, length = 50)
@@ -32,6 +36,12 @@ public class TaxDuty extends BaseEntity {
     private String status;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "branch_id", nullable = false)
+    @JoinColumn(name = "branch_id", nullable = true)
+    @JsonIgnore
     private Branch branch;
+
+    @JsonIgnore
+    public Branch getBranch() {
+        return branch;
+    }
 }

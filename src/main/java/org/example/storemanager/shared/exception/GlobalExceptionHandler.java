@@ -130,12 +130,19 @@ public class GlobalExceptionHandler {
             fieldErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
+        String combinedMessage = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+        if (combinedMessage.isEmpty()) {
+            combinedMessage = ErrorCode.VALIDATION_ERROR.getDefaultMessage();
+        }
+
         log.warn("Validation: {} errors | Path: {}", fieldErrors.size(), request.getRequestURI());
 
         ApiResponse<Void> response = ApiResponse.fail(
                 HttpStatus.BAD_REQUEST.value(),
                 ErrorCode.VALIDATION_ERROR.name(),
-                ErrorCode.VALIDATION_ERROR.getDefaultMessage(),
+                combinedMessage,
                 request.getRequestURI(),
                 fieldErrors
         );
@@ -155,12 +162,19 @@ public class GlobalExceptionHandler {
                         (msg1, msg2) -> msg1
                 ));
 
+        String combinedMessage = ex.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining(", "));
+        if (combinedMessage.isEmpty()) {
+            combinedMessage = ErrorCode.VALIDATION_ERROR.getDefaultMessage();
+        }
+
         log.warn("ConstraintViolation: {} errors | Path: {}", fieldErrors.size(), request.getRequestURI());
 
         ApiResponse<Void> response = ApiResponse.fail(
                 HttpStatus.BAD_REQUEST.value(),
                 ErrorCode.VALIDATION_ERROR.name(),
-                ErrorCode.VALIDATION_ERROR.getDefaultMessage(),
+                combinedMessage,
                 request.getRequestURI(),
                 fieldErrors
         );

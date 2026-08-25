@@ -242,8 +242,9 @@ public class RoleServiceImpl implements RoleService {
 
         // Cập nhật thông tin Audit cho Role gánh phân quyền này
         role.setUpdatedBy(getCurrentUsername());
-        role.setUpdatedAt(LocalDateTime.now());
         Role updatedRole = roleRepository.save(role);
+        // Xóa cache quyền tức thì để đảm bảo tính nhất quán (Consistent Caching)
+        org.example.storemanager.shared.security.SecurityEvaluator.evictRoleCache(roleId);
 
         return AssignPermissionsResponse.builder()
                 .roleId(updatedRole.getId())

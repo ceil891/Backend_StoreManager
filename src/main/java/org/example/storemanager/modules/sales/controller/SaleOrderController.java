@@ -7,6 +7,8 @@ import org.example.storemanager.modules.sales.dto.response.SaleOrderResponse;
 import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.modules.common.dto.response.PageResponse;
 import org.example.storemanager.modules.sales.service.SaleOrderService;
+import org.example.storemanager.shared.annotation.BranchScoped;
+import org.example.storemanager.shared.security.UserContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/sales/orders")
 @RequiredArgsConstructor
+@BranchScoped
 public class SaleOrderController {
 
     private final SaleOrderService saleOrderService;
@@ -71,13 +74,15 @@ public class SaleOrderController {
             @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "id,desc") String sort) {
 
+        Long effectiveBranchId = UserContextHolder.getEffectiveBranchId(branchId);
+
         if (page != null && size != null) {
             PageResponse<SaleOrderResponse> response = saleOrderService.getOrdersPaginated(
-                    search, status, branchId, page, size, sort, includeDeleted);
+                    search, status, effectiveBranchId, page, size, sort, includeDeleted);
             return ResponseEntity.ok(ApiResponse.ok(response));
         } else {
             List<SaleOrderResponse> response = saleOrderService.getAllOrders(
-                    search, status, branchId, sort, includeDeleted);
+                    search, status, effectiveBranchId, sort, includeDeleted);
             return ResponseEntity.ok(ApiResponse.ok(response));
         }
     }

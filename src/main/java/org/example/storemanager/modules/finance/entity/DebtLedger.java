@@ -33,4 +33,22 @@ public class DebtLedger extends BaseEntity {
 
     @Column(name = "partner_id", nullable = false)
     private Long partnerId; // Liên kết phẳng đến Customer ID hoặc Supplier ID
+
+    @Column(name = "entity_name", length = 200)
+    private String entityName; // Tên đối tác / doanh nghiệp
+
+    @Column(name = "entity_type", length = 30)
+    private String entityType; // CUSTOMER, SUPPLIER, PARTNER
+
+    @Column(name = "due_date")
+    private LocalDateTime dueDate; // Hạn thanh toán
+
+    @Column(name = "status", length = 30)
+    private String status; // NORMAL, DUE_SOON, OVERDUE, SETTLED
+
+    @Column(name = "last_payment_date")
+    private LocalDateTime lastPaymentDate; // Ngày giao dịch gần nhất
+
+    @Column(name = "account_manager", length = 100)
+    private String accountManager; // NV phụ trách
 }

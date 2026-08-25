@@ -86,9 +86,21 @@ public class PaymentVoucher extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reason_id", nullable = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private TransactionReason reason;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public TransactionReason getReason() {
+        return reason;
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Branch branch;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public Branch getBranch() {
+        return branch;
+    }
 }

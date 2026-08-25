@@ -388,20 +388,20 @@ public class ProductServiceImpl implements ProductService {
 
         productUnitService.syncBaseProductUnit(updatedProduct, getCurrentUsername());
 
-        return UpdateProductResponse.builder()
-                .id(updatedProduct.getId())
-                .productCode(updatedProduct.getProductCode())
-                .name(updatedProduct.getName())
-                .categoryId(updatedProduct.getCategory().getId())
-                .baseUnitId(updatedProduct.getBaseUnit().getId())
-                .basePrice(updatedProduct.getBasePrice())
-                .costPrice(updatedProduct.getCostPrice())
-                .mainImageUrl(updatedProduct.getMainImageUrl())
-                .galleryImages(updatedProduct.getGalleryImages())
-                .isActive(updatedProduct.getIsActive())
-                .updatedAt(updatedProduct.getUpdatedAt())
-                .updatedBy(updatedProduct.getUpdatedBy())
-                .build();
+        UpdateProductResponse resp = new UpdateProductResponse();
+        resp.setId(updatedProduct.getId());
+        resp.setProductCode(updatedProduct.getProductCode());
+        resp.setName(updatedProduct.getName());
+        resp.setCategoryId(updatedProduct.getCategory() != null ? updatedProduct.getCategory().getId() : null);
+        resp.setBaseUnitId(updatedProduct.getBaseUnit() != null ? updatedProduct.getBaseUnit().getId() : null);
+        resp.setBasePrice(updatedProduct.getBasePrice());
+        resp.setCostPrice(updatedProduct.getCostPrice());
+        resp.setMainImageUrl(updatedProduct.getMainImageUrl());
+        resp.setGalleryImages(updatedProduct.getGalleryImages());
+        resp.setIsActive(updatedProduct.getIsActive());
+        resp.setUpdatedAt(updatedProduct.getUpdatedAt());
+        resp.setUpdatedBy(updatedProduct.getUpdatedBy());
+        return resp;
     }
 
     @Override
@@ -484,20 +484,20 @@ public class ProductServiceImpl implements ProductService {
         product.setUpdatedBy(getCurrentUsername());
 
         Product updated = productRepository.save(product);
-        return UpdateProductResponse.builder()
-                .id(updated.getId())
-                .productCode(updated.getProductCode())
-                .name(updated.getName())
-                .categoryId(updated.getCategory().getId())
-                .baseUnitId(updated.getBaseUnit().getId())
-                .basePrice(updated.getBasePrice())
-                .costPrice(updated.getCostPrice())
-                .mainImageUrl(updated.getMainImageUrl())
-                .galleryImages(updated.getGalleryImages())
-                .isActive(updated.getIsActive())
-                .updatedAt(updated.getUpdatedAt())
-                .updatedBy(updated.getUpdatedBy())
-                .build();
+        UpdateProductResponse resp = new UpdateProductResponse();
+        resp.setId(updated.getId());
+        resp.setProductCode(updated.getProductCode());
+        resp.setName(updated.getName());
+        resp.setCategoryId(updated.getCategory() != null ? updated.getCategory().getId() : null);
+        resp.setBaseUnitId(updated.getBaseUnit() != null ? updated.getBaseUnit().getId() : null);
+        resp.setBasePrice(updated.getBasePrice());
+        resp.setCostPrice(updated.getCostPrice());
+        resp.setMainImageUrl(updated.getMainImageUrl());
+        resp.setGalleryImages(updated.getGalleryImages());
+        resp.setIsActive(updated.getIsActive());
+        resp.setUpdatedAt(updated.getUpdatedAt());
+        resp.setUpdatedBy(updated.getUpdatedBy());
+        return resp;
     }
 
     @Override
@@ -669,4 +669,48 @@ public class ProductServiceImpl implements ProductService {
                 .onHand(onHand != null ? onHand : java.math.BigDecimal.ZERO)
                 .build();
     }
+
+    @Override
+    public BulkProductImportResponse bulkCreateProducts(List<CreateProductRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return BulkProductImportResponse.builder()
+                    .totalSubmitted(0)
+                    .successCount(0)
+                    .failedCount(0)
+                    .createdProductIds(Collections.emptyList())
+                    .errors(Collections.emptyList())
+                    .build();
+        }
+
+        List<Long> createdIds = new java.util.ArrayList<>();
+        List<BulkProductImportResponse.BulkImportError> errors = new java.util.ArrayList<>();
+
+        for (int i = 0; i < requests.size(); i++) {
+            CreateProductRequest req = requests.get(i);
+            try {
+                CreateProductResponse response = createProduct(req);
+                createdIds.add(response.getId());
+            } catch (Exception ex) {
+                String errMsg = ex.getMessage();
+                if (ex instanceof org.springframework.web.server.ResponseStatusException rse) {
+                    errMsg = rse.getReason() != null ? rse.getReason() : rse.getMessage();
+                }
+                errors.add(BulkProductImportResponse.BulkImportError.builder()
+                        .rowIndex(i + 1)
+                        .productCode(req.getProductCode())
+                        .productName(req.getName())
+                        .errorMessage(errMsg != null ? errMsg : "Lỗi không xác định khi tạo sản phẩm")
+                        .build());
+            }
+        }
+
+        return BulkProductImportResponse.builder()
+                .totalSubmitted(requests.size())
+                .successCount(createdIds.size())
+                .failedCount(errors.size())
+                .createdProductIds(createdIds)
+                .errors(errors)
+                .build();
+    }
 }
+

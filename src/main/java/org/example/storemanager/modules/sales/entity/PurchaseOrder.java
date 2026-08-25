@@ -44,4 +44,10 @@ public class PurchaseOrder extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "purchase_request_id")
     private org.example.storemanager.modules.wms.entity.PurchaseRequest purchaseRequest;
+
+    @Column(name = "payment_status", length = 50)
+    private String paymentStatus;
+
+    @Column(name = "advance_amount", precision = 18, scale = 2)
+    private java.math.BigDecimal advanceAmount;
 }

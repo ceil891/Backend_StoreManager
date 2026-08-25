@@ -48,6 +48,7 @@ public enum ErrorCode {
     INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "Trạng thái chuyển đổi không hợp lệ"),
     FILE_UPLOAD_ERROR(HttpStatus.BAD_REQUEST, "Lỗi tải file lên"),
     FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "Dung lượng file vượt quá giới hạn cho phép"),
+    CONTRACT_INVALID(HttpStatus.BAD_REQUEST, "Số tiền hợp đồng không được để trống hoặc phải lớn hơn 0"),
 
     // === Data Integrity ===
     DATA_INTEGRITY_VIOLATION(HttpStatus.CONFLICT, "Dữ liệu vi phạm ràng buộc toàn vẹn"),

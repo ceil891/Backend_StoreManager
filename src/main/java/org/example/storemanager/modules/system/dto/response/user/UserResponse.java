@@ -29,6 +29,7 @@ public class UserResponse {
     private String dateOfBirth;
     private String departmentId;
     private String positionId;
+    private String avatar;
 
     private LocalDateTime createdAt;
     private String createdBy;

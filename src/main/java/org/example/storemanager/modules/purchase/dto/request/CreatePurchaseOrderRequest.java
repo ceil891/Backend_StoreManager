@@ -28,6 +28,9 @@ public class CreatePurchaseOrderRequest {
 
     private String note;
 
+    private String paymentStatus;
+    private java.math.BigDecimal advanceAmount;
+
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
     private List<PurchaseOrderDetailRequest> details;
 }

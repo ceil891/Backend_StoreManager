@@ -75,5 +75,64 @@ CREATE INDEX IF NOT EXISTS idx_stock_ledger_variant ON stock_ledgers(product_var
 -- Migration: Add column type if not exists with default 'message' in n8n_chat_histories_ric_qlbh table
 ALTER TABLE IF EXISTS n8n_chat_histories_ric_qlbh ADD COLUMN IF NOT EXISTS "type" VARCHAR(50) DEFAULT 'message';
 
+-- Migration: Add payment_status and advance_amount to purchase_orders
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50) DEFAULT 'UNPAID';
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS advance_amount NUMERIC(18, 2) DEFAULT 0;
 
+-- Migration: Add customer profile fields to customers table
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS dob DATE;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS gender VARCHAR(10);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS tax_code VARCHAR(50);
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS group_id BIGINT;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS area_id BIGINT;
+
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS fk_customer_group;
+ALTER TABLE customers ADD CONSTRAINT fk_customer_group FOREIGN KEY (group_id) REFERENCES partner_groups(id);
+
+ALTER TABLE customers DROP CONSTRAINT IF EXISTS fk_customer_area;
+ALTER TABLE customers ADD CONSTRAINT fk_customer_area FOREIGN KEY (area_id) REFERENCES areas(id);
+
+-- TC21: Mở rộng bảng debt_ledgers cho phân hệ Sổ nợ & Công nợ
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS entity_name VARCHAR(200);
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS entity_type VARCHAR(30);
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS due_date TIMESTAMP;
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS status VARCHAR(30);
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS last_payment_date TIMESTAMP;
+ALTER TABLE debt_ledgers ADD COLUMN IF NOT EXISTS account_manager VARCHAR(100);
+
+-- Migration: Add extra fields to shipping_carriers
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS website VARCHAR(255);
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS address VARCHAR(255);
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS contact_person VARCHAR(150);
+ALTER TABLE shipping_carriers ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- Migration: Add avatar column to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
+
+-- Migration: Finance module columns
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS swift_bic VARCHAR(50);
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'VND';
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS current_balance NUMERIC(18, 2) DEFAULT 0;
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS available_working_capital NUMERIC(18, 2) DEFAULT 0;
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS account_type VARCHAR(50) DEFAULT 'PRIMARY_OPERATING';
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS opened_date VARCHAR(20);
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'ACTIVE';
+ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+ALTER TABLE fund_balances ADD COLUMN IF NOT EXISTS branch_name VARCHAR(150);
+ALTER TABLE fund_balances ADD COLUMN IF NOT EXISTS manager_name VARCHAR(100);
+ALTER TABLE fund_balances ALTER COLUMN branch_id DROP NOT NULL;
+
+ALTER TABLE tax_duties ALTER COLUMN branch_id DROP NOT NULL;
+
+ALTER TABLE transaction_reasons ADD COLUMN IF NOT EXISTS accounting_code VARCHAR(30);
+ALTER TABLE transaction_reasons ADD COLUMN IF NOT EXISTS description VARCHAR(255);
+
+ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS accumulated_depreciation NUMERIC(18, 2) DEFAULT 0;
+ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS useful_life_months INTEGER DEFAULT 36;
+ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'ACTIVE';
 

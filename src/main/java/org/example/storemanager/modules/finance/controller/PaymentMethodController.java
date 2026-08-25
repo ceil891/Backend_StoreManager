@@ -63,11 +63,119 @@ public class PaymentMethodController {
         return map;
     }
 
+    @Transactional
+    public synchronized void checkAndSeedPaymentMethods() {
+        if (paymentMethodRepository.count() == 0) {
+            PaymentMethod cod = PaymentMethod.builder()
+                    .methodCode("COD")
+                    .methodName("Thanh toán khi nhận hàng (COD)")
+                    .type("CASH")
+                    .providerType("CASH")
+                    .status("ACTIVE")
+                    .sortOrder(1)
+                    .allowPos(true)
+                    .allowOnline(true)
+                    .applyToAllBranches(true)
+                    .currency("VND")
+                    .transferSyntax("COD đơn {order_code}")
+                    .logoUrl("https://cdn-icons-png.flaticon.com/512/2331/2331941.png")
+                    .build();
+            cod.setIsDeleted(false);
+            paymentMethodRepository.save(cod);
+
+            PaymentMethod bank = PaymentMethod.builder()
+                    .methodCode("BANK_TRANSFER")
+                    .methodName("Chuyển khoản Ngân hàng (VietQR)")
+                    .type("BANK_TRANSFER")
+                    .providerType("BANK_TRANSFER")
+                    .status("ACTIVE")
+                    .sortOrder(2)
+                    .allowPos(true)
+                    .allowOnline(true)
+                    .applyToAllBranches(true)
+                    .currency("VND")
+                    .bankName("MBBank (Ngân hàng Quân Đội)")
+                    .bankAccount("0388123456789")
+                    .bankAccountName("CONG TY TNHH SMART RETAIL")
+                    .transferSyntax("ONLINE {order_code}")
+                    .logoUrl("https://img.vietqr.io/image/MB-0388123456789-compact2.png")
+                    .build();
+            bank.setIsDeleted(false);
+            paymentMethodRepository.save(bank);
+
+            PaymentMethod momo = PaymentMethod.builder()
+                    .methodCode("MOMO")
+                    .methodName("Ví Điện Tử MoMo")
+                    .type("E_WALLET")
+                    .providerType("E_WALLET")
+                    .status("ACTIVE")
+                    .sortOrder(3)
+                    .allowPos(true)
+                    .allowOnline(true)
+                    .applyToAllBranches(true)
+                    .currency("VND")
+                    .merchantId("MOMO_MERCHANT_01")
+                    .transferSyntax("MOMO {order_code}")
+                    .logoUrl("https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png")
+                    .build();
+            momo.setIsDeleted(false);
+            paymentMethodRepository.save(momo);
+
+            PaymentMethod vnpay = PaymentMethod.builder()
+                    .methodCode("VNPAY")
+                    .methodName("Cổng thanh toán VNPAY-QR")
+                    .type("E_WALLET")
+                    .providerType("E_WALLET")
+                    .status("ACTIVE")
+                    .sortOrder(4)
+                    .allowPos(true)
+                    .allowOnline(true)
+                    .applyToAllBranches(true)
+                    .currency("VND")
+                    .merchantId("VNPAY_MERCHANT_01")
+                    .transferSyntax("VNPAY {order_code}")
+                    .logoUrl("https://vnpay.vn/assets/images/logo-icon/logo-primary.svg")
+                    .build();
+            vnpay.setIsDeleted(false);
+            paymentMethodRepository.save(vnpay);
+
+            PaymentMethod card = PaymentMethod.builder()
+                    .methodCode("CARD")
+                    .methodName("Thẻ Quốc tế VISA / MasterCard / JCB")
+                    .type("CARD")
+                    .providerType("CARD")
+                    .status("ACTIVE")
+                    .sortOrder(5)
+                    .allowPos(true)
+                    .allowOnline(true)
+                    .applyToAllBranches(true)
+                    .currency("VND")
+                    .transferSyntax("CARD {order_code}")
+                    .logoUrl("https://cdn-icons-png.flaticon.com/512/349/349221.png")
+                    .build();
+            card.setIsDeleted(false);
+            paymentMethodRepository.save(card);
+        }
+    }
+
     // GET /api/v1/payment-methods
     @GetMapping("/payment-methods")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllMethods() {
+        checkAndSeedPaymentMethods();
         List<Map<String, Object>> result = paymentMethodRepository.findByIsDeletedFalse()
                 .stream().map(this::enrichMethod).collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.ok(result));
+    }
+
+    // GET /api/v1/payment-methods/online
+    @GetMapping("/payment-methods/online")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getOnlineMethods() {
+        checkAndSeedPaymentMethods();
+        List<PaymentMethod> all = paymentMethodRepository.findByIsDeletedFalseAndStatusOrderBySortOrderAsc("ACTIVE");
+        List<Map<String, Object>> result = all.stream()
+                .filter(pm -> pm.getAllowOnline() == null || Boolean.TRUE.equals(pm.getAllowOnline()))
+                .map(this::enrichMethod)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
@@ -75,6 +183,7 @@ public class PaymentMethodController {
     @GetMapping("/pos/payment-methods/active")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActiveMethods(
             @RequestParam(value = "branchId", required = false) Long branchId) {
+        checkAndSeedPaymentMethods();
         List<PaymentMethod> methods;
         if (branchId != null) {
             methods = paymentMethodRepository.findActiveByBranchId(branchId);

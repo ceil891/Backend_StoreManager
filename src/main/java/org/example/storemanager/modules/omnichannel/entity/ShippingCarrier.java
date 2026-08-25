@@ -24,4 +24,22 @@ public class ShippingCarrier extends BaseEntity {
 
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
+
+    @Column(length = 150)
+    private String email;
+
+    @Column(length = 50)
+    private String phone;
+
+    @Column(length = 255)
+    private String website;
+
+    @Column(length = 255)
+    private String address;
+
+    @Column(name = "contact_person", length = 150)
+    private String contactPerson;
+
+    @Column(columnDefinition = "TEXT")
+    private String notes;
 }

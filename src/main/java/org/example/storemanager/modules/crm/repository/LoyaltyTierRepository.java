@@ -9,5 +9,7 @@ import java.util.List;
 @Repository
 public interface LoyaltyTierRepository extends JpaRepository<LoyaltyTier, Long> {
     Optional<LoyaltyTier> findByIdAndIsDeletedFalse(Long id);
+    Optional<LoyaltyTier> findByTierCodeAndIsDeletedFalse(String tierCode);
+    Optional<LoyaltyTier> findByTierNameAndIsDeletedFalse(String tierName);
     List<LoyaltyTier> findByIsDeletedFalse();
 }
