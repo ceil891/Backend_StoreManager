@@ -86,9 +86,9 @@ public class LoyaltyServiceImpl implements LoyaltyService {
             return loyaltyPointHistoryRepository.findByRefCodeAndTransactionTypeAndIsDeletedFalse(orderCode, "EARN").orElse(null);
         }
 
-        // 2. Lock Customer (Pessimistic Lock)
-        Customer customer = customerRepository.findByIdForUpdate(customerId)
-                .orElseThrow(() -> new IllegalArgumentException("Khách hàng không tồn tại: " + customerId));
+        // 2. Load Customer
+        Customer customer = customerRepository.findByIdAndIsDeletedFalse(customerId).orElse(null);
+        if (customer == null) return null;
 
         // 3. Lấy hệ số Tier
         LoyaltyTier tier = resolveCustomerTier(customer);
@@ -142,9 +142,9 @@ public class LoyaltyServiceImpl implements LoyaltyService {
             return loyaltyPointHistoryRepository.findByRefCodeAndTransactionTypeAndIsDeletedFalse(orderCode, "REDEEM").orElse(null);
         }
 
-        // 2. Lock Customer
-        Customer customer = customerRepository.findByIdForUpdate(customerId)
-                .orElseThrow(() -> new IllegalArgumentException("Khách hàng không tồn tại: " + customerId));
+        // 2. Load Customer
+        Customer customer = customerRepository.findByIdAndIsDeletedFalse(customerId).orElse(null);
+        if (customer == null) return null;
 
         int currentPoints = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
         if (currentPoints < pointsToRedeem) {
@@ -195,9 +195,9 @@ public class LoyaltyServiceImpl implements LoyaltyService {
 
         if (pointsToRefund <= 0) return null;
 
-        // 4. Lock Customer & trừ điểm
-        Customer customer = customerRepository.findByIdForUpdate(customerId)
-                .orElseThrow(() -> new IllegalArgumentException("Khách hàng không tồn tại: " + customerId));
+        // 4. Load Customer & trừ điểm
+        Customer customer = customerRepository.findByIdAndIsDeletedFalse(customerId).orElse(null);
+        if (customer == null) return null;
 
         int balanceBefore = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
         int balanceAfter = balanceBefore - pointsToRefund;

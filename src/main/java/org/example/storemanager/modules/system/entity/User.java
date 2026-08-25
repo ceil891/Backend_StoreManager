@@ -60,4 +60,7 @@ public class User extends BaseEntity {
 
     @Column(name = "position_id", length = 50)
     private String positionId;
+
+    @Column(name = "avatar", columnDefinition = "TEXT")
+    private String avatar;
 }

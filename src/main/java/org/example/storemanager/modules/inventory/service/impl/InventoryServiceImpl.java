@@ -85,6 +85,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final org.example.storemanager.modules.inventory.repository.InventoryTransactionRepository inventoryTransactionRepository;
     private final org.example.storemanager.modules.catalog.repository.SerialNumberRepository serialNumberRepository;
     private final org.example.storemanager.modules.sales.repository.PurchaseOrderRepository purchaseOrderRepository;
+    private final org.example.storemanager.modules.sales.repository.PurchaseOrderDetailRepository purchaseOrderDetailRepository;
     private final StockOutRepository stockOutRepository;
     private final org.example.storemanager.modules.inventory.mapper.StockOutMapper stockOutMapper;
 
@@ -115,14 +116,37 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<InventoryResponse> getAllInventories() {
-        return sizeInventoryRepository.findAllWithAssociations().stream()
+        return getAllInventories(null);
+    }
+
+    @Override
+    public List<InventoryResponse> getAllInventories(Long branchId) {
+        List<SizeInventory> list = sizeInventoryRepository.findAllWithAssociations();
+        if (branchId != null) {
+            list = list.stream()
+                    .filter(si -> si.getWarehouseZone() != null && si.getWarehouseZone().getBranch() != null
+                            && branchId.equals(si.getWarehouseZone().getBranch().getId()))
+                    .collect(Collectors.toList());
+        }
+        return list.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     public List<StockLedgerResponse> getStockLedger() {
-        return stockLedgerRepository.findAllWithProductAndBranch().stream()
+        return getStockLedger(null);
+    }
+
+    @Override
+    public List<StockLedgerResponse> getStockLedger(Long branchId) {
+        List<StockLedger> list = stockLedgerRepository.findAllWithProductAndBranch();
+        if (branchId != null) {
+            list = list.stream()
+                    .filter(sl -> sl.getBranch() != null && branchId.equals(sl.getBranch().getId()))
+                    .collect(Collectors.toList());
+        }
+        return list.stream()
                 .map(this::toLedgerResponse)
                 .collect(Collectors.toList());
     }
@@ -583,6 +607,10 @@ public class InventoryServiceImpl implements InventoryService {
                     .findFirst().orElse(null);
         }
 
+        if (dto.getReceiptDate() != null && dto.getReceiptDate().toLocalDate().isBefore(java.time.LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày dự kiến nhận không được nằm trong quá khứ");
+        }
+
         ImportReceipt receipt = ImportReceipt.builder()
                 .receiptCode(dto.getReceiptCode() != null ? dto.getReceiptCode() : "GRN-" + System.currentTimeMillis())
                 .receiptDate(dto.getReceiptDate() != null ? dto.getReceiptDate() : LocalDateTime.now())
@@ -598,6 +626,35 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
         receipt.setIsDeleted(false);
         ImportReceipt saved = importReceiptRepository.save(receipt);
+
+        java.util.Map<Long, BigDecimal> orderedQtys = new java.util.HashMap<>();
+        java.util.Map<Long, BigDecimal> alreadyReceived = new java.util.HashMap<>();
+        if (purchaseOrder != null) {
+            List<org.example.storemanager.modules.sales.entity.PurchaseOrderDetail> poDetails = 
+                purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(purchaseOrder.getId());
+            for (org.example.storemanager.modules.sales.entity.PurchaseOrderDetail pod : poDetails) {
+                if (pod.getProduct() != null) {
+                    orderedQtys.put(pod.getProduct().getId(), pod.getQuantity());
+                }
+            }
+
+            // Sum already received in other receipts
+            final Long poIdVal = purchaseOrder.getId();
+            List<ImportReceipt> otherReceipts = importReceiptRepository.findAll().stream()
+                .filter(r -> r.getPurchaseOrder() != null && r.getPurchaseOrder().getId().equals(poIdVal) 
+                             && !Boolean.TRUE.equals(r.getIsDeleted()))
+                .collect(Collectors.toList());
+            for (ImportReceipt or : otherReceipts) {
+                List<ImportReceiptDetail> details = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(or.getId());
+                for (ImportReceiptDetail det : details) {
+                    if (det.getProduct() != null) {
+                        Long pId = det.getProduct().getId();
+                        BigDecimal qty = det.getQuantity() != null ? det.getQuantity() : BigDecimal.ZERO;
+                        alreadyReceived.put(pId, alreadyReceived.getOrDefault(pId, BigDecimal.ZERO).add(qty));
+                    }
+                }
+            }
+        }
 
         List<ImportReceiptDetailDTO> savedLines = new ArrayList<>();
         if (dto.getReceiptLines() != null && !dto.getReceiptLines().isEmpty()) {
@@ -649,6 +706,18 @@ public class InventoryServiceImpl implements InventoryService {
                     variant = productVariantRepository.save(newVar);
                 }
 
+                if (purchaseOrder != null && variant.getProduct() != null) {
+                    Long pId = variant.getProduct().getId();
+                    BigDecimal orderedQty = orderedQtys.getOrDefault(pId, BigDecimal.ZERO);
+                    BigDecimal prevRec = alreadyReceived.getOrDefault(pId, BigDecimal.ZERO);
+                    BigDecimal currentRec = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ZERO;
+                    
+                    if (prevRec.add(currentRec).compareTo(orderedQty) > 0) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                            "Số lượng thực nhận cho sản phẩm " + variant.getProduct().getName() + " vượt quá số lượng đặt hàng ban đầu (Đã nhận: " + prevRec + ", Đang nhận: " + currentRec + ", Đặt mua: " + orderedQty + ")");
+                    }
+                }
+
                 WarehouseBin targetBin = line.getTargetBinId() != null
                         ? warehouseBinRepository.findByIdAndIsDeletedFalse(line.getTargetBinId()).orElse(null)
                         : warehouseBinRepository.findAll().stream().findFirst().orElse(null);
@@ -683,7 +752,8 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
 
-        if ("COMPLETE".equalsIgnoreCase(saved.getStatus()) || "PASSED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) {
+        if ("COMPLETE".equalsIgnoreCase(saved.getStatus()) || "PASSED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())
+                || "INSPECTED_ACCEPTED".equalsIgnoreCase(saved.getStatus()) || "PARTIAL_ACCEPTANCE".equalsIgnoreCase(saved.getStatus())) {
             saved.setStatus("PENDING");
             importReceiptRepository.save(saved);
             return completeImportReceipt(saved.getId());
@@ -729,6 +799,12 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getReceiptCode() != null && !dto.getReceiptCode().isBlank()) {
             r.setReceiptCode(dto.getReceiptCode());
         }
+        if (dto.getReceiptDate() != null) {
+            if (dto.getReceiptDate().toLocalDate().isBefore(java.time.LocalDate.now())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày dự kiến nhận không được nằm trong quá khứ");
+            }
+            r.setReceiptDate(dto.getReceiptDate());
+        }
         if (dto.getStatus() != null && !dto.getStatus().isBlank()) {
             r.setStatus(dto.getStatus());
         }
@@ -747,7 +823,8 @@ public class InventoryServiceImpl implements InventoryService {
         ImportReceipt saved = importReceiptRepository.save(r);
 
         String stUpper = dto.getStatus() != null ? dto.getStatus().toUpperCase() : "";
-        if ("COMPLETED".equals(stUpper) || "COMPLETE".equals(stUpper) || "DA_NHAN".equals(stUpper)) {
+        if ("COMPLETED".equals(stUpper) || "COMPLETE".equals(stUpper) || "DA_NHAN".equals(stUpper)
+                || "INSPECTED_ACCEPTED".equals(stUpper) || "PARTIAL_ACCEPTANCE".equals(stUpper)) {
             return completeImportReceipt(saved.getId());
         }
 
@@ -768,11 +845,38 @@ public class InventoryServiceImpl implements InventoryService {
     public ImportReceiptDTO completeImportReceipt(Long id) {
         ImportReceipt r = importReceiptRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ImportReceipt", "id", id));
-        if ("COMPLETE".equals(r.getStatus())) {
+        if ("COMPLETE".equals(r.getStatus()) || "PARTIAL".equals(r.getStatus()) || "INSPECTED_ACCEPTED".equals(r.getStatus()) || "PARTIAL_ACCEPTANCE".equals(r.getStatus())) {
             return toImportReceiptDTO(r);
         }
 
-        r.setStatus("COMPLETE");
+        if (r.getPurchaseOrder() != null) {
+            List<org.example.storemanager.modules.sales.entity.PurchaseOrderDetail> poDetails = 
+                purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(r.getPurchaseOrder().getId());
+            BigDecimal totalOrdered = poDetails.stream()
+                .map(org.example.storemanager.modules.sales.entity.PurchaseOrderDetail::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalReceived = BigDecimal.ZERO;
+            List<ImportReceipt> otherReceipts = importReceiptRepository.findAll().stream()
+                .filter(x -> x.getPurchaseOrder() != null && x.getPurchaseOrder().getId().equals(r.getPurchaseOrder().getId()) 
+                             && !Boolean.TRUE.equals(x.getIsDeleted()))
+                .collect(Collectors.toList());
+            for (ImportReceipt or : otherReceipts) {
+                List<ImportReceiptDetail> rDetails = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(or.getId());
+                for (ImportReceiptDetail det : rDetails) {
+                    totalReceived = totalReceived.add(det.getQuantity() != null ? det.getQuantity() : BigDecimal.ZERO);
+                }
+            }
+
+            if (totalReceived.compareTo(totalOrdered) >= 0) {
+                r.setStatus("INSPECTED_ACCEPTED");
+            } else {
+                r.setStatus("PARTIAL_ACCEPTANCE");
+            }
+        } else {
+            r.setStatus("INSPECTED_ACCEPTED");
+        }
+
         ImportReceipt saved = importReceiptRepository.save(r);
 
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(id);
@@ -912,14 +1016,15 @@ public class InventoryServiceImpl implements InventoryService {
     public ImportReceiptDTO approveImportReceipt(Long id) {
         ImportReceipt r = importReceiptRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ImportReceipt", "id", id));
-        if (!"PENDING_APPROVAL".equals(r.getStatus())) {
+        if (!"PENDING_APPROVAL".equals(r.getStatus()) && !"PENDING_INSPECTION".equals(r.getStatus()) && !"PENDING".equals(r.getStatus())) {
             throw new org.example.storemanager.shared.exception.BusinessException(
                 org.example.storemanager.shared.enums.ErrorCode.INVALID_STATUS_TRANSITION,
-                "Chỉ có thể phê duyệt phiếu ở trạng thái PENDING_APPROVAL");
+                "Chỉ có thể phê duyệt phiếu ở trạng thái PENDING_APPROVAL hoặc PENDING_INSPECTION");
         }
         r.setStatus("APPROVED");
         r.setUpdatedBy(getCurrentUsername());
-        return toImportReceiptDTO(importReceiptRepository.save(r));
+        importReceiptRepository.save(r);
+        return completeImportReceipt(id);
     }
 
     private String getCurrentUsername() {
@@ -957,9 +1062,57 @@ public class InventoryServiceImpl implements InventoryService {
         return dto;
     }
 
+    private void validateReturnToSupplier(ReturnToSupplierDTO dto) {
+        if (dto.getGrnRefNumber() == null || dto.getGrnRefNumber().trim().isEmpty() || !dto.getGrnRefNumber().startsWith("GRN-")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Yêu cầu mã phiếu nhập kho tham chiếu bắt đầu bằng GRN-");
+        }
+        ImportReceipt originalReceipt = importReceiptRepository.findAll().stream()
+            .filter(rec -> !Boolean.TRUE.equals(rec.getIsDeleted()) && (
+                dto.getGrnRefNumber().equalsIgnoreCase(rec.getReceiptCode()) ||
+                dto.getGrnRefNumber().equalsIgnoreCase(rec.getReceiptCode() != null ? rec.getReceiptCode() : "GRN-" + rec.getId())
+            ))
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không tìm thấy Phiếu nhập kho gốc hợp lệ có mã " + dto.getGrnRefNumber()));
+
+        List<ImportReceiptDetail> receiptDetails = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(originalReceipt.getId());
+        java.util.Map<Long, BigDecimal> receivedProductQtys = new java.util.HashMap<>();
+        for (ImportReceiptDetail det : receiptDetails) {
+            if (det.getProduct() != null) {
+                BigDecimal qty = det.getQuantity() != null ? det.getQuantity() : BigDecimal.ZERO;
+                receivedProductQtys.put(det.getProduct().getId(), receivedProductQtys.getOrDefault(det.getProduct().getId(), BigDecimal.ZERO).add(qty));
+            }
+        }
+
+        if (dto.getReturnLines() != null && !dto.getReturnLines().isEmpty()) {
+            for (ReturnToSupplierDetailDTO line : dto.getReturnLines()) {
+                Long variantId = line.getProductVariantId();
+                ProductVariant variant = null;
+                if (variantId != null) {
+                    variant = productVariantRepository.findById(variantId).orElse(null);
+                }
+                if (variant == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm xuất trả không hợp lệ");
+                }
+                Long prodId = variant.getProduct().getId();
+                if (!receivedProductQtys.containsKey(prodId)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm " + variant.getProduct().getName() + " không nằm trong phiếu nhập kho gốc " + dto.getGrnRefNumber());
+                }
+                BigDecimal maxAllowed = receivedProductQtys.get(prodId);
+                BigDecimal qtyToReturn = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ZERO;
+                if (qtyToReturn.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng xuất trả cho sản phẩm " + variant.getProduct().getName() + " phải lớn hơn 0");
+                }
+                if (qtyToReturn.compareTo(maxAllowed) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng xuất trả cho sản phẩm " + variant.getProduct().getName() + " (" + qtyToReturn + ") vượt quá số lượng đã nhận trong phiếu nhập kho gốc (" + maxAllowed + ")");
+                }
+            }
+        }
+    }
+
     @Override
     @Transactional
     public ReturnToSupplierDTO createReturnToSupplier(ReturnToSupplierDTO dto) {
+        validateReturnToSupplier(dto);
         Long branchId = dto.getBranchId();
         Branch branch = null;
         if (branchId != null) {
@@ -1039,6 +1192,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public ReturnToSupplierDTO updateReturnToSupplier(Long id, ReturnToSupplierDTO dto) {
+        validateReturnToSupplier(dto);
         ReturnToSupplier r = returnToSupplierRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReturnToSupplier", "id", id));
         r.setReturnCode(dto.getReturnCode());

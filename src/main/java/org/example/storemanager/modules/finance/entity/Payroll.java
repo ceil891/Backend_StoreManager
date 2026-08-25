@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.shared.base.BaseEntity;
 import org.example.storemanager.modules.system.entity.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.math.BigDecimal;
 
@@ -13,7 +15,9 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, exclude = {"user"})
+@ToString(callSuper = true, exclude = {"user"})
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "user"})
 public class Payroll extends BaseEntity {
 
     @Column(name = "period_month", nullable = false)
@@ -39,5 +43,11 @@ public class Payroll extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
+
+    @JsonIgnore
+    public User getUser() {
+        return user;
+    }
 }

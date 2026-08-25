@@ -103,40 +103,46 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
         if (request.getDetails() != null) {
             for (SaleOrderDetailRequest detailReq : request.getDetails()) {
-                ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(detailReq.getProductVariantId()).orElse(null);
-                if (variant == null) {
-                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(detailReq.getProductVariantId());
+                Long reqVariantId = detailReq.getProductVariantId();
+                ProductVariant variant = null;
+
+                if (reqVariantId != null) {
+                    // 1. Kiểm tra nếu reqVariantId là Product ID (POS thường gửi Product ID)
+                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(reqVariantId);
                     if (!pvs.isEmpty()) {
                         variant = pvs.get(0);
                     }
+                    // 2. Nếu không phải Product ID, tìm trực tiếp theo ProductVariant ID
+                    if (variant == null) {
+                        variant = productVariantRepository.findByIdAndIsDeletedFalse(reqVariantId).orElse(null);
+                    }
                 }
+
                 if (variant == null) {
-                    variant = productVariantRepository.findAll().stream().filter(v -> Boolean.FALSE.equals(v.getIsDeleted())).findFirst().orElse(null);
+                    throw new ResourceNotFoundException("ProductVariant", "id", reqVariantId);
                 }
 
-                if (variant != null) {
-                    BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPriceSnapshot());
-                    totalAmount = totalAmount.add(subTotal);
+                BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPriceSnapshot());
+                totalAmount = totalAmount.add(subTotal);
 
-                    SaleOrderDetail detail = SaleOrderDetail.builder()
-                            .order(order)
-                            .productVariant(variant)
-                            .productNameSnapshot(variant.getProduct() != null ? variant.getProduct().getName() : "Sản phẩm Online")
-                            .skuSnapshot(variant.getSku() != null ? variant.getSku() : "SKU-ONLINE")
-                            .barcodeSnapshot(variant.getBarcode())
-                            .variantDescriptionSnapshot(variant.getVariantCode())
-                            .quantity(detailReq.getQuantity())
-                            .unitPrice(detailReq.getUnitPriceSnapshot())
-                            .unitPriceSnapshot(detailReq.getUnitPriceSnapshot())
-                            .subTotal(subTotal)
-                            .totalAmount(subTotal)
-                            .taxRate(getTaxRateForProduct(variant.getProduct()))
-                            .build();
+                SaleOrderDetail detail = SaleOrderDetail.builder()
+                        .order(order)
+                        .productVariant(variant)
+                        .productNameSnapshot(variant.getProduct() != null ? variant.getProduct().getName() : "Sản phẩm Online")
+                        .skuSnapshot(variant.getSku() != null ? variant.getSku() : "SKU-ONLINE")
+                        .barcodeSnapshot(variant.getBarcode())
+                        .variantDescriptionSnapshot(variant.getVariantCode())
+                        .quantity(detailReq.getQuantity())
+                        .unitPrice(detailReq.getUnitPriceSnapshot())
+                        .unitPriceSnapshot(detailReq.getUnitPriceSnapshot())
+                        .subTotal(subTotal)
+                        .totalAmount(subTotal)
+                        .taxRate(getTaxRateForProduct(variant.getProduct()))
+                        .build();
 
-                    detail.setIsDeleted(false);
-                    detail.setCreatedBy(username != null ? username : "ONLINE_STORE");
-                    details.add(detail);
-                }
+                detail.setIsDeleted(false);
+                detail.setCreatedBy(username != null ? username : "ONLINE_STORE");
+                details.add(detail);
             }
         }
 
@@ -147,11 +153,11 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
         // Tự động trừ tồn kho thực tế nếu đơn hàng đã hoàn tất (COMPLETED)
         if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
-            try {
-                org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
-                        warehouseService.getOrCreateDefaultZone(branch);
-                for (SaleOrderDetail detail : details) {
-                    ProductVariant pv = detail.getProductVariant();
+            org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
+                    warehouseService.getOrCreateDefaultZone(branch);
+            for (SaleOrderDetail detail : details) {
+                ProductVariant pv = detail.getProductVariant();
+                if (pv != null && pv.getProduct() != null) {
                     inventoryService.deductStock(
                             defaultZone.getId(),
                             branch.getId(),
@@ -164,9 +170,6 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                             savedOrder.getId()
                     );
                 }
-            } catch (Exception e) {
-                // Log warning nếu có lỗi khi trừ tồn kho nhưng vẫn cho đơn tạo thành công
-                System.err.println("Cảnh báo khi trừ tồn kho đơn hàng: " + e.getMessage());
             }
         }
 

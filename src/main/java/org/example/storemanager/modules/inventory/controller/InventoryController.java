@@ -9,6 +9,8 @@ import org.example.storemanager.modules.catalog.dto.response.inventory.LowStockR
 import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.modules.common.dto.response.PageResponse;
 import org.example.storemanager.modules.inventory.service.InventoryService;
+import org.example.storemanager.shared.annotation.BranchScoped;
+import org.example.storemanager.shared.security.UserContextHolder;
 import org.example.storemanager.shared.config.LogActivity;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -23,19 +25,24 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/inventories")
 @RequiredArgsConstructor
+@BranchScoped
 public class InventoryController {
 
     private final InventoryService inventoryService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<InventoryResponse>>> getAllInventories() {
-        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getAllInventories()));
+    public ResponseEntity<ApiResponse<List<InventoryResponse>>> getAllInventories(
+            @RequestParam(required = false) Long branchId) {
+        Long effectiveBranchId = UserContextHolder.getEffectiveBranchId(branchId);
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getAllInventories(effectiveBranchId)));
     }
 
     @GetMapping("/ledger")
     @PreAuthorize("@securityEvaluator.hasPermission('catalog:inventory:search')")
-    public ResponseEntity<ApiResponse<List<StockLedgerResponse>>> getStockLedger() {
-        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getStockLedger()));
+    public ResponseEntity<ApiResponse<List<StockLedgerResponse>>> getStockLedger(
+            @RequestParam(required = false) Long branchId) {
+        Long effectiveBranchId = UserContextHolder.getEffectiveBranchId(branchId);
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getStockLedger(effectiveBranchId)));
     }
 
     @GetMapping("/search")
@@ -43,6 +50,9 @@ public class InventoryController {
     public ResponseEntity<ApiResponse<PageResponse<InventoryResponse>>> searchInventories(
             SearchInventoryRequest request,
             Pageable pageable) {
+        if (request != null) {
+            request.setBranchId(UserContextHolder.getEffectiveBranchId(request.getBranchId()));
+        }
         PageResponse<InventoryResponse> response = inventoryService.searchInventories(request, pageable);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }

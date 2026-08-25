@@ -169,6 +169,12 @@ public class LogisticsController {
         carrier.setCarrierName(req.getCarrierName());
         carrier.setTrackingUrlFormat(req.getTrackingUrlFormat());
         carrier.setIsActive(req.getIsActive());
+        carrier.setEmail(req.getEmail());
+        carrier.setPhone(req.getPhone());
+        carrier.setWebsite(req.getWebsite());
+        carrier.setAddress(req.getAddress());
+        carrier.setContactPerson(req.getContactPerson());
+        carrier.setNotes(req.getNotes());
         return ResponseEntity.ok(ApiResponse.ok(shippingCarrierRepository.save(carrier)));
     }
 
@@ -533,6 +539,19 @@ public class LogisticsController {
         item.put("id", String.valueOf(System.currentTimeMillis()));
         deliveryNotes.add(item);
         return ResponseEntity.status(201).body(ApiResponse.created(item));
+    }
+
+    @PutMapping("/delivery-notes/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateDeliveryNote(@PathVariable String id, @RequestBody Map<String, Object> req) {
+        for (int i = 0; i < deliveryNotes.size(); i++) {
+            if (id.equals(String.valueOf(deliveryNotes.get(i).get("id")))) {
+                Map<String, Object> updated = new HashMap<>(req);
+                updated.put("id", id);
+                deliveryNotes.set(i, updated);
+                return ResponseEntity.ok(ApiResponse.ok(updated));
+            }
+        }
+        return ResponseEntity.status(404).body(ApiResponse.error(404, "Delivery note not found"));
     }
 
     @DeleteMapping("/delivery-notes/{id}")

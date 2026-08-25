@@ -9,5 +9,8 @@ import java.util.List;
 @Repository
 public interface ProductReviewRepository extends JpaRepository<ProductReview, Long> {
     List<ProductReview> findByProductIdAndIsApprovedTrueOrderByCreatedAtDesc(Long productId);
+    List<ProductReview> findByProductIdOrderByCreatedAtDesc(Long productId);
+    List<ProductReview> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
+    List<ProductReview> findAllByOrderByCreatedAtDesc();
     Long countByProductIdAndIsApprovedTrue(Long productId);
 }

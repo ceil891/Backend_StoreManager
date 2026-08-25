@@ -44,6 +44,16 @@ public class SupplierContractServiceImpl implements SupplierContractService {
 
     @Override
     public SupplierContractResponse createContract(CreateSupplierContractRequest request) {
+        if (request.getMaxDebtLimit() == null || request.getMaxDebtLimit().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new org.example.storemanager.shared.exception.BusinessException(org.example.storemanager.shared.enums.ErrorCode.CONTRACT_INVALID);
+        }
+        if (request.getEndDate() != null && request.getStartDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
+            throw new org.example.storemanager.shared.exception.BusinessException(
+                org.example.storemanager.shared.enums.ErrorCode.CONTRACT_INVALID, 
+                "Ngày kết thúc hợp đồng không được trước ngày bắt đầu"
+            );
+        }
+
         Supplier supplier = supplierRepository.findByIdAndIsDeletedFalse(request.getSupplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
 
@@ -75,6 +85,16 @@ public class SupplierContractServiceImpl implements SupplierContractService {
 
     @Override
     public SupplierContractResponse updateContract(Long id, UpdateSupplierContractRequest request) {
+        if (request.getMaxDebtLimit() == null || request.getMaxDebtLimit().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new org.example.storemanager.shared.exception.BusinessException(org.example.storemanager.shared.enums.ErrorCode.CONTRACT_INVALID);
+        }
+        if (request.getEndDate() != null && request.getStartDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
+            throw new org.example.storemanager.shared.exception.BusinessException(
+                org.example.storemanager.shared.enums.ErrorCode.CONTRACT_INVALID, 
+                "Ngày kết thúc hợp đồng không được trước ngày bắt đầu"
+            );
+        }
+
         SupplierContract contract = supplierContractRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SupplierContract", "id", id));
 

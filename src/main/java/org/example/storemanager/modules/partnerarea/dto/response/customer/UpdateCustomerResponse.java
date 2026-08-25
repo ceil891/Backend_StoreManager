@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -19,8 +20,17 @@ public class UpdateCustomerResponse {
     private String address;
     private String avatarUrl;
     private String membershipRank;
+    private Double points;
+    private Double totalSpend;
     private String message;
     private LocalDateTime updatedAt;
     private String updatedBy;
     private Boolean isActive;
+
+    private LocalDate dob;
+    private String taxCode;
+    private String gender;
+    private String note;
+    private Long groupId;
+    private Long areaId;
 }

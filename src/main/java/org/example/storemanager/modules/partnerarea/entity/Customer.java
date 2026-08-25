@@ -31,6 +31,9 @@ public class Customer extends BaseEntity {
 
     private LocalDate dob; // Ngày sinh
 
+    @Column(name = "gender", length = 10)
+    private String gender; // Nam, Nữ, Khác
+
     @Column(name = "tax_code", length = 50)
     private String taxCode;
 

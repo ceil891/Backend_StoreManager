@@ -34,6 +34,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     Page<Customer> findByIsActiveAndIsDeletedFalse(Boolean isActive, Pageable pageable);
 
     // 3. Các hàm bổ trợ
+    Optional<Customer> findByPhone(String phone);
     boolean existsByPhone(String phone);
     boolean existsByEmail(String email);
     // Thêm vào CustomerRepository.java

@@ -24,6 +24,8 @@ public class PurchaseOrderResponse {
     private Long branchId;
     private String branchName;
     private String note;
+    private String paymentStatus;
+    private BigDecimal advanceAmount;
     private LocalDateTime createdAt;
     private String createdBy;
     private List<PurchaseOrderDetailResponse> details;

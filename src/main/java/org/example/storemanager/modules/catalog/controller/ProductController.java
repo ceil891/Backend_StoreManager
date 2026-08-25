@@ -38,6 +38,15 @@ public class ProductController {
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
 
+    @PostMapping("/bulk")
+    @PreAuthorize("@securityEvaluator.hasPermission('catalog:product:create')")
+    public ResponseEntity<ApiResponse<org.example.storemanager.modules.catalog.dto.response.product.BulkProductImportResponse>> bulkCreateProducts(
+            @RequestBody List<CreateProductRequest> requests) {
+        org.example.storemanager.modules.catalog.dto.response.product.BulkProductImportResponse response = productService.bulkCreateProducts(requests);
+        return ResponseEntity.ok(ApiResponse.ok("Xử lý nhập danh sách sản phẩm hoàn tất", response));
+    }
+
+
     @PutMapping("/{id}")
     @PreAuthorize("@securityEvaluator.hasPermission('catalog:product:update')")
     public ResponseEntity<ApiResponse<UpdateProductResponse>> updateProduct(

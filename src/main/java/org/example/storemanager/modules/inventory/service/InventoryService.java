@@ -15,7 +15,13 @@ import java.util.List;
 public interface InventoryService {
     PageResponse<InventoryResponse> searchInventories(SearchInventoryRequest request, Pageable pageable);
     List<InventoryResponse> getAllInventories();
+    default List<InventoryResponse> getAllInventories(Long branchId) {
+        return getAllInventories();
+    }
     List<StockLedgerResponse> getStockLedger();
+    default List<StockLedgerResponse> getStockLedger(Long branchId) {
+        return getStockLedger();
+    }
     List<LowStockResponse> getLowStock();
     AdjustmentResponse adjustStock(InventoryAdjustRequest request);
     InventoryResponse getInventory(Long id);

@@ -8,6 +8,7 @@ import org.example.storemanager.modules.partnerarea.service.customer.CustomerSer
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/partnerarea/customers")
@@ -17,13 +18,13 @@ public class CustomerController {
     private final CustomerService customerService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<?>> createCustomer(@ModelAttribute CreateCustomerRequest req) {
+    public ResponseEntity<ApiResponse<?>> createCustomer(@Valid @ModelAttribute CreateCustomerRequest req) {
         return ResponseEntity.status(201)
                 .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @ModelAttribute UpdateCustomerRequest req) {
+    public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @Valid @ModelAttribute UpdateCustomerRequest req) {
         return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
     }
 

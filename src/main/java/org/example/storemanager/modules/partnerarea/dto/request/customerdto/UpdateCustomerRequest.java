@@ -3,6 +3,7 @@ package org.example.storemanager.modules.partnerarea.dto.request.customerdto;
 import lombok.Builder;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDate;
 
 @Data
 @Builder
@@ -16,5 +17,12 @@ public class UpdateCustomerRequest {
     private Long areaId;
     private Boolean isActive;
     private MultipartFile avatar;
-    private String avatarUrl;// Cho phép cập nhật trạng thái hoạt động
+    private String avatarUrl;
+    
+    private LocalDate dob;
+    private String gender;
+    private String membershipRank;
+    private Double points;
+    private Double totalSpend;
+    private String note;
 }

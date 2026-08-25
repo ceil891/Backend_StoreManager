@@ -1,6 +1,8 @@
 package org.example.storemanager.modules.purchase.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.example.storemanager.modules.purchase.dto.request.CreatePurchaseOrderRequest;
 import org.example.storemanager.modules.purchase.dto.request.UpdatePurchaseOrderRequest;
 import org.example.storemanager.modules.purchase.dto.request.CalculatePurchaseOrderRequest;
@@ -59,9 +61,20 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final BranchRepository branchRepository;
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
+    private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
 
     @Override
     public PurchaseOrderResponse createOrder(CreatePurchaseOrderRequest request) {
+        if (request.getPoDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày đặt hàng không được để trống");
+        }
+        if (request.getPoDate().toLocalDate().isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày lập đơn không được nhỏ hơn ngày hiện tại");
+        }
+        if (request.getExpectedDate() != null && request.getExpectedDate().isBefore(request.getPoDate())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày nhận hàng dự kiến không được nhỏ hơn Ngày lập đơn");
+        }
+
         Supplier supplier = supplierRepository.findByIdAndIsDeletedFalse(request.getSupplierId())
                 .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
 
@@ -74,7 +87,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poCode(request.getPoCode())
                 .poDate(request.getPoDate())
                 .expectedDate(request.getExpectedDate())
-                .status(request.getStatus())
+                .status("DRAFT")
+                .paymentStatus(request.getPaymentStatus() != null ? request.getPaymentStatus() : "UNPAID")
+                .advanceAmount(request.getAdvanceAmount() != null ? request.getAdvanceAmount() : BigDecimal.ZERO)
                 .supplier(supplier)
                 .branch(branch)
                 .build();
@@ -110,11 +125,42 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder savedPo = purchaseOrderRepository.save(po);
         purchaseOrderDetailRepository.saveAll(details);
 
+        // Auto create PaymentVoucher (Phiếu chi) under the same transaction block if PO is marked fully paid or partially paid on creation
+        if ("PAID".equals(request.getPaymentStatus()) || "PARTIAL_ADVANCE".equals(request.getPaymentStatus())) {
+            BigDecimal amount = "PAID".equals(request.getPaymentStatus()) ? totalAmount : (request.getAdvanceAmount() != null ? request.getAdvanceAmount() : totalAmount.divide(BigDecimal.valueOf(2)));
+            String dateStr = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now());
+            String voucherCode = "PAY-PUR-" + dateStr + "-" + String.format("%03d", (int)(Math.random() * 900 + 100));
+            
+            org.example.storemanager.modules.finance.entity.PaymentVoucher pv = org.example.storemanager.modules.finance.entity.PaymentVoucher.builder()
+                    .voucherCode(voucherCode)
+                    .voucherDate(LocalDateTime.now())
+                    .amount(amount)
+                    .receiverName(supplier.getName())
+                    .status("COMPLETED")
+                    .invoiceCode(savedPo.getPoCode())
+                    .paymentMethod("CHUYEN_KHOAN")
+                    .fundAccountName("Techcombank - 1902838392 (Công ty StoreManager)")
+                    .handler(username)
+                    .notes("Thanh toán tự động khi tạo Đơn mua hàng " + savedPo.getPoCode())
+                    .build();
+            pv.setIsDeleted(false);
+            pv.setCreatedBy(username);
+            
+            paymentVoucherRepository.save(pv);
+        }
+
         return mapToResponse(savedPo, details);
     }
 
     @Override
     public PurchaseOrderResponse updateOrder(Long id, UpdatePurchaseOrderRequest request) {
+        if (request.getPoDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày đặt hàng không được để trống");
+        }
+        if (request.getExpectedDate() != null && request.getExpectedDate().isBefore(request.getPoDate())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày nhận hàng dự kiến không được nhỏ hơn Ngày lập đơn");
+        }
+
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
 
@@ -132,7 +178,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         po.setPoDate(request.getPoDate());
         po.setExpectedDate(request.getExpectedDate());
-        po.setStatus(request.getStatus());
+        if (request.getStatus() != null) {
+            validateStatusTransition(po.getStatus(), request.getStatus());
+            po.setStatus(request.getStatus());
+        }
+        if (request.getPaymentStatus() != null) {
+            po.setPaymentStatus(request.getPaymentStatus());
+        }
+        if (request.getAdvanceAmount() != null) {
+            po.setAdvanceAmount(request.getAdvanceAmount());
+        }
         po.setSupplier(supplier);
         po.setBranch(branch);
         po.setNote(request.getNote());
@@ -183,6 +238,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
 
+        validateStatusTransition(po.getStatus(), status);
         po.setStatus(status);
         po.setUpdatedBy(getCurrentUsername());
 
@@ -196,8 +252,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
 
-        if ("COMPLETED".equals(po.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không thể xóa đơn mua hàng ở trạng thái COMPLETED");
+        if (!"DRAFT".equals(po.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ được phép xóa đơn hàng ở trạng thái Bản nháp (DRAFT)");
         }
 
         String username = getCurrentUsername();
@@ -471,6 +527,43 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return Sort.by(direction, property);
     }
 
+    private String calculatePaymentStatus(PurchaseOrder po) {
+        List<org.example.storemanager.modules.finance.entity.PaymentVoucher> allVouchers = 
+                paymentVoucherRepository.findAll().stream()
+                    .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()) && v.getInvoiceCode() != null)
+                    .filter(v -> {
+                        String code = v.getInvoiceCode().trim();
+                        return (po.getPoCode() != null && code.toLowerCase().contains(po.getPoCode().toLowerCase()))
+                            || code.equalsIgnoreCase("INV-MH-" + po.getId())
+                            || code.equalsIgnoreCase(String.valueOf(po.getId()));
+                    })
+                    .collect(Collectors.toList());
+
+        if (allVouchers.isEmpty()) {
+            return po.getPaymentStatus() != null ? po.getPaymentStatus() : "UNPAID";
+        }
+        
+        BigDecimal totalPaid = allVouchers.stream()
+                .filter(v -> "COMPLETED".equalsIgnoreCase(v.getStatus()) 
+                        || "APPROVED".equalsIgnoreCase(v.getStatus()) 
+                        || "DA_THANH_TOAN".equalsIgnoreCase(v.getStatus()))
+                .map(v -> v.getAmount() != null ? v.getAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        po.setAdvanceAmount(totalPaid);
+        BigDecimal totalAmt = po.getTotalAmount() != null ? po.getTotalAmount() : BigDecimal.ZERO;
+
+        if (totalPaid.compareTo(BigDecimal.ZERO) == 0) {
+            return "UNPAID";
+        } else if (totalAmt.compareTo(BigDecimal.ZERO) > 0 && totalPaid.compareTo(totalAmt) >= 0) {
+            return "PAID";
+        } else if (totalPaid.compareTo(BigDecimal.ZERO) > 0) {
+            return "PARTIAL_ADVANCE";
+        } else {
+            return "UNPAID";
+        }
+    }
+
     private PurchaseOrderResponse mapToResponse(PurchaseOrder po, List<PurchaseOrderDetail> details) {
         List<PurchaseOrderDetailResponse> detailsResponse = details.stream()
                 .map(d -> PurchaseOrderDetailResponse.builder()
@@ -484,6 +577,12 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                         .build())
                 .collect(Collectors.toList());
 
+        String computedPaymentStatus = calculatePaymentStatus(po);
+        if (!computedPaymentStatus.equals(po.getPaymentStatus())) {
+            po.setPaymentStatus(computedPaymentStatus);
+            purchaseOrderRepository.save(po);
+        }
+
         return PurchaseOrderResponse.builder()
                 .id(po.getId())
                 .poCode(po.getPoCode())
@@ -496,10 +595,71 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .branchId(po.getBranch().getId())
                 .branchName(po.getBranch().getBranchName())
                 .note(po.getNote())
+                .paymentStatus(computedPaymentStatus)
+                .advanceAmount(po.getAdvanceAmount() != null ? po.getAdvanceAmount() : BigDecimal.ZERO)
                 .createdAt(po.getCreatedAt())
                 .createdBy(po.getCreatedBy())
                 .details(detailsResponse)
                 .build();
+    }
+
+    private void validateStatusTransition(String currentStatus, String targetStatus) {
+        if (currentStatus == null || targetStatus == null || currentStatus.equals(targetStatus)) {
+            return;
+        }
+        
+        boolean valid = false;
+        switch (currentStatus) {
+            case "DRAFT":
+                if ("PENDING_APPROVAL".equals(targetStatus) || "CANCELLED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "PENDING_APPROVAL":
+                if ("APPROVED".equals(targetStatus) || "CANCELLED".equals(targetStatus) || "DRAFT".equals(targetStatus) || "REJECTED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "REJECTED":
+                if ("DRAFT".equals(targetStatus) || "PENDING_APPROVAL".equals(targetStatus) || "CANCELLED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "APPROVED":
+                if ("SENT_TO_SUPPLIER".equals(targetStatus) || "CONFIRMED".equals(targetStatus) 
+                        || "DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) 
+                        || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "SENT_TO_SUPPLIER":
+                if ("CONFIRMED".equals(targetStatus) || "DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) 
+                        || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "CONFIRMED":
+                if ("DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "DISPATCHED":
+            case "IN_TRANSIT":
+                if ("DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+            case "DELIVERED":
+                if ("COMPLETED".equals(targetStatus)) {
+                    valid = true;
+                }
+                break;
+        }
+        
+        if (!valid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                "Chuyển đổi trạng thái từ " + currentStatus + " sang " + targetStatus + " không hợp lệ.");
+        }
     }
 
     private ImportReceiptDTO mapToImportReceiptResponse(ImportReceipt r, List<ImportReceiptDetail> details) {

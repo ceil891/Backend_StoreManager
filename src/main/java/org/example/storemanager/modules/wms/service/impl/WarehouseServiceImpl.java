@@ -104,23 +104,31 @@ public class WarehouseServiceImpl implements WarehouseService {
 
     @Override
     public WarehouseZone getOrCreateDefaultZone(Branch branch) {
-        return warehouseZoneRepository.findByBranchIdAndZoneCodeAndIsDeletedFalse(branch.getId(), DEFAULT_ZONE_CODE)
-                .orElseGet(() -> {
-                    WarehouseZone zone = WarehouseZone.builder()
-                            .zoneCode(DEFAULT_ZONE_CODE)
-                            .zoneName(DEFAULT_ZONE_NAME)
-                            .status("ACTIVE")
-                            .branch(branch)
-                            .build();
-                    zone.setIsDeleted(false);
-                    return warehouseZoneRepository.save(zone);
-                });
+        if (branch == null) {
+            branch = branchRepository.findAll().stream().filter(b -> Boolean.FALSE.equals(b.getIsDeleted())).findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", "default"));
+        }
+        final Branch targetBranch = branch;
+        return warehouseZoneRepository.findByBranchIdAndZoneCodeAndIsDeletedFalse(targetBranch.getId(), DEFAULT_ZONE_CODE)
+                .orElseGet(() -> warehouseZoneRepository.findFirstByBranchIdAndIsDeletedFalseOrderByIdAsc(targetBranch.getId())
+                        .orElseGet(() -> {
+                            WarehouseZone zone = WarehouseZone.builder()
+                                    .zoneCode(DEFAULT_ZONE_CODE)
+                                    .zoneName(DEFAULT_ZONE_NAME)
+                                    .status("ACTIVE")
+                                    .branch(targetBranch)
+                                    .build();
+                            zone.setIsDeleted(false);
+                            return warehouseZoneRepository.save(zone);
+                        }));
     }
 
     @Override
     public WarehouseZone getOrCreateDefaultZone(Long branchId) {
-        Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
+        Branch branch = null;
+        if (branchId != null) {
+            branch = branchRepository.findByIdAndIsDeletedFalse(branchId).orElse(null);
+        }
         return getOrCreateDefaultZone(branch);
     }
 

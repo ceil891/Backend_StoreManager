@@ -80,6 +80,7 @@ public class UserServiceImpl implements UserService {
         user.setDateOfBirth(request.getDateOfBirth());
         user.setDepartmentId(request.getDepartmentId());
         user.setPositionId(request.getPositionId());
+        user.setAvatar(request.getAvatar());
         user.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE");
 
         user.setIsDeleted(false);
@@ -136,6 +137,9 @@ public class UserServiceImpl implements UserService {
         user.setDateOfBirth(request.getDateOfBirth());
         user.setDepartmentId(request.getDepartmentId());
         user.setPositionId(request.getPositionId());
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
@@ -309,6 +313,7 @@ public class UserServiceImpl implements UserService {
                 .dateOfBirth(user.getDateOfBirth())
                 .departmentId(user.getDepartmentId())
                 .positionId(user.getPositionId())
+                .avatar(user.getAvatar())
                 .createdAt(user.getCreatedAt())
                 .createdBy(user.getCreatedBy())
                 .updatedAt(user.getUpdatedAt())
@@ -325,6 +330,7 @@ public class UserServiceImpl implements UserService {
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .status(user.getStatus())
+                .avatar(user.getAvatar())
                 .createdBy(user.getCreatedBy())
                 .createdAt(user.getCreatedAt() != null ? user.getCreatedAt() : LocalDateTime.now())
                 .build();
@@ -342,6 +348,7 @@ public class UserServiceImpl implements UserService {
                 .roleName(user.getRole() != null ? user.getRole().getRoleName() : null)
                 .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
                 .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
+                .avatar(user.getAvatar())
                 .updatedBy(user.getUpdatedBy())
                 .updatedAt(user.getUpdatedAt() != null ? user.getUpdatedAt() : LocalDateTime.now())
                 .build();
