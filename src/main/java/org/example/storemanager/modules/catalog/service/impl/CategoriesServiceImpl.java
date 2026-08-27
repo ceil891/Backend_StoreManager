@@ -33,7 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class CategoriesServiceImpl implements CategoriesService {
 
     private final CategoriesRepository categoriesRepository;
@@ -48,6 +48,7 @@ public class CategoriesServiceImpl implements CategoriesService {
     }
 
     @Override
+    @Transactional
     @LogActivity(actionType = "CREATE", entityName = "ProductCategory", entityClass = ProductCategory.class)
     public CreateCategoriesResponse create(CreateCategoriesRequest request) {
         if (categoriesRepository.existsByCategoryCodeAndIsDeletedFalse(request.getCategoryCode())) {
@@ -82,6 +83,7 @@ public class CategoriesServiceImpl implements CategoriesService {
     }
 
     @Override
+    @Transactional
     @LogActivity(actionType = "UPDATE", entityName = "ProductCategory", entityClass = ProductCategory.class)
     public UpdateCategoriesResponse update(Long id, UpdateCategoriesRequest request) {
         ProductCategory category = categoriesRepository.findByIdAndIsDeletedFalse(id)
@@ -130,6 +132,7 @@ public class CategoriesServiceImpl implements CategoriesService {
     }
 
     @Override
+    @Transactional
     @LogActivity(actionType = "DELETE", entityName = "ProductCategory", entityClass = ProductCategory.class)
     public DeleteCategoriesResponse softDelete(Long id) {
         ProductCategory category = categoriesRepository.findByIdAndIsDeletedFalse(id)
@@ -167,6 +170,7 @@ public class CategoriesServiceImpl implements CategoriesService {
     }
 
     @Override
+    @Transactional
     @LogActivity(actionType = "UPDATE_STATUS", entityName = "ProductCategory", entityClass = ProductCategory.class)
     public UpdateCategoriesResponse toggleStatus(Long id, Boolean isActive) {
         ProductCategory category = categoriesRepository.findByIdAndIsDeletedFalse(id)
@@ -180,6 +184,7 @@ public class CategoriesServiceImpl implements CategoriesService {
     }
 
     @Override
+    @Transactional
     @LogActivity(actionType = "RESTORE", entityName = "ProductCategory", entityClass = ProductCategory.class)
     public UpdateCategoriesResponse restore(Long id) {
         ProductCategory category = categoriesRepository.findById(id)
