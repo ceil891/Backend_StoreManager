@@ -136,3 +136,35 @@ ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS accumulated_depreciation NUMER
 ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS useful_life_months INTEGER DEFAULT 36;
 ALTER TABLE fixed_assets ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'ACTIVE';
 
+-- Migration: Banners table column alignment
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS link_url VARCHAR(255);
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS valid_from TIMESTAMP;
+ALTER TABLE IF EXISTS banners ADD COLUMN IF NOT EXISTS valid_until TIMESTAMP;
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'createdat') THEN
+        UPDATE banners SET created_at = createdat WHERE created_at IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'updatedat') THEN
+        UPDATE banners SET updated_at = updatedat WHERE updated_at IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'isactive') THEN
+        UPDATE banners SET is_active = isactive WHERE is_active IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'sortorder') THEN
+        UPDATE banners SET sort_order = sortorder WHERE sort_order IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'imageurl') THEN
+        UPDATE banners SET image_url = imageurl WHERE image_url IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'banners' AND column_name = 'linkurl') THEN
+        UPDATE banners SET link_url = linkurl WHERE link_url IS NULL;
+    END IF;
+END $$;
+

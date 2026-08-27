@@ -50,6 +50,7 @@ import org.example.storemanager.modules.system.repository.BranchRepository;
 import java.time.LocalDateTime;
 
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.seeder.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
@@ -76,21 +77,7 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        try {
-            seedInitialData();
-        } catch (Exception e) {
-            log.error("[DataSeeder] Quá trình seed dữ liệu khởi tạo gặp sự cố (ứng dụng vẫn tiếp tục khởi động bình thường): {}", e.getMessage());
-        }
-    }
-
-    private void seedInitialData() {
-        seedPermissions();
-        Role superAdminRole = seedSuperAdminRole();
-        if (superAdminRole != null) {
-            seedSuperAdminPermissions(superAdminRole);
-            seedDefaultStaffRoles(superAdminRole);
-        }
-        log.info("[DataSeeder] Hoàn tất kiểm tra dữ liệu khởi tạo.");
+        log.info("[DataSeeder] DataSeeder đã được tắt. Bỏ qua toàn bộ truy vấn khởi tạo DB.");
     }
 
     private void seedPermissions() {
