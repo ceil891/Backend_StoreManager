@@ -1,4 +1,13 @@
 target/
+.git
+.gitignore
+.idea
+*.iml
+.mvn
+mvnw
+mvnw.cmd
+.DS_Store
+Thumbs.db
 !.mvn/wrapper/maven-wrapper.jar
 !target//*.jar
 
