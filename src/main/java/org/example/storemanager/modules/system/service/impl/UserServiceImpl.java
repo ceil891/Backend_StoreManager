@@ -47,6 +47,7 @@ public class UserServiceImpl implements UserService {
     private final BranchRepository branchRepository;
     private final PasswordEncoder passwordEncoder;
     private final org.example.storemanager.shared.service.EmailService emailService;
+    private final org.example.storemanager.modules.partnerarea.repository.CustomerRepository customerRepository;
 
 
     @Override
@@ -143,6 +144,27 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
+
+        // Đồng bộ ảnh đại diện và thông tin với Customer nếu có
+        try {
+            customerRepository.findAll().stream()
+                    .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                    .filter(cust -> (updatedUser.getEmail() != null && updatedUser.getEmail().equalsIgnoreCase(cust.getEmail())) ||
+                                    (updatedUser.getPhone() != null && updatedUser.getPhone().replace(" ", "").equals(cust.getPhone() != null ? cust.getPhone().replace(" ", "") : "")) ||
+                                    (id != null && id.equals(cust.getId())))
+                    .findFirst()
+                    .ifPresent(cust -> {
+                        if (updatedUser.getFullName() != null) cust.setName(updatedUser.getFullName());
+                        if (updatedUser.getPhone() != null) cust.setPhone(updatedUser.getPhone());
+                        if (updatedUser.getEmail() != null) cust.setEmail(updatedUser.getEmail());
+                        if (updatedUser.getAvatar() != null && !updatedUser.getAvatar().isBlank()) cust.setAvatarUrl(updatedUser.getAvatar());
+                        if (updatedUser.getStatus() != null) {
+                            cust.setIsActive("ACTIVE".equalsIgnoreCase(updatedUser.getStatus()));
+                        }
+                        customerRepository.save(cust);
+                    });
+        } catch (Exception ignored) {}
+
         return mapToUpdateResponse(updatedUser);
     }
 
@@ -161,6 +183,22 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
+
+        // Đồng bộ trạng thái khóa tài khoản sang Customer
+        try {
+            boolean isActive = "ACTIVE".equalsIgnoreCase(status);
+            customerRepository.findAll().stream()
+                    .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                    .filter(cust -> (updatedUser.getEmail() != null && updatedUser.getEmail().equalsIgnoreCase(cust.getEmail())) ||
+                                    (updatedUser.getPhone() != null && updatedUser.getPhone().replace(" ", "").equals(cust.getPhone() != null ? cust.getPhone().replace(" ", "") : "")) ||
+                                    (id != null && id.equals(cust.getId())))
+                    .findFirst()
+                    .ifPresent(cust -> {
+                        cust.setIsActive(isActive);
+                        customerRepository.save(cust);
+                    });
+        } catch (Exception ignored) {}
+
         return mapToUpdateResponse(updatedUser);
     }
 

@@ -199,6 +199,24 @@ public class CustomerServiceImpl implements CustomerService {
         }
         Customer saved = customerRepository.save(c);
 
+        // Đồng bộ dữ liệu với tài khoản User nếu có
+        try {
+            userRepository.findAll().stream()
+                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
+                    .filter(u -> (saved.getEmail() != null && saved.getEmail().equalsIgnoreCase(u.getEmail())) ||
+                                 (saved.getPhone() != null && saved.getPhone().replace(" ", "").equals(u.getPhone() != null ? u.getPhone().replace(" ", "") : "")) ||
+                                 (id != null && id.equals(u.getId())))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        if (saved.getName() != null && !saved.getName().isBlank()) u.setFullName(saved.getName());
+                        if (saved.getPhone() != null && !saved.getPhone().isBlank()) u.setPhone(saved.getPhone());
+                        if (saved.getEmail() != null && !saved.getEmail().isBlank()) u.setEmail(saved.getEmail());
+                        if (saved.getAvatarUrl() != null && !saved.getAvatarUrl().isBlank()) u.setAvatar(saved.getAvatarUrl());
+                        if (saved.getIsActive() != null) u.setStatus(Boolean.TRUE.equals(saved.getIsActive()) ? "ACTIVE" : "LOCKED");
+                        userRepository.save(u);
+                    });
+        } catch (Exception ignored) {}
+
         return UpdateCustomerResponse.builder()
                 .id(saved.getId())
                 .name(saved.getName())
@@ -228,6 +246,21 @@ public class CustomerServiceImpl implements CustomerService {
         c.setIsActive(isActive);
         c.setUpdatedAt(LocalDateTime.now());
         customerRepository.save(c);
+
+        // Đồng bộ trạng thái khóa tài khoản User tương ứng
+        try {
+            userRepository.findAll().stream()
+                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
+                    .filter(u -> (c.getEmail() != null && c.getEmail().equalsIgnoreCase(u.getEmail())) ||
+                                 (c.getPhone() != null && c.getPhone().replace(" ", "").equals(u.getPhone() != null ? u.getPhone().replace(" ", "") : "")) ||
+                                 (id != null && id.equals(u.getId())))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        u.setStatus(Boolean.TRUE.equals(isActive) ? "ACTIVE" : "LOCKED");
+                        userRepository.save(u);
+                    });
+        } catch (Exception ignored) {}
+
         return UpdateCustomerResponse.builder()
                 .id(c.getId())
                 .isActive(c.getIsActive())

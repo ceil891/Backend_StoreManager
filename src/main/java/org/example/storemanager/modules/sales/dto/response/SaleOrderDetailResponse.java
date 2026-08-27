@@ -13,11 +13,13 @@ import java.math.BigDecimal;
 public class SaleOrderDetailResponse {
     private Long id;
     private Long productVariantId;
+    private Long productId;
     private String variantCode;
     private String skuSnapshot;
     private String barcodeSnapshot;
     private String productNameSnapshot;
     private String variantDescriptionSnapshot;
+    private String imageUrl;
     private BigDecimal quantity;
     private BigDecimal unitPriceSnapshot;
     private BigDecimal subTotal;

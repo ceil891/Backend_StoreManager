@@ -58,9 +58,17 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
         Customer customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId()).orElse(null);
         if (customer == null && request.getCustomerPhone() != null && !request.getCustomerPhone().trim().isEmpty()) {
+            String ph = request.getCustomerPhone().trim().replace(" ", "");
             customer = customerRepository.findAll().stream()
                     .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
-                    .filter(c -> request.getCustomerPhone().trim().equals(c.getPhone()))
+                    .filter(c -> c.getPhone() != null && c.getPhone().replace(" ", "").equals(ph))
+                    .findFirst().orElse(null);
+        }
+        if (customer == null && request.getCustomerName() != null && !request.getCustomerName().trim().isEmpty()) {
+            String cName = request.getCustomerName().trim();
+            customer = customerRepository.findAll().stream()
+                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
+                    .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cName))
                     .findFirst().orElse(null);
         }
         if (customer == null) {
@@ -173,8 +181,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             }
         }
 
-        // Tự động tích điểm cho khách hàng khi đơn hoàn tất hoặc đã thanh toán
-        if (customer != null && ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) || "PAID".equalsIgnoreCase(savedOrder.getPaymentStatus()))) {
+        // Tự động tích điểm cho khách hàng khi đặt hàng thành công
+        if (customer != null) {
             try {
                 loyaltyService.processOrderLoyaltyEarn(
                         customer.getId(),
@@ -572,18 +580,33 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     private SaleOrderResponse mapToResponse(SaleOrder o, List<SaleOrderDetail> details) {
         List<SaleOrderDetailResponse> detailsResponse = details.stream()
-                .map(d -> SaleOrderDetailResponse.builder()
-                        .id(d.getId())
-                        .productVariantId(d.getProductVariant().getId())
-                        .variantCode(d.getProductVariant().getVariantCode())
-                        .skuSnapshot(d.getSkuSnapshot())
-                        .barcodeSnapshot(d.getBarcodeSnapshot())
-                        .productNameSnapshot(d.getProductNameSnapshot())
-                        .variantDescriptionSnapshot(d.getVariantDescriptionSnapshot())
-                        .quantity(d.getQuantity())
-                        .unitPriceSnapshot(d.getUnitPriceSnapshot())
-                        .subTotal(d.getSubTotal())
-                        .build())
+                .map(d -> {
+                    String imgUrl = null;
+                    Long prodId = null;
+                    if (d.getProductVariant() != null) {
+                        imgUrl = d.getProductVariant().getImageUrl();
+                        if (d.getProductVariant().getProduct() != null) {
+                            prodId = d.getProductVariant().getProduct().getId();
+                            if (imgUrl == null || imgUrl.isBlank()) {
+                                imgUrl = d.getProductVariant().getProduct().getMainImageUrl();
+                            }
+                        }
+                    }
+                    return SaleOrderDetailResponse.builder()
+                            .id(d.getId())
+                            .productVariantId(d.getProductVariant() != null ? d.getProductVariant().getId() : null)
+                            .productId(prodId)
+                            .variantCode(d.getProductVariant() != null ? d.getProductVariant().getVariantCode() : null)
+                            .skuSnapshot(d.getSkuSnapshot())
+                            .barcodeSnapshot(d.getBarcodeSnapshot())
+                            .productNameSnapshot(d.getProductNameSnapshot())
+                            .variantDescriptionSnapshot(d.getVariantDescriptionSnapshot())
+                            .imageUrl(imgUrl)
+                            .quantity(d.getQuantity())
+                            .unitPriceSnapshot(d.getUnitPriceSnapshot())
+                            .subTotal(d.getSubTotal())
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return SaleOrderResponse.builder()
