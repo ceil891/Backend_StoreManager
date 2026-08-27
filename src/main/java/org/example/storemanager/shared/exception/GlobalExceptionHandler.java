@@ -312,6 +312,24 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, ex.getStatusCode());
     }
 
+    // ==================== Database Connection & Transaction Exceptions ====================
+
+    @ExceptionHandler({
+        org.springframework.orm.jpa.JpaSystemException.class,
+        org.springframework.transaction.CannotCreateTransactionException.class,
+        org.springframework.transaction.TransactionException.class,
+        org.springframework.dao.DataAccessResourceFailureException.class,
+        java.sql.SQLException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleDatabaseConnectionException(
+            Exception ex, HttpServletRequest request) {
+
+        log.error("DatabaseConnectionError | Path: {} | Cause: {}", request.getRequestURI(), getRootCauseMessage(ex));
+
+        String userFriendlyMsg = "Kết nối cơ sở dữ liệu tạm thời gián đoạn. Hệ thống đang tự động kết nối lại, vui lòng thử lại sau vài giây.";
+        return buildResponse(ErrorCode.INTERNAL_SERVER_ERROR, userFriendlyMsg, request);
+    }
+
     // ==================== Fallback ====================
 
     @ExceptionHandler(Exception.class)
