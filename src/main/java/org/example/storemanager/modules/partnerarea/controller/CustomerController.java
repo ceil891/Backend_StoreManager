@@ -37,10 +37,13 @@ public class CustomerController {
     public ResponseEntity<ApiResponse<?>> getAllCustomers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) Boolean isActive) {
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String search) {
 
+        String query = (keyword != null && !keyword.isBlank()) ? keyword : search;
         return ResponseEntity.ok(ApiResponse.success(
-                customerService.getAllCustomers(page, size, isActive), // Truyền Boolean trực tiếp
+                customerService.getAllCustomers(page, size, isActive, query),
                 "Lấy danh sách thành công"
         ));
     }

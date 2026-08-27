@@ -14,8 +14,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -52,7 +54,9 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request) {
+        log.info(">>> [AuthController] Received POST /api/v1/auth/login for: {}", request.getUsername());
         LoginResponse response = authService.login(request);
+        log.info("<<< [AuthController] Login SUCCESS for: {}", request.getUsername());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
@@ -124,5 +128,34 @@ public class AuthController {
         }
         List<String> permissions = authService.getMyPermissions(auth.getName());
         return ResponseEntity.ok(ApiResponse.ok(permissions));
+    }
+
+    /**
+     * GET /api/v1/auth/profile
+     * Lấy thông tin tài khoản của user đang đăng nhập.
+     */
+    @GetMapping("/profile")
+    public ResponseEntity<ApiResponse<org.example.storemanager.modules.auth.dto.response.UserInfoResponse>> getProfile() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Chưa đăng nhập"));
+        }
+        org.example.storemanager.modules.auth.dto.response.UserInfoResponse userInfo = authService.getProfile(auth.getName());
+        return ResponseEntity.ok(ApiResponse.ok(userInfo));
+    }
+
+    /**
+     * PUT /api/v1/auth/profile
+     * Cập nhật họ tên, số điện thoại, ảnh đại diện của user đang đăng nhập.
+     */
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<org.example.storemanager.modules.auth.dto.response.UserInfoResponse>> updateProfile(
+            @RequestBody org.example.storemanager.modules.auth.dto.request.UpdateProfileRequest request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Chưa đăng nhập"));
+        }
+        org.example.storemanager.modules.auth.dto.response.UserInfoResponse userInfo = authService.updateProfile(auth.getName(), request);
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật thông tin tài khoản thành công", userInfo));
     }
 }

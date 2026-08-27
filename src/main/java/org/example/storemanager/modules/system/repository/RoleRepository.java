@@ -23,7 +23,7 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     boolean existsByRoleNameAndIdNotAndIsDeletedFalse(String roleName, Long id);
 
     @Query("SELECT r FROM Role r WHERE " +
-            "(:includeDeleted = true OR r.isDeleted = false) AND " +
+            "(:includeDeleted = true OR r.isDeleted = false OR r.isDeleted IS NULL) AND " +
             "(:isActive IS NULL OR r.isActive = :isActive) AND " +
             "(:search IS NULL OR :search = '' OR " +
             "LOWER(r.roleName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +

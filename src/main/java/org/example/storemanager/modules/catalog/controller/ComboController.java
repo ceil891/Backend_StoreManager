@@ -28,7 +28,6 @@ public class ComboController {
     private final ComboService comboService;
 
     @GetMapping("/combos")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:combo:view')")
     public ResponseEntity<ApiResponse<PageResponse<ComboResponse>>> search(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Boolean isActive,
@@ -39,7 +38,6 @@ public class ComboController {
     }
 
     @GetMapping("/combos/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('catalog:combo:view')")
     public ResponseEntity<ApiResponse<ComboResponse>> getById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(comboService.getById(id)));
     }

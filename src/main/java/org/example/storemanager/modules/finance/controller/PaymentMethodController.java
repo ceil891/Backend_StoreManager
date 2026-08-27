@@ -28,8 +28,10 @@ public class PaymentMethodController {
     /** Đính kèm branchIds và ytdTotal vào mỗi bản ghi PTTT */
     private Map<String, Object> enrichMethod(PaymentMethod pm) {
         int currentYear = LocalDate.now().getYear();
+        java.time.LocalDateTime startOfYear = java.time.LocalDate.of(currentYear, 1, 1).atStartOfDay();
+        java.time.LocalDateTime endOfYear = java.time.LocalDate.of(currentYear + 1, 1, 1).atStartOfDay();
         List<Long> branchIds = paymentMethodBranchRepository.findBranchIdsByPaymentMethodId(pm.getId());
-        Double ytd = saleOrderRepository.sumYtdByPaymentMethodCode(pm.getMethodCode(), currentYear);
+        Double ytd = saleOrderRepository.sumYtdByPaymentMethodCode(pm.getMethodCode(), startOfYear, endOfYear);
 
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", pm.getId());

@@ -73,8 +73,10 @@ public class BranchScopeAspect {
             return;
         }
 
-        String username = auth.getName();
-        User user = userRepository.findByUsername(username).orElse(null);
+        String principal = auth.getName();
+        User user = userRepository.findByUsername(principal)
+                .or(() -> userRepository.findByEmail(principal))
+                .orElse(null);
 
         Long userBranchId = user != null && user.getBranch() != null ? user.getBranch().getId() : headerBranchId;
 
@@ -100,7 +102,7 @@ public class BranchScopeAspect {
 
         UserContext ctx = UserContext.builder()
                 .userId(user != null ? user.getId() : null)
-                .username(username)
+                .username(principal)
                 .branchId(userBranchId)
                 .roles(roleCodes)
                 .permissions(permissionCodes)

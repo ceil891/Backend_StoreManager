@@ -33,8 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import java.time.LocalDateTime;
@@ -206,39 +205,39 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String input = request.getUsername();
+        log.info("[AuthService] Step 1: Searching for user with input: [{}]", input);
         User user = userRepository.findByUsername(input)
                 .or(() -> userRepository.findByEmail(input))
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS,
-                        "Tên đăng nhập hoặc mật khẩu không đúng"));
+                .orElse(null);
 
-        // Kiểm tra trạng thái tài khoản User
-        if ("LOCKED".equalsIgnoreCase(user.getStatus()) || "SUSPENDED".equalsIgnoreCase(user.getStatus()) || "TERMINATED".equalsIgnoreCase(user.getStatus())) {
-            throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản của bạn đã bị khóa hoặc tạm ngừng hoạt động. Vui lòng liên hệ quản trị viên.");
-        }
-        if ("INACTIVE".equalsIgnoreCase(user.getStatus())) {
-            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, "Tài khoản này hiện đang bị vô hiệu hóa.");
-        }
-
-        // Kiểm tra trạng thái khách hàng nếu có liên kết
-        try {
-            Customer linkedCust = customerRepository.findAll().stream()
-                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
-                    .filter(c -> (user.getEmail() != null && user.getEmail().equalsIgnoreCase(c.getEmail())) ||
-                                 (user.getPhone() != null && user.getPhone().equals(c.getPhone())))
-                    .findFirst().orElse(null);
-            if (linkedCust != null && Boolean.FALSE.equals(linkedCust.getIsActive())) {
-                throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản khách hàng của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.");
-            }
-        } catch (BusinessException be) {
-            throw be;
-        } catch (Exception ignored) {}
-
-        // Kiểm tra mật khẩu
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (user == null) {
+            log.warn("[AuthService] User NOT FOUND in database for input: [{}]", input);
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS,
                     "Tên đăng nhập hoặc mật khẩu không đúng");
         }
 
+        log.info("[AuthService] Step 2: Found user [id={}, username={}, email={}, status={}]", 
+                user.getId(), user.getUsername(), user.getEmail(), user.getStatus());
+
+        // Kiểm tra trạng thái tài khoản User
+        if ("LOCKED".equalsIgnoreCase(user.getStatus()) || "SUSPENDED".equalsIgnoreCase(user.getStatus()) || "TERMINATED".equalsIgnoreCase(user.getStatus())) {
+            log.warn("[AuthService] User [{}] is LOCKED/SUSPENDED", input);
+            throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản của bạn đã bị khóa hoặc tạm ngừng hoạt động. Vui lòng liên hệ quản trị viên.");
+        }
+        if ("INACTIVE".equalsIgnoreCase(user.getStatus())) {
+            log.warn("[AuthService] User [{}] is INACTIVE", input);
+            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, "Tài khoản này hiện đang bị vô hiệu hóa.");
+        }
+
+        // Kiểm tra mật khẩu
+        boolean matches = passwordEncoder.matches(request.getPassword(), user.getPassword());
+        if (!matches) {
+            log.warn("[AuthService] Password does NOT match for user [{}]", input);
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS,
+                    "Tên đăng nhập hoặc mật khẩu không đúng");
+        }
+
+        log.info("[AuthService] Step 3: Password matched! Issuing token pair for user [{}]", input);
         return issueTokenPair(user);
     }
 
@@ -343,6 +342,103 @@ public class AuthServiceImpl implements AuthService {
                 .collect(Collectors.toList());
     }
 
+    // ==================== CẬP NHẬT HỒ SƠ & AVATAR ====================
+
+    @Override
+    @Transactional
+    public UserInfoResponse updateProfile(String username, org.example.storemanager.modules.auth.dto.request.UpdateProfileRequest request) {
+        User user = userRepository.findByUsername(username)
+                .or(() -> userRepository.findByEmail(username))
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy người dùng: " + username));
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName().trim());
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone().trim());
+        }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar().trim());
+        }
+        user.setUpdatedBy(username);
+        User savedUser = userRepository.save(user);
+
+        // Đồng bộ với Customer nếu có
+        try {
+            if (savedUser.getEmail() != null && !savedUser.getEmail().isBlank()) {
+                Customer cust = customerRepository.findByEmailAndIsDeletedFalse(savedUser.getEmail()).orElse(null);
+                if (cust != null) {
+                    if (request.getFullName() != null && !request.getFullName().isBlank()) {
+                        cust.setName(request.getFullName().trim());
+                    }
+                    if (request.getPhone() != null && !request.getPhone().isBlank()) {
+                        cust.setPhone(request.getPhone().trim());
+                    }
+                    if (request.getAvatar() != null) {
+                        cust.setAvatarUrl(request.getAvatar().trim());
+                    }
+                    customerRepository.save(cust);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[AuthService] Failed to sync customer profile: {}", e.getMessage());
+        }
+
+        String roleName = savedUser.getRole() != null ? savedUser.getRole().getRoleName() : "USER";
+        List<String> permissions = Collections.emptyList();
+        if (savedUser.getRole() != null) {
+            if ("SUPER_ADMIN".equalsIgnoreCase(roleName)) {
+                permissions = List.of("*");
+            } else {
+                Set<String> permCodes = rolePermissionRepository.findPermissionCodesByRoleId(savedUser.getRole().getId());
+                permissions = permCodes != null ? new ArrayList<>(permCodes) : Collections.emptyList();
+            }
+        }
+
+        return UserInfoResponse.builder()
+                .id(savedUser.getId())
+                .name(savedUser.getFullName())
+                .email(savedUser.getEmail())
+                .role(roleName)
+                .branchId(savedUser.getBranch() != null ? savedUser.getBranch().getId() : null)
+                .branchCode(savedUser.getBranch() != null ? savedUser.getBranch().getBranchCode() : null)
+                .branchName(savedUser.getBranch() != null ? savedUser.getBranch().getBranchName() : null)
+                .avatar(savedUser.getAvatar())
+                .permissions(permissions)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserInfoResponse getProfile(String username) {
+        User user = userRepository.findByUsername(username)
+                .or(() -> userRepository.findByEmail(username))
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy người dùng: " + username));
+
+        String roleName = user.getRole() != null ? user.getRole().getRoleName() : "USER";
+        List<String> permissions = Collections.emptyList();
+        if (user.getRole() != null) {
+            if ("SUPER_ADMIN".equalsIgnoreCase(roleName)) {
+                permissions = List.of("*");
+            } else {
+                Set<String> permCodes = rolePermissionRepository.findPermissionCodesByRoleId(user.getRole().getId());
+                permissions = permCodes != null ? new ArrayList<>(permCodes) : Collections.emptyList();
+            }
+        }
+
+        return UserInfoResponse.builder()
+                .id(user.getId())
+                .name(user.getFullName())
+                .email(user.getEmail())
+                .role(roleName)
+                .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
+                .branchCode(user.getBranch() != null ? user.getBranch().getBranchCode() : null)
+                .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
+                .avatar(user.getAvatar())
+                .permissions(permissions)
+                .build();
+    }
+
     // ==================== HELPER ====================
 
     /**
@@ -365,22 +461,20 @@ public class AuthServiceImpl implements AuthService {
 
         String roleName = user.getRole() != null ? user.getRole().getRoleName() : "USER";
 
-        // Lấy danh sách quyền từ vai trò của user
+        // Lấy danh sách quyền từ vai trò của user (Tối ưu 1 query JOIN duy nhất)
         List<String> permissions = Collections.emptyList();
         if (user.getRole() != null) {
-            List<RolePermission> rolePermissions = rolePermissionRepository.findByRoleId(user.getRole().getId());
-            permissions = rolePermissions.stream()
-                    .map(rp -> rp.getPermission().getPermissionCode())
-                    .collect(Collectors.toList());
+            if ("SUPER_ADMIN".equalsIgnoreCase(roleName)) {
+                permissions = List.of("*");
+            } else {
+                Set<String> permCodes = rolePermissionRepository.findPermissionCodesByRoleId(user.getRole().getId());
+                permissions = permCodes != null ? new ArrayList<>(permCodes) : Collections.emptyList();
+            }
         }
 
         String userAvatar = user.getAvatar();
-        if (userAvatar == null || userAvatar.isBlank()) {
-            Customer cust = customerRepository.findAll().stream()
-                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
-                    .filter(c -> (user.getEmail() != null && user.getEmail().equalsIgnoreCase(c.getEmail())) ||
-                                 (user.getPhone() != null && user.getPhone().equals(c.getPhone())))
-                    .findFirst().orElse(null);
+        if ((userAvatar == null || userAvatar.isBlank()) && user.getEmail() != null && !user.getEmail().isBlank()) {
+            Customer cust = customerRepository.findByEmailAndIsDeletedFalse(user.getEmail()).orElse(null);
             if (cust != null && cust.getAvatarUrl() != null && !cust.getAvatarUrl().isBlank()) {
                 userAvatar = cust.getAvatarUrl();
             }

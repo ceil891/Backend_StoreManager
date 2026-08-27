@@ -50,7 +50,7 @@ import org.example.storemanager.modules.system.repository.BranchRepository;
 import java.time.LocalDateTime;
 
 @Component
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.seeder.enabled", havingValue = "true", matchIfMissing = false)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.seeder.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
@@ -72,12 +72,123 @@ public class DataSeeder implements CommandLineRunner {
     private final BannerRepository bannerRepository;
     private final CategoriesRepository categoriesRepository;
     private final ProductRepository productRepository;
+    private final org.example.storemanager.modules.hrm.repository.DepartmentRepository hrmDepartmentRepository;
+    private final org.example.storemanager.modules.hrm.repository.PositionRepository hrmPositionRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private static final Pattern PERMISSION_PATTERN = Pattern.compile("hasPermission\\s*\\(\\s*'([^']+)'\\s*\\)");
 
     @Override
     public void run(String... args) {
-        log.info("[DataSeeder] DataSeeder đã được tắt. Bỏ qua toàn bộ truy vấn khởi tạo DB.");
+        try {
+            fixNullIsDeleted();
+            seedInitialData();
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Quá trình seed dữ liệu khởi tạo gặp sự cố (ứng dụng vẫn tiếp tục khởi động): {}", e.getMessage());
+        }
+    }
+
+    private void fixNullIsDeleted() {
+        try {
+            jdbcTemplate.execute("UPDATE users SET is_deleted = false WHERE is_deleted IS NULL");
+            jdbcTemplate.execute("UPDATE roles SET is_deleted = false WHERE is_deleted IS NULL");
+            jdbcTemplate.execute("UPDATE departments SET is_deleted = false WHERE is_deleted IS NULL");
+            jdbcTemplate.execute("UPDATE positions SET is_deleted = false WHERE is_deleted IS NULL");
+        } catch (Exception ignored) {}
+    }
+
+    private void seedInitialData() {
+        seedPermissions();
+        Role superAdminRole = seedSuperAdminRole();
+        if (superAdminRole != null) {
+            seedSuperAdminPermissions(superAdminRole);
+            seedStandardRolesAndPermissions(superAdminRole);
+            seedSuperAdminUser(superAdminRole);
+            seedSampleUsers(superAdminRole);
+        }
+        seedDepartmentsAndPositions();
+        fixNullIsDeleted();
+        log.info("[DataSeeder] Hoàn tất kiểm tra phân quyền và dữ liệu khởi tạo trong Database.");
+    }
+
+    private static class RoleSeedDefinition {
+        final String roleCode;
+        final String description;
+        final List<String> permissionCodes;
+
+        RoleSeedDefinition(String roleCode, String description, List<String> permissionCodes) {
+            this.roleCode = roleCode;
+            this.description = description;
+            this.permissionCodes = permissionCodes;
+        }
+    }
+
+    private void seedStandardRolesAndPermissions(Role superAdminRole) {
+        try {
+            List<RoleSeedDefinition> standardRoles = List.of(
+                new RoleSeedDefinition("STORE_MANAGER", "Cửa hàng trưởng (Store Manager)", List.of(
+                    "pos:terminal:access", "pos:session:view", "pos:session:open", "pos:session:close",
+                    "pos:payment:process", "pos:order:discount", "pos:order:cancel", "pos:price:override",
+                    "pos:branch:change", "sales:order:view", "sales:invoice:view", "catalog:product:view",
+                    "inventory:stock-keeping:view", "inventory:dashboard:view", "crm:customer:view",
+                    "hr:employee:view", "reports:sales:view", "reports:inventory:view"
+                )),
+                new RoleSeedDefinition("CASHIER", "Thu ngân / Nhân viên POS", List.of(
+                    "pos:terminal:access", "pos:session:view", "pos:session:open", "pos:session:close",
+                    "pos:payment:process", "sales:invoice:view", "catalog:product:view", "crm:customer:view"
+                )),
+                new RoleSeedDefinition("INVENTORY_STAFF", "Nhân viên Thủ kho / Kiểm kê", List.of(
+                    "catalog:product:view", "inventory:product-detail:view", "inventory:variant:view",
+                    "inventory:batch:view", "inventory:serial:view", "inventory:ledger:view", "inventory:check:view",
+                    "inventory:import:view", "inventory:stock-out:view", "inventory:transfer:view",
+                    "inventory:transfer-list:view", "inventory:return-supplier:view", "purchase:order:view"
+                )),
+                new RoleSeedDefinition("ACCOUNTANT", "Kế toán & Tài chính", List.of(
+                    "finance:receipt:view", "finance:payment:view", "finance:debt:view", "finance:fund-balance:view",
+                    "finance:bank:view", "finance:order-payment:view", "reports:finance:view", "sales:invoice:view",
+                    "purchase:invoice:view", "purchase:payment:view"
+                )),
+                new RoleSeedDefinition("SALES_STAFF", "Nhân viên Kinh doanh / Bán hàng", List.of(
+                    "sales:order:view", "sales:quote:view", "sales:offer:view", "sales:invoice:view",
+                    "crm:customer:view", "catalog:product:view", "crm:voucher:view"
+                ))
+            );
+
+            for (RoleSeedDefinition def : standardRoles) {
+                Role role = roleRepository.findByRoleName(def.roleCode).orElse(null);
+                if (role == null) {
+                    role = Role.builder()
+                            .roleName(def.roleCode)
+                            .description(def.description)
+                            .isActive(true)
+                            .build();
+                    role.setIsDeleted(false);
+                    role = roleRepository.saveAndFlush(role);
+                    log.info("[DataSeeder] Đã thêm mới vai trò [{}] vào Database.", def.roleCode);
+                }
+
+                // Gán quyền tương ứng
+                List<RolePermission> existingPerms = rolePermissionRepository.findByRoleId(role.getId());
+                if (existingPerms.isEmpty()) {
+                    List<Permission> perms = permissionRepository.findByPermissionCodeIn(def.permissionCodes);
+                    List<RolePermission> rps = new ArrayList<>();
+                    for (Permission p : perms) {
+                        RolePermission rp = RolePermission.builder()
+                                .role(role)
+                                .permission(p)
+                                .build();
+                        rp.setIsDeleted(false);
+                        rps.add(rp);
+                    }
+                    if (!rps.isEmpty()) {
+                        rolePermissionRepository.saveAllAndFlush(rps);
+                        log.info("[DataSeeder] Đã lưu {} quyền vào Database cho vai trò [{}].", rps.size(), def.roleCode);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Lỗi khi khởi tạo roles vào Database (non-fatal): {}", e.getMessage());
+        }
     }
 
     private void seedPermissions() {
@@ -242,6 +353,101 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
+    private void seedSuperAdminUser(Role superAdminRole) {
+        try {
+            String email = "luuhung261125@storemanager.com";
+            String username = "luuhung261125";
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user == null) {
+                user = userRepository.findByUsername(username).orElse(null);
+            }
+
+            Branch defaultBranch = null;
+            try {
+                defaultBranch = branchRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+            } catch (Exception ignored) {}
+
+            if (user == null) {
+                user = User.builder()
+                        .username(username)
+                        .email(email)
+                        .password(passwordEncoder.encode("123456"))
+                        .fullName("Nguyễn Lưu Hưng (Super Admin)")
+                        .phone("0943021105")
+                        .status("ACTIVE")
+                        .role(superAdminRole)
+                        .branch(defaultBranch)
+                        .build();
+                user.setIsDeleted(false);
+                userRepository.saveAndFlush(user);
+                log.info("Đã tạo mới tài khoản SuperAdmin [{}] mật khẩu [123456]", email);
+            } else {
+                user.setRole(superAdminRole);
+                user.setPassword(passwordEncoder.encode("123456"));
+                user.setStatus("ACTIVE");
+                user.setIsDeleted(false);
+                if (user.getBranch() == null && defaultBranch != null) {
+                    user.setBranch(defaultBranch);
+                }
+                userRepository.saveAndFlush(user);
+                log.info("Đã cập nhật tài khoản [{}] với vai trò SUPER_ADMIN và mật khẩu [123456]", email);
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Không thể seed tài khoản SuperAdmin (non-fatal): {}", e.getMessage());
+        }
+    }
+
+    private void seedSampleUsers(Role superAdminRole) {
+        try {
+            Role storeManagerRole = roleRepository.findByRoleName("STORE_MANAGER").orElse(superAdminRole);
+            Role cashierRole = roleRepository.findByRoleName("CASHIER").orElse(superAdminRole);
+            Role inventoryRole = roleRepository.findByRoleName("INVENTORY_STAFF").orElse(superAdminRole);
+            Role accountantRole = roleRepository.findByRoleName("ACCOUNTANT").orElse(superAdminRole);
+            Role salesRole = roleRepository.findByRoleName("SALES_STAFF").orElse(superAdminRole);
+
+            List<Branch> branches = branchRepository.findByIsDeletedFalse();
+            Branch b1 = !branches.isEmpty() ? branches.get(0) : null;
+            Branch b2 = branches.size() > 1 ? branches.get(1) : b1;
+            Branch b3 = branches.size() > 2 ? branches.get(2) : b1;
+
+            var sampleUsers = List.of(
+                new Object[]{"nguyenminhquan", "quan.nguyen@storemanager.com", "Nguyễn Minh Quân", "0901234567", storeManagerRole, b1},
+                new Object[]{"tranthilan", "lan.tran@storemanager.com", "Trần Thị Lan", "0912345678", storeManagerRole, b2},
+                new Object[]{"lehoangnam", "nam.le@storemanager.com", "Lê Hoàng Nam", "0923456789", cashierRole, b1},
+                new Object[]{"phamvanhung", "hung.pham@storemanager.com", "Phạm Văn Hùng", "0934567890", inventoryRole, b3},
+                new Object[]{"hoangthimai", "mai.hoang@storemanager.com", "Hoàng Thị Mai", "0945678901", accountantRole, b1},
+                new Object[]{"dangthithu", "thu.dang@storemanager.com", "Đặng Thị Thu", "0956789012", salesRole, b2}
+            );
+
+            for (Object[] row : sampleUsers) {
+                String username = (String) row[0];
+                String email = (String) row[1];
+                String fullName = (String) row[2];
+                String phone = (String) row[3];
+                Role role = (Role) row[4];
+                Branch branch = (Branch) row[5];
+
+                if (userRepository.findByEmail(email).isEmpty() && userRepository.findByUsername(username).isEmpty()) {
+                    User u = User.builder()
+                            .username(username)
+                            .email(email)
+                            .password(passwordEncoder.encode("123456"))
+                            .fullName(fullName)
+                            .phone(phone)
+                            .status("ACTIVE")
+                            .role(role)
+                            .branch(branch)
+                            .build();
+                    u.setIsDeleted(false);
+                    userRepository.save(u);
+                    log.info("[DataSeeder] Đã tạo người dùng mẫu [{}] - [{}]", fullName, email);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Không thể khởi tạo người dùng mẫu (non-fatal): {}", e.getMessage());
+        }
+    }
+
     /**
      * Quét tất cả các @RestController bean trong ApplicationContext,
      * tìm tất cả method có @PreAuthorize("hasPermission('...')") và trích xuất mã quyền.
@@ -307,5 +513,97 @@ public class DataSeeder implements CommandLineRunner {
     private String capitalize(String s) {
         if (s == null || s.isEmpty()) return s;
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
+    private static class DeptSeed {
+        final String code;
+        final String name;
+        final String desc;
+        final List<PosSeed> positions;
+        DeptSeed(String code, String name, String desc, List<PosSeed> positions) {
+            this.code = code;
+            this.name = name;
+            this.desc = desc;
+            this.positions = positions;
+        }
+    }
+
+    private static class PosSeed {
+        final String code;
+        final String name;
+        final double salary;
+        PosSeed(String code, String name, double salary) {
+            this.code = code;
+            this.name = name;
+            this.salary = salary;
+        }
+    }
+
+    private void seedDepartmentsAndPositions() {
+        try {
+            if (hrmDepartmentRepository.count() == 0) {
+                var depts = List.of(
+                    new DeptSeed("BGD", "Ban Giám Đốc", "Cấp điều hành cao nhất toàn hệ thống", List.of(
+                        new PosSeed("CEO", "Tổng Giám Đốc Điều Hành (CEO)", 50000000),
+                        new PosSeed("COO", "Giám Đốc Vận Hành (COO)", 40000000),
+                        new PosSeed("CFO", "Giám Đốc Tài Chính (CFO)", 40000000)
+                    )),
+                    new DeptSeed("KD", "Phòng Kinh Doanh & Bán Hàng", "Bộ phận kinh doanh, phát triển thị trường và điểm bán POS", List.of(
+                        new PosSeed("SALES_MGR", "Trưởng Phòng Kinh Doanh (Sales Manager)", 25000000),
+                        new PosSeed("STORE_SUP", "Trưởng Ca Bán Hàng (Store Supervisor)", 15000000),
+                        new PosSeed("CASHIER_POS", "Nhân Viên Thu Ngân & Bán Hàng POS", 9000000),
+                        new PosSeed("SALES_CONS", "Chuyên Viên Tư Vấn Bán Hàng", 10000000)
+                    )),
+                    new DeptSeed("TCKT", "Phòng Tài Chính - Kế Toán", "Quản lý ngân sách, dòng tiền và hạch toán kế toán", List.of(
+                        new PosSeed("CHIEF_ACC", "Kế Toán Trưởng (Chief Accountant)", 25000000),
+                        new PosSeed("GEN_ACC", "Kế Toán Tổng Hợp & Công Nợ", 14000000),
+                        new PosSeed("TREASURER", "Nhân Viên Thủ Quỹ", 10000000)
+                    )),
+                    new DeptSeed("KHO", "Phòng Kho Vận & Chuỗi Cung Ứng", "Quản lý kho bãi, luân chuyển và giao nhận hàng hóa", List.of(
+                        new PosSeed("WMS_MGR", "Trưởng Phòng Kho Vận (Warehouse Manager)", 22000000),
+                        new PosSeed("INV_STAFF", "Nhân Viên Thủ Kho & Kiểm Kê", 11000000),
+                        new PosSeed("LOG_PACKER", "Nhân Viên Giao Vận & Đóng Gói", 9500000)
+                    )),
+                    new DeptSeed("IT", "Phòng Công Nghệ Thông Tin", "Quản trị hạ tầng mạng, an ninh và phần mềm RetailHub", List.of(
+                        new PosSeed("IT_MGR", "Trưởng Phòng CNTT (IT Manager)", 30000000),
+                        new PosSeed("SYS_ADMIN", "Quản Trị Hệ Thống & Mạng (SysAdmin)", 18000000),
+                        new PosSeed("SWE", "Kỹ Sư Phần Mềm & RetailHub (SWE)", 20000000)
+                    )),
+                    new DeptSeed("HR", "Phòng Hành Chính - Nhân Sự", "Quản lý hồ sơ nhân sự, tuyển dụng, C&B và chế độ", List.of(
+                        new PosSeed("HR_MGR", "Trưởng Phòng Nhân Sự (HR Manager)", 22000000),
+                        new PosSeed("HR_RECRUIT", "Chuyên Viên Tuyển Dụng & C&B", 13000000),
+                        new PosSeed("HR_ADMIN", "Nhân Viên Hành Chính Lễ Tân", 9000000)
+                    )),
+                    new DeptSeed("CRM", "Phòng Chăm Sóc Khách Hàng", "Chăm sóc khách hàng VIP, xử lý khiếu nại và bảo hành", List.of(
+                        new PosSeed("CRM_LEAD", "Trưởng Nhóm CSKH (Support Lead)", 16000000),
+                        new PosSeed("CRM_AGENT", "Chuyên Viên CSKH & Khiếu Nại", 10000000)
+                    ))
+                );
+
+                for (var dSeed : depts) {
+                    org.example.storemanager.modules.hrm.entity.Department dept = org.example.storemanager.modules.hrm.entity.Department.builder()
+                            .deptCode(dSeed.code)
+                            .deptName(dSeed.name)
+                            .description(dSeed.desc)
+                            .build();
+                    dept.setIsDeleted(false);
+                    var savedDept = hrmDepartmentRepository.save(dept);
+
+                    for (var pSeed : dSeed.positions) {
+                        org.example.storemanager.modules.hrm.entity.Position pos = org.example.storemanager.modules.hrm.entity.Position.builder()
+                                .positionCode(pSeed.code)
+                                .positionName(pSeed.name)
+                                .baseSalary(java.math.BigDecimal.valueOf(pSeed.salary))
+                                .department(savedDept)
+                                .build();
+                        pos.setIsDeleted(false);
+                        hrmPositionRepository.save(pos);
+                    }
+                }
+                log.info("[DataSeeder] Đã khởi tạo thành công 7 Phòng ban và 20 Chức danh chuẩn vào Database.");
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Lỗi khi seed phòng ban/chức danh (non-fatal): {}", e.getMessage());
+        }
     }
 }

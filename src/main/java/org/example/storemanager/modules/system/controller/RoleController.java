@@ -2,6 +2,7 @@ package org.example.storemanager.modules.system.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.system.dto.request.role.AssignPermissionsRequest;
 import org.example.storemanager.modules.system.dto.request.role.CreateRoleRequest;
 import org.example.storemanager.modules.system.dto.request.role.UpdateRoleRequest;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
@@ -74,6 +76,7 @@ public class RoleController {
             @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "id,desc") String sort) {
 
+        log.info(">>> [RoleController] Received GET /api/v1/roles (search={}, page={}, size={})", search, page, size);
         if (page != null && size != null) {
             return ResponseEntity.ok(ApiResponse.ok(
                     roleService.getRolesPaginated(search, isActive, page, size, sort, includeDeleted)));

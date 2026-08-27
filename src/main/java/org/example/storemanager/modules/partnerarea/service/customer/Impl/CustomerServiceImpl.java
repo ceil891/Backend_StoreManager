@@ -320,7 +320,17 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive) {
+        return getAllCustomers(page, size, isActive, null);
+    }
+
+    @Override
+    public Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive, String search) {
         Pageable pageable = PageRequest.of(page, size);
+
+        if (search != null && !search.trim().isEmpty()) {
+            return customerRepository.searchAllCustomers(search.trim(), isActive, pageable)
+                    .map(this::mapToListResponse);
+        }
 
         // 1. Nếu không lọc (null): Lấy tất cả trừ những cái đã xóa hẳn (is_deleted = true)
         if (isActive == null) {
@@ -329,7 +339,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
         // 2. Nếu có lọc: Chỉ cần lọc theo isActive là được
         else {
-            return customerRepository.findByIsActive(isActive, pageable)
+            return customerRepository.findByIsActiveAndIsDeletedFalse(isActive, pageable)
                     .map(this::mapToListResponse);
         }
     }

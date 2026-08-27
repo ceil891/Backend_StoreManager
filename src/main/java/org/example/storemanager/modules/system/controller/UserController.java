@@ -2,6 +2,7 @@ package org.example.storemanager.modules.system.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.system.dto.request.user.CreateUserRequest;
 import org.example.storemanager.modules.system.dto.request.user.ResetPasswordRequest;
 import org.example.storemanager.modules.system.dto.request.user.UpdateUserRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import org.example.storemanager.modules.system.dto.request.user.UpdateUserRoleBranchRequest;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -106,6 +108,7 @@ public class UserController {
             @RequestParam(required = false) Integer size,
             @RequestParam(defaultValue = "id,desc") String sort) {
 
+        log.info(">>> [UserController] Received GET /api/v1/users (search={}, status={}, roleId={}, branchId={})", search, status, roleId, branchId);
         if (page != null && size != null) {
             return ResponseEntity.ok(ApiResponse.ok(
                     userService.getUsersPaginated(search, status, roleId, branchId, page, size, sort, includeDeleted)));
