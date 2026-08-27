@@ -576,6 +576,33 @@ public class CrmController {
         if (customerId != null) {
             c = customerRepository.findById(customerId).orElse(null);
         }
+        if (c == null && req.get("customerPhone") != null) {
+            String ph = req.get("customerPhone").toString().trim().replace(" ", "");
+            if (!ph.isBlank()) {
+                c = customerRepository.findAll().stream()
+                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                        .filter(cust -> cust.getPhone() != null && cust.getPhone().replace(" ", "").equals(ph))
+                        .findFirst().orElse(null);
+            }
+        }
+        if (c == null && req.get("phone") != null) {
+            String ph = req.get("phone").toString().trim().replace(" ", "");
+            if (!ph.isBlank()) {
+                c = customerRepository.findAll().stream()
+                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                        .filter(cust -> cust.getPhone() != null && cust.getPhone().replace(" ", "").equals(ph))
+                        .findFirst().orElse(null);
+            }
+        }
+        if (c == null && req.get("customerName") != null) {
+            String cName = req.get("customerName").toString().trim();
+            if (!cName.isBlank()) {
+                c = customerRepository.findAll().stream()
+                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
+                        .filter(cust -> cust.getName() != null && cust.getName().equalsIgnoreCase(cName))
+                        .findFirst().orElse(null);
+            }
+        }
         if (c == null) {
             java.util.List<Customer> customers = customerRepository.findAll();
             if (!customers.isEmpty()) {

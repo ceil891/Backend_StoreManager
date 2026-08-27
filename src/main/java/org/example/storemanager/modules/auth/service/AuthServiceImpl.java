@@ -211,13 +211,27 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS,
                         "Tên đăng nhập hoặc mật khẩu không đúng"));
 
-        // Kiểm tra trạng thái tài khoản
-        if ("LOCKED".equalsIgnoreCase(user.getStatus())) {
-            throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, null);
+        // Kiểm tra trạng thái tài khoản User
+        if ("LOCKED".equalsIgnoreCase(user.getStatus()) || "SUSPENDED".equalsIgnoreCase(user.getStatus()) || "TERMINATED".equalsIgnoreCase(user.getStatus())) {
+            throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản của bạn đã bị khóa hoặc tạm ngừng hoạt động. Vui lòng liên hệ quản trị viên.");
         }
         if ("INACTIVE".equalsIgnoreCase(user.getStatus())) {
-            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, null);
+            throw new BusinessException(ErrorCode.ACCOUNT_DISABLED, "Tài khoản này hiện đang bị vô hiệu hóa.");
         }
+
+        // Kiểm tra trạng thái khách hàng nếu có liên kết
+        try {
+            Customer linkedCust = customerRepository.findAll().stream()
+                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
+                    .filter(c -> (user.getEmail() != null && user.getEmail().equalsIgnoreCase(c.getEmail())) ||
+                                 (user.getPhone() != null && user.getPhone().equals(c.getPhone())))
+                    .findFirst().orElse(null);
+            if (linkedCust != null && Boolean.FALSE.equals(linkedCust.getIsActive())) {
+                throw new BusinessException(ErrorCode.ACCOUNT_LOCKED, "Tài khoản khách hàng của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.");
+            }
+        } catch (BusinessException be) {
+            throw be;
+        } catch (Exception ignored) {}
 
         // Kiểm tra mật khẩu
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
@@ -360,6 +374,18 @@ public class AuthServiceImpl implements AuthService {
                     .collect(Collectors.toList());
         }
 
+        String userAvatar = user.getAvatar();
+        if (userAvatar == null || userAvatar.isBlank()) {
+            Customer cust = customerRepository.findAll().stream()
+                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()))
+                    .filter(c -> (user.getEmail() != null && user.getEmail().equalsIgnoreCase(c.getEmail())) ||
+                                 (user.getPhone() != null && user.getPhone().equals(c.getPhone())))
+                    .findFirst().orElse(null);
+            if (cust != null && cust.getAvatarUrl() != null && !cust.getAvatarUrl().isBlank()) {
+                userAvatar = cust.getAvatarUrl();
+            }
+        }
+
         UserInfoResponse userInfo = UserInfoResponse.builder()
                 .id(user.getId())
                 .name(user.getFullName())
@@ -368,6 +394,7 @@ public class AuthServiceImpl implements AuthService {
                 .branchId(user.getBranch() != null ? user.getBranch().getId() : null)
                 .branchCode(user.getBranch() != null ? user.getBranch().getBranchCode() : null)
                 .branchName(user.getBranch() != null ? user.getBranch().getBranchName() : null)
+                .avatar(userAvatar)
                 .permissions(permissions)
                 .build();
 
