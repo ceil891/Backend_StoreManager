@@ -18,4 +18,6 @@ public interface AuthService {
     void logoutAll(String username);
     void changePassword(String username, ChangePasswordRequest request);
     List<String> getMyPermissions(String username);
+    org.example.storemanager.modules.auth.dto.response.UserInfoResponse updateProfile(String username, org.example.storemanager.modules.auth.dto.request.UpdateProfileRequest request);
+    org.example.storemanager.modules.auth.dto.response.UserInfoResponse getProfile(String username);
 }

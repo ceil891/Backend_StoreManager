@@ -182,7 +182,7 @@ public class RoleServiceImpl implements RoleService {
     @Transactional(readOnly = true)
     public List<RoleResponse> getAllRoles(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
+        Pageable pageable = PageRequest.of(0, 1000, sorting);
 
         Page<Role> pageResult = roleRepository.findAllRolesIncludeDeleted(search, isActive, includeDeleted, pageable);
 
@@ -332,15 +332,14 @@ public class RoleServiceImpl implements RoleService {
         if (roleId == null) {
             return new java.util.ArrayList<>();
         }
-        return rolePermissionRepository.findByRoleId(roleId).stream()
-                .filter(rp -> rp.getPermission() != null && rp.getPermission().getPermissionCode() != null)
-                .map(rp -> rp.getPermission().getPermissionCode())
-                .collect(Collectors.toList());
+        // Sử dụng query trực tiếp lấy permissionCode string, tránh N+1 lazy-load qua mạng
+        return new java.util.ArrayList<>(rolePermissionRepository.findPermissionCodesByRoleId(roleId));
     }
 
     private RoleResponse mapToResponse(Role role) {
         return RoleResponse.builder()
                 .id(role.getId())
+                .roleCode(role.getRoleName())
                 .roleName(role.getRoleName())
                 .description(role.getDescription())
                 .isActive(role.getIsActive())

@@ -65,11 +65,13 @@ public class SecurityEvaluator {
             return true;
         }
 
-        String username = auth.getName();
-        User user = userRepository.findByUsername(username).orElse(null);
+        String principal = auth.getName();
+        User user = userRepository.findByUsername(principal)
+                .or(() -> userRepository.findByEmail(principal))
+                .orElse(null);
 
         if (user == null || Boolean.TRUE.equals(user.getIsDeleted()) || !"ACTIVE".equals(user.getStatus()) || user.getRole() == null) {
-            log.warn("SecurityEvaluator: User không hợp lệ hoặc đã bị vô hiệu hóa: {}", username);
+            log.warn("SecurityEvaluator: User không hợp lệ hoặc đã bị vô hiệu hóa: {}", principal);
             return false;
         }
 
@@ -84,7 +86,7 @@ public class SecurityEvaluator {
         boolean hasPerm = matchPermission(permissions, requiredPermission);
 
         if (!hasPerm) {
-            log.warn("Access Denied: User [{}] (Role: {}) missing permission [{}]", username, role.getRoleName(), requiredPermission);
+            log.warn("Access Denied: User [{}] (Role: {}) missing permission [{}]", principal, role.getRoleName(), requiredPermission);
         }
 
         return hasPerm;

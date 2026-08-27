@@ -112,7 +112,10 @@ public class ActivityLogAspect {
         User user = null;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
-            user = userRepository.findByUsername(auth.getName()).orElse(null);
+            String principal = auth.getName();
+            user = userRepository.findByUsername(principal)
+                    .or(() -> userRepository.findByEmail(principal))
+                    .orElse(null);
         }
 
         // Resolve client IP Address

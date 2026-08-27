@@ -33,8 +33,17 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Page<Customer> findByIsActiveAndIsDeletedFalse(Boolean isActive, Pageable pageable);
 
+    Optional<Customer> findByEmailAndIsDeletedFalse(String email);
+    Optional<Customer> findByPhoneAndIsDeletedFalse(String phone);
+
+    @Query("SELECT c FROM Customer c WHERE (c.isDeleted = false OR c.isDeleted IS NULL) AND " +
+            "(:isActive IS NULL OR c.isActive = :isActive) AND " +
+            "(:keyword IS NULL OR :keyword = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(c.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR c.phone LIKE %:keyword% OR LOWER(c.customerCode) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    Page<Customer> searchAllCustomers(@Param("keyword") String keyword, @Param("isActive") Boolean isActive, Pageable pageable);
+
     // 3. Các hàm bổ trợ
     Optional<Customer> findByPhone(String phone);
+    Optional<Customer> findByEmail(String email);
     boolean existsByPhone(String phone);
     boolean existsByEmail(String email);
     // Thêm vào CustomerRepository.java

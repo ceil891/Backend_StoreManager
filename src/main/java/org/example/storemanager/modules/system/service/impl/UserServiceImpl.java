@@ -34,6 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import org.example.storemanager.modules.system.entity.Branch;
 import org.example.storemanager.modules.system.repository.BranchRepository;
+import org.example.storemanager.modules.partnerarea.entity.Customer;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -122,8 +123,11 @@ public class UserServiceImpl implements UserService {
 
         if (request.getBranchId() != null) {
             Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+                    .or(() -> branchRepository.findById(request.getBranchId()))
+                    .orElse(null);
             user.setBranch(branch);
+        } else {
+            user.setBranch(null);
         }
 
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
@@ -147,22 +151,23 @@ public class UserServiceImpl implements UserService {
 
         // Đồng bộ ảnh đại diện và thông tin với Customer nếu có
         try {
-            customerRepository.findAll().stream()
-                    .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                    .filter(cust -> (updatedUser.getEmail() != null && updatedUser.getEmail().equalsIgnoreCase(cust.getEmail())) ||
-                                    (updatedUser.getPhone() != null && updatedUser.getPhone().replace(" ", "").equals(cust.getPhone() != null ? cust.getPhone().replace(" ", "") : "")) ||
-                                    (id != null && id.equals(cust.getId())))
-                    .findFirst()
-                    .ifPresent(cust -> {
-                        if (updatedUser.getFullName() != null) cust.setName(updatedUser.getFullName());
-                        if (updatedUser.getPhone() != null) cust.setPhone(updatedUser.getPhone());
-                        if (updatedUser.getEmail() != null) cust.setEmail(updatedUser.getEmail());
-                        if (updatedUser.getAvatar() != null && !updatedUser.getAvatar().isBlank()) cust.setAvatarUrl(updatedUser.getAvatar());
-                        if (updatedUser.getStatus() != null) {
-                            cust.setIsActive("ACTIVE".equalsIgnoreCase(updatedUser.getStatus()));
-                        }
-                        customerRepository.save(cust);
-                    });
+            Customer cust = null;
+            if (updatedUser.getEmail() != null && !updatedUser.getEmail().isBlank()) {
+                cust = customerRepository.findByEmailAndIsDeletedFalse(updatedUser.getEmail()).orElse(null);
+            }
+            if (cust == null && updatedUser.getPhone() != null && !updatedUser.getPhone().isBlank()) {
+                cust = customerRepository.findByPhoneAndIsDeletedFalse(updatedUser.getPhone().replace(" ", "")).orElse(null);
+            }
+            if (cust != null) {
+                if (updatedUser.getFullName() != null) cust.setName(updatedUser.getFullName());
+                if (updatedUser.getPhone() != null) cust.setPhone(updatedUser.getPhone());
+                if (updatedUser.getEmail() != null) cust.setEmail(updatedUser.getEmail());
+                if (updatedUser.getAvatar() != null && !updatedUser.getAvatar().isBlank()) cust.setAvatarUrl(updatedUser.getAvatar());
+                if (updatedUser.getStatus() != null) {
+                    cust.setIsActive("ACTIVE".equalsIgnoreCase(updatedUser.getStatus()));
+                }
+                customerRepository.save(cust);
+            }
         } catch (Exception ignored) {}
 
         return mapToUpdateResponse(updatedUser);
@@ -187,16 +192,17 @@ public class UserServiceImpl implements UserService {
         // Đồng bộ trạng thái khóa tài khoản sang Customer
         try {
             boolean isActive = "ACTIVE".equalsIgnoreCase(status);
-            customerRepository.findAll().stream()
-                    .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                    .filter(cust -> (updatedUser.getEmail() != null && updatedUser.getEmail().equalsIgnoreCase(cust.getEmail())) ||
-                                    (updatedUser.getPhone() != null && updatedUser.getPhone().replace(" ", "").equals(cust.getPhone() != null ? cust.getPhone().replace(" ", "") : "")) ||
-                                    (id != null && id.equals(cust.getId())))
-                    .findFirst()
-                    .ifPresent(cust -> {
-                        cust.setIsActive(isActive);
-                        customerRepository.save(cust);
-                    });
+            Customer cust = null;
+            if (updatedUser.getEmail() != null && !updatedUser.getEmail().isBlank()) {
+                cust = customerRepository.findByEmailAndIsDeletedFalse(updatedUser.getEmail()).orElse(null);
+            }
+            if (cust == null && updatedUser.getPhone() != null && !updatedUser.getPhone().isBlank()) {
+                cust = customerRepository.findByPhoneAndIsDeletedFalse(updatedUser.getPhone().replace(" ", "")).orElse(null);
+            }
+            if (cust != null) {
+                cust.setIsActive(isActive);
+                customerRepository.save(cust);
+            }
         } catch (Exception ignored) {}
 
         return mapToUpdateResponse(updatedUser);
@@ -260,7 +266,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public List<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
+        Pageable pageable = PageRequest.of(0, 1000, sorting);
         Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
 
         return pageResult.getContent().stream()
@@ -407,12 +413,15 @@ public class UserServiceImpl implements UserService {
 
         if (branchId != null) {
             Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
+                    .or(() -> branchRepository.findById(branchId))
+                    .orElse(null);
             user.setBranch(branch);
+        } else {
+            user.setBranch(null);
         }
 
         user.setUpdatedBy(getCurrentUsername());
         User updatedUser = userRepository.save(user);
         return mapToUpdateResponse(updatedUser);
     }
-}
+}

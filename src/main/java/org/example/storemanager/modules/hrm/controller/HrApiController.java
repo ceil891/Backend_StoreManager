@@ -78,19 +78,53 @@ public class HrApiController {
     }
 
     @PostMapping("/positions")
-    public ResponseEntity<ApiResponse<Position>> createPosition(@RequestBody Position req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(positionRepository.save(req)));
+    public ResponseEntity<ApiResponse<PositionDTO>> createPosition(@RequestBody PositionDTO req) {
+        Department dept = null;
+        if (req.getDepartmentId() != null) {
+            dept = departmentRepository.findById(req.getDepartmentId()).orElse(null);
+        }
+        Position p = Position.builder()
+                .positionCode(req.getPositionCode())
+                .positionName(req.getPositionName() != null ? req.getPositionName() : req.getPositionTitle())
+                .baseSalary(req.getBaseSalary())
+                .department(dept)
+                .build();
+        p.setIsDeleted(false);
+        Position saved = positionRepository.save(p);
+        PositionDTO resp = PositionDTO.builder()
+                .id(saved.getId())
+                .positionCode(saved.getPositionCode())
+                .positionName(saved.getPositionName())
+                .positionTitle(saved.getPositionName())
+                .baseSalary(saved.getBaseSalary())
+                .departmentId(saved.getDepartment() != null ? saved.getDepartment().getId() : null)
+                .departmentName(saved.getDepartment() != null ? saved.getDepartment().getDeptName() : "")
+                .build();
+        return ResponseEntity.status(201).body(ApiResponse.created(resp));
     }
 
     @PutMapping("/positions/{id}")
-    public ResponseEntity<ApiResponse<Position>> updatePosition(@PathVariable Long id, @RequestBody Position req) {
+    public ResponseEntity<ApiResponse<PositionDTO>> updatePosition(@PathVariable Long id, @RequestBody PositionDTO req) {
         Position p = positionRepository.findById(id).orElseThrow();
         if (req.getPositionCode() != null) p.setPositionCode(req.getPositionCode());
         if (req.getPositionName() != null) p.setPositionName(req.getPositionName());
+        if (req.getPositionTitle() != null) p.setPositionName(req.getPositionTitle());
         if (req.getBaseSalary() != null) p.setBaseSalary(req.getBaseSalary());
-        if (req.getDepartment() != null) p.setDepartment(req.getDepartment());
-        return ResponseEntity.ok(ApiResponse.ok("Cập nhật chức vụ thành công", positionRepository.save(p)));
+        if (req.getDepartmentId() != null) {
+            Department dept = departmentRepository.findById(req.getDepartmentId()).orElse(null);
+            p.setDepartment(dept);
+        }
+        Position saved = positionRepository.save(p);
+        PositionDTO resp = PositionDTO.builder()
+                .id(saved.getId())
+                .positionCode(saved.getPositionCode())
+                .positionName(saved.getPositionName())
+                .positionTitle(saved.getPositionName())
+                .baseSalary(saved.getBaseSalary())
+                .departmentId(saved.getDepartment() != null ? saved.getDepartment().getId() : null)
+                .departmentName(saved.getDepartment() != null ? saved.getDepartment().getDeptName() : "")
+                .build();
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật chức vụ thành công", resp));
     }
 
     @DeleteMapping("/positions/{id}")

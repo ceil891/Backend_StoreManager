@@ -30,7 +30,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsernameAndIdNotAndIsDeletedFalse(String username, Long id);
 
     @Query("SELECT u FROM User u WHERE " +
-            "(:includeDeleted = true OR u.isDeleted = false) AND " +
+            "(:includeDeleted = true OR u.isDeleted = false OR u.isDeleted IS NULL) AND " +
             "(:status IS NULL OR u.status = :status) AND " +
             "(:roleId IS NULL OR u.role.id = :roleId) AND " +
             "(:branchId IS NULL OR u.branch.id = :branchId) AND " +

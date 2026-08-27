@@ -20,6 +20,7 @@ public interface CustomerService {
     CustomerDetailResponse getCustomerById(Long id);
 
     Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive);
+    Page<CustomerListResponse> getAllCustomers(int page, int size, Boolean isActive, String search);
 
     // --- Các báo cáo & Tiện ích ---
     List<SalesHistoryResponse> getSalesHistory(Long id);
