@@ -140,11 +140,39 @@ public class ProductServiceImpl implements ProductService {
             productUnitService.validateBarcode(barcode, null, null);
         }
 
-        ProductCategory category = categoriesRepository.findByIdAndIsDeletedFalse(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getCategoryId()));
+        ProductCategory category = null;
+        if (request.getCategoryId() != null) {
+            category = categoriesRepository.findByIdAndIsDeletedFalse(request.getCategoryId()).orElse(null);
+        }
+        if (category == null) {
+            category = categoriesRepository.findAllForTree().stream().findFirst().orElse(null);
+            if (category == null) {
+                ProductCategory newCat = new ProductCategory();
+                newCat.setCategoryCode("CAT-GEN");
+                newCat.setCategoryName("Chung");
+                newCat.setIsActive(true);
+                newCat.setIsDeleted(false);
+                newCat.setCreatedBy("SYSTEM");
+                category = categoriesRepository.save(newCat);
+            }
+        }
 
-        Unit baseUnit = unitRepository.findByIdAndIsDeletedFalse(request.getBaseUnitId())
-                .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", request.getBaseUnitId()));
+        Unit baseUnit = null;
+        if (request.getBaseUnitId() != null) {
+            baseUnit = unitRepository.findByIdAndIsDeletedFalse(request.getBaseUnitId()).orElse(null);
+        }
+        if (baseUnit == null) {
+            baseUnit = unitRepository.findAllUnitsList("", true).stream().findFirst().orElse(null);
+            if (baseUnit == null) {
+                Unit newUnit = new Unit();
+                newUnit.setUnitCode("CAI");
+                newUnit.setUnitName("Cái");
+                newUnit.setIsActive(true);
+                newUnit.setIsDeleted(false);
+                newUnit.setCreatedBy("SYSTEM");
+                baseUnit = unitRepository.save(newUnit);
+            }
+        }
 
         String username = getCurrentUsername();
 
@@ -188,13 +216,13 @@ public class ProductServiceImpl implements ProductService {
 
         if (request.getConversionUnits() != null) {
             for (ProductUnitRequest uReq : request.getConversionUnits()) {
-                if (uReq.getUnitId().equals(request.getBaseUnitId())) {
-                    throw new ResponseStatusException(HttpStatus.CONFLICT,
-                            "Đơn vị quy đổi không được trùng với đơn vị gốc.");
+                if (uReq == null || uReq.getUnitId() == null) continue;
+                if (uReq.getUnitId().equals(baseUnit.getId())) {
+                    continue;
                 }
 
-                Unit conversionUnit = unitRepository.findByIdAndIsDeletedFalse(uReq.getUnitId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", uReq.getUnitId()));
+                Unit conversionUnit = unitRepository.findByIdAndIsDeletedFalse(uReq.getUnitId()).orElse(null);
+                if (conversionUnit == null) continue;
 
                 productUnitService.validateBarcode(uReq.getBarcode(), null, savedProduct.getId());
 
@@ -518,10 +546,8 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public List<MapProductResponse> getAllProducts(String search, Long categoryId, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
-        Page<Product> pageResult = productRepository.findAllProductsIncludeDeleted(search, categoryId, isActive, includeDeleted, pageable);
+        List<Product> products = productRepository.findAllProductsList(search, categoryId, isActive, includeDeleted, sorting);
         
-        List<Product> products = pageResult.getContent();
         List<Long> productIds = products.stream().map(Product::getId).collect(Collectors.toList());
         List<Object[]> stockSummaries = productIds.isEmpty() ? java.util.Collections.emptyList() :
                 sizeInventoryRepository.sumOnHandByProductIds(productIds);
@@ -613,6 +639,13 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductResponse mapToProductResponse(Product product, List<ProductUnitResponse> units) {
         BigDecimal onHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
+        List<org.example.storemanager.modules.catalog.dto.response.variant.VariantResponse> variantList = java.util.Collections.emptyList();
+        try {
+            if (productVariantService != null) {
+                variantList = productVariantService.getByProductId(product.getId());
+            }
+        } catch (Exception ignored) {}
+
         return ProductResponse.builder()
                 .id(product.getId())
                 .productCode(product.getProductCode())
@@ -641,6 +674,7 @@ public class ProductServiceImpl implements ProductService {
                 .baseUnitCode(product.getBaseUnit() != null ? product.getBaseUnit().getUnitCode() : null)
                 .baseUnitName(product.getBaseUnit() != null ? product.getBaseUnit().getUnitName() : null)
                 .units(units)
+                .variantList(variantList)
                 .onHand(onHand != null ? onHand : BigDecimal.ZERO)
                 .build();
     }

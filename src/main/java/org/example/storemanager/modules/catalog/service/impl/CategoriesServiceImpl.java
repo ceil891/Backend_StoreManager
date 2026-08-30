@@ -211,9 +211,13 @@ public class CategoriesServiceImpl implements CategoriesService {
     @Transactional(readOnly = true)
     public List<MapCategoriesResponse> getAllCategories(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
-        Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
-        Page<ProductCategory> page = categoriesRepository.findAllCategoriesIncludeDeleted(search, isActive, includeDeleted, pageable);
-        return page.getContent().stream()
+        List<ProductCategory> list;
+        if ((search == null || search.trim().isEmpty()) && !includeDeleted && (isActive == null || isActive)) {
+            list = categoriesRepository.findAllForTree();
+        } else {
+            list = categoriesRepository.findAllCategoriesList(search, isActive, includeDeleted, sorting);
+        }
+        return list.stream()
                 .map(this::mapToMapResponse)
                 .collect(Collectors.toList());
     }

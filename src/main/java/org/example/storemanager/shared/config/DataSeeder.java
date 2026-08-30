@@ -151,7 +151,8 @@ public class DataSeeder implements CommandLineRunner {
                 new RoleSeedDefinition("SALES_STAFF", "Nhân viên Kinh doanh / Bán hàng", List.of(
                     "sales:order:view", "sales:quote:view", "sales:offer:view", "sales:invoice:view",
                     "crm:customer:view", "catalog:product:view", "crm:voucher:view"
-                ))
+                )),
+                new RoleSeedDefinition("CUSTOMER", "Khách hàng mua sắm Web Online", List.of())
             );
 
             for (RoleSeedDefinition def : standardRoles) {

@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest, Long> {
     Optional<PurchaseRequest> findByIdAndIsDeletedFalse(Long id);
+    java.util.List<PurchaseRequest> findByIsDeletedFalse();
 
     @Query("SELECT pr FROM PurchaseRequest pr WHERE " +
            "(:includeDeleted = true OR pr.isDeleted = false) AND " +

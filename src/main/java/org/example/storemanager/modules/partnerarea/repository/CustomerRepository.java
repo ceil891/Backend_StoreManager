@@ -35,6 +35,9 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Optional<Customer> findByEmailAndIsDeletedFalse(String email);
     Optional<Customer> findByPhoneAndIsDeletedFalse(String phone);
+    Optional<Customer> findByNameIgnoreCaseAndIsDeletedFalse(String name);
+    Optional<Customer> findByCustomerCodeAndIsDeletedFalse(String customerCode);
+    java.util.List<Customer> findByIsDeletedFalse();
 
     @Query("SELECT c FROM Customer c WHERE (c.isDeleted = false OR c.isDeleted IS NULL) AND " +
             "(:isActive IS NULL OR c.isActive = :isActive) AND " +

@@ -2,9 +2,12 @@ package org.example.storemanager.modules.auth.controller;
 
 import jakarta.validation.Valid;
 import org.example.storemanager.modules.auth.dto.request.ChangePasswordRequest;
+import org.example.storemanager.modules.auth.dto.request.ForgotPasswordRequest;
 import org.example.storemanager.modules.auth.dto.request.LoginRequest;
 import org.example.storemanager.modules.auth.dto.request.RefreshTokenRequest;
 import org.example.storemanager.modules.auth.dto.request.RegisterRequest;
+import org.example.storemanager.modules.auth.dto.request.ResetPasswordRequest;
+import org.example.storemanager.modules.auth.dto.request.VerifyOtpRequest;
 import org.example.storemanager.modules.auth.dto.response.LoginResponse;
 import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.modules.auth.service.AuthService;
@@ -113,6 +116,39 @@ public class AuthController {
         }
         authService.changePassword(auth.getName(), request);
         return ResponseEntity.ok(ApiResponse.noContent());
+    }
+
+    /**
+     * POST /api/v1/auth/forgot-password
+     * Gửi mã xác thực OTP về email khi quên mật khẩu.
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<String>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        authService.sendForgotPasswordOtp(request);
+        return ResponseEntity.ok(ApiResponse.ok("Mã xác thực OTP đã được gửi đến email của bạn. Vui lòng kiểm tra hòm thư."));
+    }
+
+    /**
+     * POST /api/v1/auth/verify-otp
+     * Xác thực mã OTP 6 số.
+     */
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<String>> verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request) {
+        authService.verifyOtp(request);
+        return ResponseEntity.ok(ApiResponse.ok("Mã OTP hợp lệ."));
+    }
+
+    /**
+     * POST /api/v1/auth/reset-password
+     * Đặt lại mật khẩu mới bằng mã OTP.
+     */
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<String>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.ok("Đặt lại mật khẩu mới thành công! Bạn có thể đăng nhập ngay bây giờ."));
     }
 
     /**

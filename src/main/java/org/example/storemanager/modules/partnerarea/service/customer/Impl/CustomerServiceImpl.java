@@ -1,6 +1,7 @@
 package org.example.storemanager.modules.partnerarea.service.customer.Impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.partnerarea.dto.request.customerdto.CreateCustomerRequest;
 import org.example.storemanager.modules.partnerarea.dto.request.customerdto.UpdateCustomerRequest;
 import org.example.storemanager.modules.partnerarea.dto.response.customer.*;
@@ -31,6 +32,7 @@ import org.example.storemanager.modules.partnerarea.repository.AreaRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.example.storemanager.modules.system.repository.UserRepository;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -58,7 +60,11 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         Customer c = new Customer();
-        c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
+        if (req.getCustomerCode() != null && !req.getCustomerCode().trim().isEmpty()) {
+            c.setCustomerCode(req.getCustomerCode().trim());
+        } else {
+            c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
+        }
         c.setName(req.getName());
         c.setPhone(req.getPhone());
         c.setEmail(req.getEmail());
@@ -73,6 +79,7 @@ public class CustomerServiceImpl implements CustomerService {
         c.setTaxCode(req.getTaxCode());
         c.setGender(req.getGender());
         c.setNote(req.getNote());
+        c.setDebtLimit(req.getDebtLimit() != null ? req.getDebtLimit() : 0.0);
         
         if (req.getGroupId() != null) {
             PartnerGroup group = partnerGroupRepository.findById(req.getGroupId()).orElse(null);
@@ -115,8 +122,11 @@ public class CustomerServiceImpl implements CustomerService {
                 .taxCode(refreshed.getTaxCode())
                 .gender(refreshed.getGender())
                 .note(refreshed.getNote())
+                .debtLimit(refreshed.getDebtLimit())
                 .groupId(refreshed.getGroup() != null ? refreshed.getGroup().getId() : null)
+                .groupName(refreshed.getGroup() != null ? refreshed.getGroup().getGroupName() : null)
                 .areaId(refreshed.getArea() != null ? refreshed.getArea().getId() : null)
+                .areaName(refreshed.getArea() != null ? refreshed.getArea().getAreaName() : null)
                 .message("Tạo thành công").build();
     }
 
@@ -124,25 +134,23 @@ public class CustomerServiceImpl implements CustomerService {
         Customer c = customerRepository.findByIdAndIsDeletedFalse(id).orElse(null);
         if (c == null) {
             org.example.storemanager.modules.system.entity.User user = userRepository.findById(id).orElse(null);
+            if (user == null) {
+                String currentUsername = getCurrentUsername();
+                if (currentUsername != null && !currentUsername.isBlank() && !"anonymousUser".equalsIgnoreCase(currentUsername)) {
+                    user = userRepository.findByUsername(currentUsername)
+                            .or(() -> userRepository.findByEmail(currentUsername))
+                            .orElse(null);
+                }
+            }
             if (user != null) {
-                c = customerRepository.findAll().stream()
-                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                        .filter(cust -> (user.getPhone() != null && user.getPhone().equals(cust.getPhone())) || 
-                                        (user.getEmail() != null && user.getEmail().equalsIgnoreCase(cust.getEmail())))
-                        .findFirst().orElse(null);
-                
-                if (c == null) {
-                    c = new Customer();
-                    c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
-                    c.setName(user.getFullName() != null ? user.getFullName() : user.getUsername());
-                    c.setPhone(user.getPhone());
-                    c.setEmail(user.getEmail());
-                    c.setIsActive(true);
-                    c.setPoints(0.0);
-                    c.setTotalSpend(0.0);
-                    c.setMembershipRank("Đồng");
-                    c.setCreatedBy("SYSTEM");
-                    c = customerRepository.save(c);
+                if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                    c = customerRepository.findByEmailAndIsDeletedFalse(user.getEmail().trim()).orElse(null);
+                }
+                if (c == null && user.getPhone() != null && !user.getPhone().isBlank()) {
+                    c = customerRepository.findByPhoneAndIsDeletedFalse(user.getPhone().replace(" ", "").trim()).orElse(null);
+                }
+                if (c == null && user.getFullName() != null && !user.getFullName().isBlank()) {
+                    c = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(user.getFullName().trim()).orElse(null);
                 }
             }
         }
@@ -156,6 +164,12 @@ public class CustomerServiceImpl implements CustomerService {
     public UpdateCustomerResponse updateCustomer(Long id, UpdateCustomerRequest req) {
         Customer c = getOrCreateCustomerForUser(id);
 
+        String oldEmail = c.getEmail();
+        String oldPhone = c.getPhone();
+
+        if (req.getCustomerCode() != null && !req.getCustomerCode().trim().isEmpty()) {
+            c.setCustomerCode(req.getCustomerCode().trim());
+        }
         c.setName(req.getName());
         c.setPhone(req.getPhone());
         c.setEmail(req.getEmail());
@@ -178,6 +192,9 @@ public class CustomerServiceImpl implements CustomerService {
         c.setTaxCode(req.getTaxCode());
         c.setGender(req.getGender());
         c.setNote(req.getNote());
+        if (req.getDebtLimit() != null) {
+            c.setDebtLimit(req.getDebtLimit());
+        }
 
         if (req.getGroupId() != null) {
             PartnerGroup group = partnerGroupRepository.findById(req.getGroupId()).orElse(null);
@@ -201,24 +218,40 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Đồng bộ dữ liệu với tài khoản User nếu có
         try {
-            userRepository.findAll().stream()
-                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
-                    .filter(u -> (saved.getEmail() != null && saved.getEmail().equalsIgnoreCase(u.getEmail())) ||
-                                 (saved.getPhone() != null && saved.getPhone().replace(" ", "").equals(u.getPhone() != null ? u.getPhone().replace(" ", "") : "")) ||
-                                 (id != null && id.equals(u.getId())))
-                    .findFirst()
-                    .ifPresent(u -> {
-                        if (saved.getName() != null && !saved.getName().isBlank()) u.setFullName(saved.getName());
-                        if (saved.getPhone() != null && !saved.getPhone().isBlank()) u.setPhone(saved.getPhone());
-                        if (saved.getEmail() != null && !saved.getEmail().isBlank()) u.setEmail(saved.getEmail());
-                        if (saved.getAvatarUrl() != null && !saved.getAvatarUrl().isBlank()) u.setAvatar(saved.getAvatarUrl());
-                        if (saved.getIsActive() != null) u.setStatus(Boolean.TRUE.equals(saved.getIsActive()) ? "ACTIVE" : "LOCKED");
-                        userRepository.save(u);
-                    });
-        } catch (Exception ignored) {}
+            org.example.storemanager.modules.system.entity.User user = null;
+            if (oldEmail != null && !oldEmail.isBlank()) {
+                user = userRepository.findByEmail(oldEmail).orElse(null);
+            }
+            if (user == null && oldPhone != null && !oldPhone.isBlank()) {
+                user = userRepository.findByPhone(oldPhone).orElse(null);
+            }
+            if (user == null && id != null) {
+                user = userRepository.findById(id).orElse(null);
+            }
+            if (user == null) {
+                String currentUsername = getCurrentUsername();
+                if (currentUsername != null && !currentUsername.isBlank() && !"anonymousUser".equalsIgnoreCase(currentUsername)) {
+                    user = userRepository.findByUsername(currentUsername)
+                            .or(() -> userRepository.findByEmail(currentUsername))
+                            .orElse(null);
+                }
+            }
+
+            if (user != null) {
+                if (saved.getName() != null && !saved.getName().isBlank()) user.setFullName(saved.getName());
+                if (saved.getPhone() != null && !saved.getPhone().isBlank()) user.setPhone(saved.getPhone());
+                if (saved.getEmail() != null && !saved.getEmail().isBlank()) user.setEmail(saved.getEmail());
+                if (saved.getAvatarUrl() != null && !saved.getAvatarUrl().isBlank()) user.setAvatar(saved.getAvatarUrl());
+                if (saved.getIsActive() != null) user.setStatus(Boolean.TRUE.equals(saved.getIsActive()) ? "ACTIVE" : "LOCKED");
+                userRepository.save(user);
+            }
+        } catch (Exception e) {
+            log.warn("[CustomerService] Failed to sync user account on customer update: {}", e.getMessage());
+        }
 
         return UpdateCustomerResponse.builder()
                 .id(saved.getId())
+                .customerCode(saved.getCustomerCode())
                 .name(saved.getName())
                 .phone(saved.getPhone())
                 .email(saved.getEmail())
@@ -234,8 +267,11 @@ public class CustomerServiceImpl implements CustomerService {
                 .taxCode(saved.getTaxCode())
                 .gender(saved.getGender())
                 .note(saved.getNote())
+                .debtLimit(saved.getDebtLimit())
                 .groupId(saved.getGroup() != null ? saved.getGroup().getId() : null)
+                .groupName(saved.getGroup() != null ? saved.getGroup().getGroupName() : null)
                 .areaId(saved.getArea() != null ? saved.getArea().getId() : null)
+                .areaName(saved.getArea() != null ? saved.getArea().getAreaName() : null)
                 .message("Cập nhật thành công")
                 .build();
     }
@@ -249,16 +285,22 @@ public class CustomerServiceImpl implements CustomerService {
 
         // Đồng bộ trạng thái khóa tài khoản User tương ứng
         try {
-            userRepository.findAll().stream()
-                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()))
-                    .filter(u -> (c.getEmail() != null && c.getEmail().equalsIgnoreCase(u.getEmail())) ||
-                                 (c.getPhone() != null && c.getPhone().replace(" ", "").equals(u.getPhone() != null ? u.getPhone().replace(" ", "") : "")) ||
-                                 (id != null && id.equals(u.getId())))
-                    .findFirst()
-                    .ifPresent(u -> {
-                        u.setStatus(Boolean.TRUE.equals(isActive) ? "ACTIVE" : "LOCKED");
-                        userRepository.save(u);
-                    });
+            org.example.storemanager.modules.system.entity.User u = null;
+            if (id != null) {
+                u = userRepository.findByIdAndIsDeletedFalse(id).orElse(null);
+            }
+            if (u == null && c.getEmail() != null && !c.getEmail().isBlank()) {
+                u = userRepository.findByEmailAndIsDeletedFalse(c.getEmail().trim()).orElse(null);
+            }
+            if (u == null && c.getPhone() != null && !c.getPhone().isBlank()) {
+                u = userRepository.findByPhone(c.getPhone().replace(" ", "").trim()).orElse(null);
+            }
+            if (u != null) {
+                u.setStatus(Boolean.TRUE.equals(isActive) ? "ACTIVE" : "LOCKED");
+                userRepository.save(u);
+                org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(u.getUsername());
+                org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(u.getEmail());
+            }
         } catch (Exception ignored) {}
 
         return UpdateCustomerResponse.builder()
@@ -313,8 +355,11 @@ public class CustomerServiceImpl implements CustomerService {
                 .taxCode(c.getTaxCode())
                 .gender(c.getGender())
                 .note(c.getNote())
+                .debtLimit(c.getDebtLimit())
                 .groupId(c.getGroup() != null ? c.getGroup().getId() : null)
+                .groupName(c.getGroup() != null ? c.getGroup().getGroupName() : null)
                 .areaId(c.getArea() != null ? c.getArea().getId() : null)
+                .areaName(c.getArea() != null ? c.getArea().getAreaName() : null)
                 .build();
     }
 
@@ -357,6 +402,15 @@ public class CustomerServiceImpl implements CustomerService {
                 .totalSpend(c.getTotalSpend() != null ? c.getTotalSpend() : 0.0)
                 .isActive(c.getIsActive())
                 .avatarUrl(c.getAvatarUrl())
+                .taxCode(c.getTaxCode())
+                .gender(c.getGender())
+                .dob(c.getDob())
+                .debtLimit(c.getDebtLimit())
+                .groupId(c.getGroup() != null ? c.getGroup().getId() : null)
+                .groupName(c.getGroup() != null ? c.getGroup().getGroupName() : null)
+                .areaId(c.getArea() != null ? c.getArea().getId() : null)
+                .areaName(c.getArea() != null ? c.getArea().getAreaName() : null)
+                .note(c.getNote())
                 .build();
     }
 

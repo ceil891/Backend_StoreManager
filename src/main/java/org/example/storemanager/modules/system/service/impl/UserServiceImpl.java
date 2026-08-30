@@ -59,6 +59,10 @@ public class UserServiceImpl implements UserService {
             throw new DuplicateResourceException("User", "username", request.getUsername());
         }
 
+        if (request.getEmail() != null && !request.getEmail().isBlank() && userRepository.existsByEmailAndIsDeletedFalse(request.getEmail())) {
+            throw new DuplicateResourceException("User", "email", request.getEmail());
+        }
+
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "id", request.getRoleId()));
 
@@ -93,6 +97,17 @@ public class UserServiceImpl implements UserService {
         // Gửi email thông tin tài khoản nếu email không trống
         if (savedUser.getEmail() != null && !savedUser.getEmail().isBlank()) {
             emailService.sendAccountInfoEmail(savedUser.getEmail(), savedUser.getFullName(), savedUser.getUsername(), rawPassword);
+        }
+
+        // Gửi email thông báo cho Quản lý nếu có chỉ định managerId
+        if (request.getManagerId() != null) {
+            userRepository.findByIdAndIsDeletedFalse(request.getManagerId()).ifPresent(manager -> {
+                if (manager.getEmail() != null && !manager.getEmail().isBlank()) {
+                    String branchName = savedUser.getBranch() != null ? savedUser.getBranch().getBranchName() : "Toàn hệ thống";
+                    String roleName = savedUser.getRole() != null ? (savedUser.getRole().getDescription() != null ? savedUser.getRole().getDescription() : savedUser.getRole().getRoleName()) : "Nhân viên";
+                    emailService.sendManagerNotificationEmail(manager.getEmail(), manager.getFullName(), savedUser.getFullName(), savedUser.getEmail(), roleName, branchName);
+                }
+            });
         }
 
         return mapToCreateResponse(savedUser);
@@ -148,6 +163,8 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getUsername());
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getEmail());
 
         // Đồng bộ ảnh đại diện và thông tin với Customer nếu có
         try {
@@ -188,6 +205,8 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getUsername());
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getEmail());
 
         // Đồng bộ trạng thái khóa tài khoản sang Customer
         try {
@@ -217,8 +236,9 @@ public class UserServiceImpl implements UserService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setUpdatedBy(getCurrentUsername());
-
         userRepository.save(user);
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getUsername());
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
     }
 
     @Override
@@ -244,6 +264,8 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedBy(username);
 
         User deletedUser = userRepository.save(user);
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(deletedUser.getUsername());
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(deletedUser.getEmail());
 
         return DeleteUserResponse.builder()
                 .id(deletedUser.getId())
@@ -269,7 +291,14 @@ public class UserServiceImpl implements UserService {
         Pageable pageable = PageRequest.of(0, 1000, sorting);
         Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
 
+        java.util.Set<String> customerRoles = java.util.Set.of("CUSTOMER", "KHÁCH HÀNG", "KHACH HANG", "USER", "NGƯỜI DÙNG", "NGUOI DUNG");
         return pageResult.getContent().stream()
+                .filter(u -> {
+                    if (roleId != null) return true;
+                    if (u.getRole() == null) return false;
+                    String rName = u.getRole().getRoleName() != null ? u.getRole().getRoleName().trim().toUpperCase() : "";
+                    return !customerRoles.contains(rName);
+                })
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -281,7 +310,14 @@ public class UserServiceImpl implements UserService {
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
 
+        java.util.Set<String> customerRoles = java.util.Set.of("CUSTOMER", "KHÁCH HÀNG", "KHACH HANG", "USER", "NGƯỜI DÙNG", "NGUOI DUNG");
         List<UserResponse> content = pageResult.getContent().stream()
+                .filter(u -> {
+                    if (roleId != null) return true;
+                    if (u.getRole() == null) return false;
+                    String rName = u.getRole().getRoleName() != null ? u.getRole().getRoleName().trim().toUpperCase() : "";
+                    return !customerRoles.contains(rName);
+                })
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
 

@@ -55,6 +55,10 @@ public class Customer extends BaseEntity {
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
+    @Column(name = "debt_limit")
+    @Builder.Default
+    private Double debtLimit = 0.0; // Hạn mức nợ cho phép
+
     @Column(name = "password", length = 255)
     private String password;
 

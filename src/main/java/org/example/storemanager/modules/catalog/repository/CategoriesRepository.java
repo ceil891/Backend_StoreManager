@@ -41,4 +41,19 @@ public interface CategoriesRepository extends JpaRepository<ProductCategory, Lon
     // Lấy tất cả chưa bị xóa để build tree
     @Query("SELECT c FROM ProductCategory c WHERE c.isDeleted = false")
     List<ProductCategory> findAllForTree();
+
+    List<ProductCategory> findByIsDeletedFalseOrderByCategoryNameAsc();
+
+    @Query("SELECT c FROM ProductCategory c WHERE " +
+           "(:includeDeleted = true OR c.isDeleted = false) AND " +
+           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
+           "(:search IS NULL OR :search = '' OR " +
+           "LOWER(c.categoryName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(c.categoryCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+    List<ProductCategory> findAllCategoriesList(
+            @Param("search") String search,
+            @Param("isActive") Boolean isActive,
+            @Param("includeDeleted") boolean includeDeleted,
+            org.springframework.data.domain.Sort sort);
 }
