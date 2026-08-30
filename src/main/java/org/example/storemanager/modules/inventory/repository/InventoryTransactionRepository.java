@@ -20,6 +20,7 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
 
     Page<InventoryTransaction> findByProductVariantId(Long productVariantId, Pageable pageable);
 
+    List<InventoryTransaction> findByIsDeletedFalse();
     List<InventoryTransaction> findByTransactionTypeAndCreatedAtBetween(
             InventoryTransactionType type, LocalDateTime from, LocalDateTime to);
 }

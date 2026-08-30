@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class UpdateCustomerResponse {
     private Long id;
+    private String customerCode;
     private String name;
     private String phone;
     private String email;
@@ -32,5 +33,8 @@ public class UpdateCustomerResponse {
     private String gender;
     private String note;
     private Long groupId;
+    private String groupName;
     private Long areaId;
+    private String areaName;
+    private Double debtLimit;
 }

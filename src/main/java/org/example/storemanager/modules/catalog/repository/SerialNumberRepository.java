@@ -10,6 +10,8 @@ import java.util.Optional;
 @Repository
 public interface SerialNumberRepository extends JpaRepository<SerialNumber, Long> {
     Optional<SerialNumber> findBySerialNumberAndIsDeletedFalse(String serialNumber);
+    List<SerialNumber> findByIsDeletedFalse();
+    List<SerialNumber> findByStatusAndIsDeletedFalse(String status);
     List<SerialNumber> findByProductIdAndStatusAndIsDeletedFalse(Long productId, String status);
     List<SerialNumber> findByProductIdAndIsDeletedFalse(Long productId);
 }

@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface SupplierRepository extends JpaRepository<Supplier, Long> {
     Optional<Supplier> findByIdAndIsDeletedFalse(Long id);
+    java.util.List<Supplier> findByIsDeletedFalse();
     Page<Supplier> findByIsActive(Boolean isActive, Pageable pageable);
     boolean existsBySupplierCode(String supplierCode);
 

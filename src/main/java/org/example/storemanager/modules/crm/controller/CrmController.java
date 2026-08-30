@@ -61,6 +61,24 @@ public class CrmController {
     @PostMapping("/tiers")
     public ResponseEntity<ApiResponse<LoyaltyTier>> createTier(@RequestBody LoyaltyTier req) {
         req.setIsDeleted(false);
+        if (req.getMinPoints() == null) {
+            req.setMinPoints(req.getMinSpend() != null ? req.getMinSpend().intValue() : 0);
+        }
+        if (req.getMinSpend() == null && req.getMinPoints() != null) {
+            req.setMinSpend(java.math.BigDecimal.valueOf(req.getMinPoints()));
+        }
+        if (req.getPointMultiplier() == null) {
+            req.setPointMultiplier(java.math.BigDecimal.ONE);
+        }
+        if (req.getDiscountPercent() == null) {
+            req.setDiscountPercent(java.math.BigDecimal.ZERO);
+        }
+        if (req.getTierCode() == null || req.getTierCode().isBlank()) {
+            req.setTierCode("TIER_" + System.currentTimeMillis());
+        }
+        if (req.getTierName() == null || req.getTierName().isBlank()) {
+            req.setTierName("Hạng " + req.getTierCode());
+        }
         return ResponseEntity.status(201).body(ApiResponse.created(loyaltyTierRepository.save(req)));
     }
 
@@ -78,6 +96,20 @@ public class CrmController {
         }
         if (target != null) {
             req.setId(target.getId());
+            if (req.getTierCode() == null || req.getTierCode().isBlank()) req.setTierCode(target.getTierCode());
+            if (req.getTierName() == null || req.getTierName().isBlank()) req.setTierName(target.getTierName());
+        }
+        if (req.getMinPoints() == null) {
+            req.setMinPoints(req.getMinSpend() != null ? req.getMinSpend().intValue() : (target != null && target.getMinPoints() != null ? target.getMinPoints() : 0));
+        }
+        if (req.getMinSpend() == null && req.getMinPoints() != null) {
+            req.setMinSpend(java.math.BigDecimal.valueOf(req.getMinPoints()));
+        }
+        if (req.getPointMultiplier() == null) {
+            req.setPointMultiplier(target != null && target.getPointMultiplier() != null ? target.getPointMultiplier() : java.math.BigDecimal.ONE);
+        }
+        if (req.getDiscountPercent() == null) {
+            req.setDiscountPercent(target != null && target.getDiscountPercent() != null ? target.getDiscountPercent() : java.math.BigDecimal.ZERO);
         }
         req.setIsDeleted(false);
         return ResponseEntity.ok(ApiResponse.ok(loyaltyTierRepository.save(req)));
@@ -104,14 +136,83 @@ public class CrmController {
 
     // --- LOYALTY POINT HISTORY ---
     @GetMapping({"/loyalty-history", "/loyalty-histories"})
-    public ResponseEntity<ApiResponse<List<LoyaltyPointHistory>>> getAllLoyaltyHistory() {
-        return ResponseEntity.ok(ApiResponse.ok(loyaltyPointHistoryRepository.findByIsDeletedFalse()));
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAllLoyaltyHistory() {
+        List<LoyaltyPointHistory> list = loyaltyPointHistoryRepository.findByIsDeletedFalse();
+        list.sort((a, b) -> Long.compare(b.getId() != null ? b.getId() : 0L, a.getId() != null ? a.getId() : 0L));
+        List<java.util.Map<String, Object>> res = list.stream().map(h -> {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", h.getId().toString());
+            m.put("code", h.getRefCode() != null ? h.getRefCode() : ("TX-" + h.getId()));
+            m.put("pointsChange", h.getPointsChange() != null ? h.getPointsChange() : 0);
+            m.put("pointChange", h.getPointsChange() != null ? h.getPointsChange() : 0);
+            m.put("transactionType", h.getTransactionType() != null ? h.getTransactionType() : "TÍCH ĐIỂM BÁN HÀNG");
+            m.put("refDocument", h.getRefCode() != null ? h.getRefCode() : "");
+            m.put("balanceAfter", h.getCurrentPoints() != null ? h.getCurrentPoints() : 0);
+            m.put("date", h.getCreatedAt() != null ? h.getCreatedAt().toLocalDate().toString() : java.time.LocalDate.now().toString());
+            m.put("createdAt", h.getCreatedAt() != null ? h.getCreatedAt().toString() : "");
+            m.put("notes", h.getDescription() != null ? h.getDescription() : "");
+            if (h.getCustomer() != null) {
+                m.put("customerId", h.getCustomer().getId().toString());
+                m.put("customerName", h.getCustomer().getName() != null ? h.getCustomer().getName() : "Khách hàng");
+                m.put("customerPhone", h.getCustomer().getPhone() != null ? h.getCustomer().getPhone() : "");
+            } else {
+                m.put("customerName", "Khách hàng");
+                m.put("customerPhone", "");
+            }
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.ok(res));
     }
 
     @PostMapping({"/loyalty-history", "/loyalty-histories"})
-    public ResponseEntity<ApiResponse<LoyaltyPointHistory>> createLoyaltyHistory(@RequestBody LoyaltyPointHistory req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(loyaltyPointHistoryRepository.save(req)));
+    @Transactional
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createLoyaltyHistory(@RequestBody java.util.Map<String, Object> req) {
+        Long customerId = null;
+        if (req.get("customerId") != null) {
+            try { customerId = Long.valueOf(req.get("customerId").toString()); } catch (Exception ignored) {}
+        }
+        Customer customer = null;
+        if (customerId != null) {
+            customer = customerRepository.findById(customerId).orElse(null);
+        }
+        if (customer == null && req.get("phone") != null) {
+            String ph = req.get("phone").toString().trim();
+            customer = customerRepository.findByPhone(ph).orElse(null);
+        }
+        if (customer == null && req.get("customerPhone") != null) {
+            String ph = req.get("customerPhone").toString().trim();
+            customer = customerRepository.findByPhone(ph).orElse(null);
+        }
+
+        Integer pointsChange = req.get("pointsChange") != null ? Integer.valueOf(req.get("pointsChange").toString()) : 
+                              (req.get("pointChange") != null ? Integer.valueOf(req.get("pointChange").toString()) : 0);
+        String txType = req.get("transactionType") != null ? req.get("transactionType").toString() : (pointsChange >= 0 ? "EARN" : "REDEEM");
+        String refCode = req.get("refDocument") != null ? req.get("refDocument").toString() : 
+                        (req.get("code") != null ? req.get("code").toString() : "TX-POS-" + System.currentTimeMillis());
+        Integer balanceAfter = req.get("balanceAfter") != null ? Integer.valueOf(req.get("balanceAfter").toString()) : pointsChange;
+        String notes = req.get("notes") != null ? req.get("notes").toString() : (req.get("description") != null ? req.get("description").toString() : "");
+
+        LoyaltyPointHistory history = LoyaltyPointHistory.builder()
+                .customer(customer)
+                .pointsChange(pointsChange)
+                .transactionType(txType)
+                .refCode(refCode)
+                .currentPoints(balanceAfter)
+                .description(notes)
+                .build();
+        history.setIsDeleted(false);
+        LoyaltyPointHistory saved = loyaltyPointHistoryRepository.save(history);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", saved.getId().toString());
+        resp.put("code", saved.getRefCode());
+        resp.put("pointsChange", saved.getPointsChange());
+        resp.put("transactionType", saved.getTransactionType());
+        resp.put("customerName", customer != null ? customer.getName() : "Khách hàng");
+        resp.put("customerPhone", customer != null ? customer.getPhone() : "");
+        resp.put("balanceAfter", saved.getCurrentPoints());
+        return ResponseEntity.status(201).body(ApiResponse.created(resp));
     }
 
     @PutMapping("/loyalty-history/{id}")
@@ -330,12 +431,13 @@ public class CrmController {
 
         Customer customer = null;
         if (!customerPhone.isBlank()) {
-            customer = customerRepository.findByPhone(customerPhone).orElse(null);
+            customer = customerRepository.findByPhoneAndIsDeletedFalse(customerPhone.trim()).orElse(null);
+            if (customer == null) {
+                customer = customerRepository.findByPhone(customerPhone.trim()).orElse(null);
+            }
         }
         if (customer == null && !customerName.isBlank()) {
-            customer = customerRepository.findAll().stream()
-                    .filter(c -> !Boolean.TRUE.equals(c.getIsDeleted()) && customerName.equalsIgnoreCase(c.getName()))
-                    .findFirst().orElse(null);
+            customer = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(customerName.trim()).orElse(null);
         }
         if (customer == null && !customerName.isBlank()) {
             Customer newCust = Customer.builder()
@@ -574,40 +676,28 @@ public class CrmController {
 
         Customer c = null;
         if (customerId != null) {
-            c = customerRepository.findById(customerId).orElse(null);
+            c = customerRepository.findByIdAndIsDeletedFalse(customerId).orElse(null);
         }
         if (c == null && req.get("customerPhone") != null) {
             String ph = req.get("customerPhone").toString().trim().replace(" ", "");
             if (!ph.isBlank()) {
-                c = customerRepository.findAll().stream()
-                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                        .filter(cust -> cust.getPhone() != null && cust.getPhone().replace(" ", "").equals(ph))
-                        .findFirst().orElse(null);
+                c = customerRepository.findByPhoneAndIsDeletedFalse(ph).orElse(null);
             }
         }
         if (c == null && req.get("phone") != null) {
             String ph = req.get("phone").toString().trim().replace(" ", "");
             if (!ph.isBlank()) {
-                c = customerRepository.findAll().stream()
-                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                        .filter(cust -> cust.getPhone() != null && cust.getPhone().replace(" ", "").equals(ph))
-                        .findFirst().orElse(null);
+                c = customerRepository.findByPhoneAndIsDeletedFalse(ph).orElse(null);
             }
         }
         if (c == null && req.get("customerName") != null) {
             String cName = req.get("customerName").toString().trim();
             if (!cName.isBlank()) {
-                c = customerRepository.findAll().stream()
-                        .filter(cust -> !Boolean.TRUE.equals(cust.getIsDeleted()))
-                        .filter(cust -> cust.getName() != null && cust.getName().equalsIgnoreCase(cName))
-                        .findFirst().orElse(null);
+                c = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(cName).orElse(null);
             }
         }
         if (c == null) {
-            java.util.List<Customer> customers = customerRepository.findAll();
-            if (!customers.isEmpty()) {
-                c = customers.get(0);
-            }
+            c = customerRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
         }
 
         Long voucherId = null;

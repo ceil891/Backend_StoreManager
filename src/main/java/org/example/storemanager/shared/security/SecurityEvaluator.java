@@ -26,7 +26,9 @@ public class SecurityEvaluator {
 
     // Cache permissions per roleId với TTL (in-memory fast cache tối ưu response time < 50ms)
     private static final Map<Long, CachedRolePermissions> ROLE_PERMISSIONS_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, CachedUserInfo> USER_INFO_CACHE = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+    private static final long USER_CACHE_TTL_MS = 3 * 60 * 1000; // 3 phút
 
     private static class CachedRolePermissions {
         final Set<String> permissions;
@@ -42,6 +44,28 @@ public class SecurityEvaluator {
         }
     }
 
+    private static class CachedUserInfo {
+        final Long userId;
+        final String status;
+        final Boolean isDeleted;
+        final Long roleId;
+        final String roleName;
+        final long cachedAt;
+
+        CachedUserInfo(Long userId, String status, Boolean isDeleted, Long roleId, String roleName) {
+            this.userId = userId;
+            this.status = status;
+            this.isDeleted = isDeleted;
+            this.roleId = roleId;
+            this.roleName = roleName;
+            this.cachedAt = System.currentTimeMillis();
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > USER_CACHE_TTL_MS;
+        }
+    }
+
     /**
      * Xóa cache khi cập nhật phân quyền cho Role
      */
@@ -51,6 +75,22 @@ public class SecurityEvaluator {
         } else {
             ROLE_PERMISSIONS_CACHE.clear();
         }
+    }
+
+    /**
+     * Xóa cache User khi user bị thay đổi trạng thái, quyền, hoặc thông tin
+     */
+    public static void evictUserCache(String usernameOrEmail) {
+        if (usernameOrEmail != null && !usernameOrEmail.trim().isEmpty()) {
+            USER_INFO_CACHE.remove(usernameOrEmail.trim().toLowerCase());
+        } else {
+            USER_INFO_CACHE.clear();
+        }
+    }
+
+    public static void evictAll() {
+        ROLE_PERMISSIONS_CACHE.clear();
+        USER_INFO_CACHE.clear();
     }
 
     @Transactional(readOnly = true)
@@ -66,27 +106,48 @@ public class SecurityEvaluator {
         }
 
         String principal = auth.getName();
-        User user = userRepository.findByUsername(principal)
-                .or(() -> userRepository.findByEmail(principal))
-                .orElse(null);
+        String userKey = principal.toLowerCase().trim();
+        CachedUserInfo cachedUser = USER_INFO_CACHE.get(userKey);
 
-        if (user == null || Boolean.TRUE.equals(user.getIsDeleted()) || !"ACTIVE".equals(user.getStatus()) || user.getRole() == null) {
+        if (cachedUser == null || cachedUser.isExpired()) {
+            User user = userRepository.findByUsername(principal)
+                    .or(() -> userRepository.findByEmail(principal))
+                    .orElse(null);
+
+            if (user == null || Boolean.TRUE.equals(user.getIsDeleted()) || !"ACTIVE".equals(user.getStatus()) || user.getRole() == null) {
+                log.warn("SecurityEvaluator: User không hợp lệ hoặc đã bị vô hiệu hóa: {}", principal);
+                USER_INFO_CACHE.remove(userKey);
+                return false;
+            }
+
+            cachedUser = new CachedUserInfo(
+                    user.getId(),
+                    user.getStatus(),
+                    user.getIsDeleted(),
+                    user.getRole().getId(),
+                    user.getRole().getRoleName()
+            );
+            USER_INFO_CACHE.put(userKey, cachedUser);
+            if (user.getUsername() != null) USER_INFO_CACHE.put(user.getUsername().toLowerCase().trim(), cachedUser);
+            if (user.getEmail() != null) USER_INFO_CACHE.put(user.getEmail().toLowerCase().trim(), cachedUser);
+        }
+
+        if (Boolean.TRUE.equals(cachedUser.isDeleted) || !"ACTIVE".equals(cachedUser.status) || cachedUser.roleId == null) {
             log.warn("SecurityEvaluator: User không hợp lệ hoặc đã bị vô hiệu hóa: {}", principal);
             return false;
         }
 
-        Role role = user.getRole();
-        if ("SUPER_ADMIN".equalsIgnoreCase(role.getRoleName())) {
+        if ("SUPER_ADMIN".equalsIgnoreCase(cachedUser.roleName)) {
             return true;
         }
 
-        Set<String> permissions = getPermissionsForRole(role.getId(), role.getRoleName());
+        Set<String> permissions = getPermissionsForRole(cachedUser.roleId, cachedUser.roleName);
 
         // Kiểm tra quyền wildcard hoặc match chính xác
         boolean hasPerm = matchPermission(permissions, requiredPermission);
 
         if (!hasPerm) {
-            log.warn("Access Denied: User [{}] (Role: {}) missing permission [{}]", principal, role.getRoleName(), requiredPermission);
+            log.warn("Access Denied: User [{}] (Role: {}) missing permission [{}]", principal, cachedUser.roleName, requiredPermission);
         }
 
         return hasPerm;

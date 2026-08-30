@@ -91,8 +91,7 @@ public class InventoryTrackingApiController {
 
     @GetMapping("/serials")
     public ResponseEntity<ApiResponse<List<SerialNumberDTO>>> getAllSerials() {
-        List<SerialNumberDTO> list = serialNumberRepository.findAll().stream()
-                .filter(sn -> !Boolean.TRUE.equals(sn.getIsDeleted()))
+        List<SerialNumberDTO> list = serialNumberRepository.findByIsDeletedFalse().stream()
                 .map(this::toSerialDTO)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -107,8 +106,7 @@ public class InventoryTrackingApiController {
 
     @GetMapping("/serials/status/{status}")
     public ResponseEntity<ApiResponse<List<SerialNumberDTO>>> getSerialsByStatus(@PathVariable String status) {
-        List<SerialNumberDTO> list = serialNumberRepository.findAll().stream()
-                .filter(sn -> !Boolean.TRUE.equals(sn.getIsDeleted()) && status.equalsIgnoreCase(sn.getStatus()))
+        List<SerialNumberDTO> list = serialNumberRepository.findByStatusAndIsDeletedFalse(status).stream()
                 .map(this::toSerialDTO)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -132,8 +130,7 @@ public class InventoryTrackingApiController {
 
     @GetMapping("/balances")
     public ResponseEntity<ApiResponse<List<InventoryBalanceDTO>>> getAllBalances() {
-        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findAll().stream()
-                .filter(b -> !Boolean.TRUE.equals(b.getIsDeleted()))
+        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findByIsDeletedFalse().stream()
                 .map(this::toBalanceDTO)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -168,8 +165,7 @@ public class InventoryTrackingApiController {
             ).toList();
             return ResponseEntity.ok(ApiResponse.ok(dtoList));
         }
-        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findAll().stream()
-                .filter(b -> !Boolean.TRUE.equals(b.getIsDeleted()) && branchId.equals(b.getBranch().getId()))
+        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findByBranchIdAndIsDeletedFalse(branchId).stream()
                 .map(this::toBalanceDTO)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -177,8 +173,7 @@ public class InventoryTrackingApiController {
 
     @GetMapping("/variants/{variantId}/stock")
     public ResponseEntity<ApiResponse<List<InventoryBalanceDTO>>> getStockByVariant(@PathVariable Long variantId) {
-        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findAll().stream()
-                .filter(b -> !Boolean.TRUE.equals(b.getIsDeleted()) && variantId.equals(b.getProductVariant().getId()))
+        List<InventoryBalanceDTO> list = inventoryBalanceRepository.findByProductVariantIdAndIsDeletedFalse(variantId).stream()
                 .map(this::toBalanceDTO)
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(list));
@@ -193,9 +188,8 @@ public class InventoryTrackingApiController {
             @RequestParam(required = false) Long variantId,
             @RequestParam(required = false) Long branchId,
             @RequestParam(required = false) String transactionType) {
-        List<InventoryTransactionDTO> list = inventoryTransactionRepository.findAll().stream()
-                .filter(t -> !Boolean.TRUE.equals(t.getIsDeleted()))
-                .filter(t -> variantId == null || variantId.equals(t.getProductVariant().getId()))
+        List<InventoryTransactionDTO> list = inventoryTransactionRepository.findByIsDeletedFalse().stream()
+                .filter(t -> variantId == null || (t.getProductVariant() != null && variantId.equals(t.getProductVariant().getId())))
                 .filter(t -> branchId == null || (t.getSourceBranch() != null && branchId.equals(t.getSourceBranch().getId())))
                 .filter(t -> transactionType == null || (t.getTransactionType() != null && transactionType.equalsIgnoreCase(t.getTransactionType().name())))
                 .map(this::toTransactionDTO)

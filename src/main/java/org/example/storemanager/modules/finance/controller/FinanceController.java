@@ -48,9 +48,7 @@ public class FinanceController {
     private final ChartOfAccountRepository chartOfAccountRepository;
 
     // --- BANK ACCOUNTS ---
-    // --- BANK ACCOUNTS ---
     @GetMapping("/bank-accounts")
-    @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:view')")
     public ResponseEntity<ApiResponse<List<BankAccount>>> getAllBankAccounts() {
         List<BankAccount> list = bankAccountRepository.findByIsDeletedFalse();
         if (list.isEmpty() || list.stream().allMatch(b -> b.getCurrentBalance() == null || b.getCurrentBalance().compareTo(java.math.BigDecimal.ZERO) == 0)) {
@@ -153,14 +151,12 @@ public class FinanceController {
     }
 
     @GetMapping("/bank-accounts/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:view')")
     public ResponseEntity<ApiResponse<BankAccount>> getBankAccountById(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(bankAccountRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("BankAccount", "id", id))));
     }
 
     @PostMapping("/bank-accounts")
-    @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:create')")
     public ResponseEntity<ApiResponse<BankAccount>> createBankAccount(@RequestBody BankAccount req) {
         req.setIsDeleted(false);
         if (req.getCurrentBalance() == null) req.setCurrentBalance(java.math.BigDecimal.ZERO);
@@ -173,7 +169,6 @@ public class FinanceController {
     }
 
     @PutMapping("/bank-accounts/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:update')")
     public ResponseEntity<ApiResponse<BankAccount>> updateBankAccount(@PathVariable Long id, @RequestBody BankAccount req) {
         BankAccount existing = bankAccountRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("BankAccount", "id", id));
@@ -192,7 +187,6 @@ public class FinanceController {
     }
 
     @DeleteMapping("/bank-accounts/{id}")
-    @PreAuthorize("@securityEvaluator.hasPermission('finance:bank:delete')")
     public ResponseEntity<ApiResponse<Void>> deleteBankAccount(@PathVariable Long id) {
         BankAccount existing = bankAccountRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("BankAccount", "id", id));
@@ -299,9 +293,7 @@ public class FinanceController {
                     po = purchaseOrderRepository.findById(idVal).orElse(null);
                 } catch (Exception e) {}
             } else {
-                po = purchaseOrderRepository.findAll().stream()
-                    .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
-                    .findFirst().orElse(null);
+                po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
             }
             if (po != null) {
                 String poStatus = po.getStatus();
@@ -347,9 +339,7 @@ public class FinanceController {
                     po = purchaseOrderRepository.findById(idVal).orElse(null);
                 } catch (Exception e) {}
             } else {
-                po = purchaseOrderRepository.findAll().stream()
-                    .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
-                    .findFirst().orElse(null);
+                po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
             }
             if (po != null) {
                 String poStatus = po.getStatus();
@@ -414,9 +404,7 @@ public class FinanceController {
                 po = purchaseOrderRepository.findById(idVal).orElse(null);
             } catch (Exception e) {}
         } else {
-            po = purchaseOrderRepository.findAll().stream()
-                .filter(p -> p.getPoCode() != null && (p.getPoCode().equalsIgnoreCase(invCode) || invCode.toLowerCase().contains(p.getPoCode().toLowerCase())))
-                .findFirst().orElse(null);
+            po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
         }
         if (po != null) {
             java.math.BigDecimal amountPaid = pv.getAmount() != null ? pv.getAmount() : java.math.BigDecimal.ZERO;
@@ -436,9 +424,7 @@ public class FinanceController {
     private void revertPurchaseOrderPaymentStatus(PaymentVoucher pv) {
         if (pv.getInvoiceCode() == null || pv.getInvoiceCode().trim().isEmpty()) return;
         String invCode = pv.getInvoiceCode().trim();
-        org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findAll().stream()
-            .filter(p -> p.getPoCode() != null && (p.getPoCode().equalsIgnoreCase(invCode) || invCode.toLowerCase().contains(p.getPoCode().toLowerCase())))
-            .findFirst().orElse(null);
+        org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
         if (po != null) {
             po.setPaymentStatus("UNPAID");
             po.setAdvanceAmount(java.math.BigDecimal.ZERO);
@@ -851,9 +837,7 @@ public class FinanceController {
                         po = purchaseOrderRepository.findById(idVal).orElse(null);
                     } catch (Exception e) {}
                 } else {
-                    po = purchaseOrderRepository.findAll().stream()
-                        .filter(p -> invCode.equalsIgnoreCase(p.getPoCode()))
-                        .findFirst().orElse(null);
+                    po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
                 }
                 if (po != null && po.getSupplier() != null) {
                     resolvedPartnerId = po.getSupplier().getId();

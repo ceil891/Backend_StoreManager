@@ -20,4 +20,7 @@ public interface AuthService {
     List<String> getMyPermissions(String username);
     org.example.storemanager.modules.auth.dto.response.UserInfoResponse updateProfile(String username, org.example.storemanager.modules.auth.dto.request.UpdateProfileRequest request);
     org.example.storemanager.modules.auth.dto.response.UserInfoResponse getProfile(String username);
+    void sendForgotPasswordOtp(org.example.storemanager.modules.auth.dto.request.ForgotPasswordRequest request);
+    void verifyOtp(org.example.storemanager.modules.auth.dto.request.VerifyOtpRequest request);
+    void resetPassword(org.example.storemanager.modules.auth.dto.request.ResetPasswordRequest request);
 }

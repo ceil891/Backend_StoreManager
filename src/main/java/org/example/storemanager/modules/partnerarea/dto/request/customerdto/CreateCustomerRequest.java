@@ -11,11 +11,13 @@ import java.time.LocalDate;
 @Data
 @Builder
 public class CreateCustomerRequest {
+    private String customerCode;
+
     @NotBlank(message = "Tên khách hàng không được để trống")
     private String name;
 
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^(09|\\+849)[0-9]{8}$", message = "Số điện thoại phải bắt đầu bằng đầu 09 và có đủ 10 chữ số")
+    @Pattern(regexp = "^(\\+84|0)[0-9]{9,10}$", message = "Số điện thoại không hợp lệ (10 chữ số)")
     private String phone;
 
     @Email(message = "Email không đúng định dạng hợp lệ")
@@ -33,4 +35,5 @@ public class CreateCustomerRequest {
     private String membershipRank;
     private String note;
     private String taxCode;
+    private Double debtLimit;
 }

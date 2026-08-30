@@ -35,5 +35,6 @@ public class CreateUserRequest {
     private String dateOfBirth;
     private String departmentId;
     private String positionId;
+    private Long managerId;
     private String avatar;
 }

@@ -13,6 +13,8 @@ import java.util.Optional;
 @Repository
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
     Optional<PurchaseOrder> findByIdAndIsDeletedFalse(Long id);
+    Optional<PurchaseOrder> findByPoCodeAndIsDeletedFalse(String poCode);
+    java.util.List<PurchaseOrder> findByIsDeletedFalse();
     java.util.List<PurchaseOrder> findByPurchaseRequestIdAndIsDeletedFalse(Long requestId);
 
     @Query("SELECT po FROM PurchaseOrder po WHERE " +

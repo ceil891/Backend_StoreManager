@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PurchaseOrderDetailRepository extends JpaRepository<PurchaseOrderDetail, Long> {
     Optional<PurchaseOrderDetail> findByIdAndIsDeletedFalse(Long id);
+    List<PurchaseOrderDetail> findByIsDeletedFalse();
     List<PurchaseOrderDetail> findByPurchaseOrderIdAndIsDeletedFalse(Long poId);
 
     @org.springframework.data.jpa.repository.Query("SELECT pod.unitPrice FROM PurchaseOrderDetail pod " +

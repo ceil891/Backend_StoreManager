@@ -21,4 +21,13 @@ public class CustomerListResponse {
     private Double points;
     private Double totalSpend;
     private Boolean isActive;
+    private String taxCode;
+    private String gender;
+    private java.time.LocalDate dob;
+    private Double debtLimit;
+    private Long groupId;
+    private String groupName;
+    private Long areaId;
+    private String areaName;
+    private String note;
 }

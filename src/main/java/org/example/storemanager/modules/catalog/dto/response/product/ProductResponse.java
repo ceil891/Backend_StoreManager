@@ -45,5 +45,6 @@ public class ProductResponse {
     private String baseUnitName;
 
     private List<ProductUnitResponse> units;
+    private List<org.example.storemanager.modules.catalog.dto.response.variant.VariantResponse> variantList;
     private BigDecimal onHand;
 }

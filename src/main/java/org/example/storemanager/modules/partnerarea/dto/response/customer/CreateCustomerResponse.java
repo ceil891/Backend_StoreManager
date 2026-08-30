@@ -33,5 +33,8 @@ public class CreateCustomerResponse {
     private String gender;
     private String note;
     private Long groupId;
+    private String groupName;
     private Long areaId;
+    private String areaName;
+    private Double debtLimit;
 }

@@ -8,6 +8,7 @@ import java.time.LocalDate;
 @Data
 @Builder
 public class UpdateCustomerRequest {
+    private String customerCode;
     private String name;
     private String phone;
     private String email;
@@ -25,4 +26,5 @@ public class UpdateCustomerRequest {
     private Double points;
     private Double totalSpend;
     private String note;
+    private Double debtLimit;
 }

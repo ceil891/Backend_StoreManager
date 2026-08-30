@@ -1,9 +1,12 @@
 package org.example.storemanager.modules.auth.service;
 
 import org.example.storemanager.modules.auth.dto.request.ChangePasswordRequest;
+import org.example.storemanager.modules.auth.dto.request.ForgotPasswordRequest;
 import org.example.storemanager.modules.auth.dto.request.LoginRequest;
 import org.example.storemanager.modules.auth.dto.request.RefreshTokenRequest;
 import org.example.storemanager.modules.auth.dto.request.RegisterRequest;
+import org.example.storemanager.modules.auth.dto.request.ResetPasswordRequest;
+import org.example.storemanager.modules.auth.dto.request.VerifyOtpRequest;
 import org.example.storemanager.modules.auth.dto.response.LoginResponse;
 import org.example.storemanager.modules.auth.dto.response.UserInfoResponse;
 import org.example.storemanager.modules.system.entity.RefreshToken;
@@ -26,6 +29,7 @@ import org.example.storemanager.modules.marketing.repository.VoucherRepository;
 import org.example.storemanager.modules.marketing.entity.CustomerVoucher;
 import org.example.storemanager.modules.marketing.repository.CustomerVoucherRepository;
 import org.example.storemanager.shared.security.JwtUtil;
+import org.example.storemanager.shared.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import java.time.LocalDateTime;
@@ -51,6 +56,11 @@ public class AuthServiceImpl implements AuthService {
     private final CustomerRepository customerRepository;
     private final VoucherRepository voucherRepository;
     private final CustomerVoucherRepository customerVoucherRepository;
+    private final EmailService emailService;
+
+    private final Map<String, OtpEntry> otpCache = new ConcurrentHashMap<>();
+
+    private record OtpEntry(String otp, LocalDateTime expiresAt) {}
 
     @Autowired
     public AuthServiceImpl(UserRepository userRepository,
@@ -60,7 +70,8 @@ public class AuthServiceImpl implements AuthService {
                            JwtUtil jwtUtil,
                            CustomerRepository customerRepository,
                            VoucherRepository voucherRepository,
-                           CustomerVoucherRepository customerVoucherRepository) {
+                           CustomerVoucherRepository customerVoucherRepository,
+                           EmailService emailService) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.rolePermissionRepository = rolePermissionRepository;
@@ -70,6 +81,7 @@ public class AuthServiceImpl implements AuthService {
         this.customerRepository = customerRepository;
         this.voucherRepository = voucherRepository;
         this.customerVoucherRepository = customerVoucherRepository;
+        this.emailService = emailService;
     }
 
     // ==================== ĐĂNG KÝ ====================
@@ -129,11 +141,17 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("Tài khoản", "phone", request.getPhone());
         }
 
-        Role defaultRole = roleRepository.findByRoleName("USER")
-                .or(() -> roleRepository.findByRoleName("Nguoi dung"))
-                .or(() -> roleRepository.findByRoleName("Người dùng"))
+        Role defaultRole = roleRepository.findByRoleName("CUSTOMER")
                 .or(() -> roleRepository.findByRoleName("Khách hàng"))
-                .orElse(null);
+                .orElseGet(() -> {
+                    Role newRole = Role.builder()
+                            .roleName("CUSTOMER")
+                            .description("Khách hàng mua sắm Web Online")
+                            .isActive(true)
+                            .build();
+                    newRole.setIsDeleted(false);
+                    return roleRepository.save(newRole);
+                });
 
         User user = User.builder()
                 .username(request.getUsername())
@@ -195,6 +213,11 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         cv.setIsDeleted(false);
         customerVoucherRepository.save(cv);
+
+        // Gửi email chào mừng khách hàng kèm mã voucher ưu đãi
+        if (savedUser.getEmail() != null && !savedUser.getEmail().isBlank()) {
+            emailService.sendWelcomeCustomerEmail(savedUser.getEmail(), savedUser.getFullName(), savedUser.getUsername(), "NEW2026");
+        }
 
         return issueTokenPair(savedUser);
     }
@@ -497,5 +520,57 @@ public class AuthServiceImpl implements AuthService {
                 .refreshToken(refreshTokenStr)
                 .user(userInfo)
                 .build();
+    }
+
+    @Override
+    public void sendForgotPasswordOtp(ForgotPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email));
+
+        // Sinh mã OTP 6 chữ số ngẫu nhiên
+        String otp = String.format("%06d", new java.util.Random().nextInt(1000000));
+        otpCache.put(email, new OtpEntry(otp, LocalDateTime.now().plusMinutes(10)));
+
+        emailService.sendForgotPasswordOtpEmail(user.getEmail(), user.getFullName(), otp);
+        log.info("[AuthService] Đã gửi mã OTP đặt lại mật khẩu đến email: [{}]", email);
+    }
+
+    @Override
+    public void verifyOtp(VerifyOtpRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        OtpEntry entry = otpCache.get(email);
+        if (entry == null || entry.expiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Mã xác thực OTP không tồn tại hoặc đã hết hạn (hiệu lực 10 phút).");
+        }
+        if (!entry.otp().equals(request.getOtp().trim())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Mã xác thực OTP không chính xác.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        OtpEntry entry = otpCache.get(email);
+        if (entry == null || entry.expiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Mã xác thực OTP không tồn tại hoặc đã hết hạn.");
+        }
+        if (!entry.otp().equals(request.getOtp().trim())) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Mã xác thực OTP không chính xác.");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Thu hồi toàn bộ refresh token cũ
+        refreshTokenRepository.revokeAllByUser(user);
+
+        // Xóa OTP khỏi cache sau khi đổi mật khẩu thành công
+        otpCache.remove(email);
+        log.info("[AuthService] Đặt lại mật khẩu thành công cho tài khoản: [{}]", user.getUsername());
     }
 }
