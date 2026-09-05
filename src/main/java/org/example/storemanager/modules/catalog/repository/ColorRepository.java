@@ -26,33 +26,34 @@ public interface ColorRepository extends JpaRepository<Color, Long> {
     boolean existsByColorCodeAndIdNotAndIsDeletedFalse(String colorCode, Long id);
 
     @Query("SELECT c FROM CatalogColor c WHERE c.isDeleted = false AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Color> findAllColors(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
             Pageable pageable);
 
     @Query("SELECT c FROM CatalogColor c WHERE c.isDeleted = false AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Color> findAllColorsList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive);
 
+    // ==== Query lấy TẤT CẢ kể cả đã xóa (includeDeleted = true) ====
     @Query("SELECT c FROM CatalogColor c WHERE " +
            "(:includeDeleted = true OR c.isDeleted = false) AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Color> findAllColorsIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -61,11 +62,11 @@ public interface ColorRepository extends JpaRepository<Color, Long> {
 
     @Query("SELECT c FROM CatalogColor c WHERE " +
            "(:includeDeleted = true OR c.isDeleted = false) AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.colorCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Color> findAllColorsListIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

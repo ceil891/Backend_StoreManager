@@ -16,13 +16,13 @@ public interface CustomerReturnRepository extends JpaRepository<CustomerReturn, 
 
     @Query("SELECT r FROM CustomerReturn r WHERE " +
            "(:includeDeleted = true OR r.isDeleted = false) AND " +
-           "(:status IS NULL OR r.status = :status) AND " +
-           "(:branchId IS NULL OR r.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(r.returnCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(r.customer.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(r.reason) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(r.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR r.status = cast(:status as string)) AND " +
+           "(cast(:branchId as long) IS NULL OR r.branch.id = cast(:branchId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(r.returnCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(r.customer.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(r.reason) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(r.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<CustomerReturn> findAllReturns(
             @Param("search") String search,
             @Param("status") String status,

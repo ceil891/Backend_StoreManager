@@ -10,4 +10,6 @@ import java.util.List;
 public interface ProductWarrantyRepository extends JpaRepository<ProductWarranty, Long> {
     Optional<ProductWarranty> findByIdAndIsDeletedFalse(Long id);
     List<ProductWarranty> findByIsDeletedFalse();
+    Optional<ProductWarranty> findByWarrantyCodeAndIsDeletedFalse(String warrantyCode);
+    Optional<ProductWarranty> findBySerialNumber_SerialNumberAndIsDeletedFalse(String serialNumber);
 }

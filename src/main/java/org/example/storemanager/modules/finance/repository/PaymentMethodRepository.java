@@ -20,12 +20,12 @@ public interface PaymentMethodRepository extends JpaRepository<PaymentMethod, Lo
 
     /**
      * Lọc các PTTT khả dụng theo chi nhánh:
-     * - Áp dụng toàn bộ chi nhánh (applyToAllBranches = true), HOẶC
+     * - Áp dụng toàn bộ chi nhánh (applyToAllBranches = true hoặc NULL), HOẶC
      * - Có bản ghi mapping trong payment_method_branches cho branchId này
      */
     @Query("SELECT pm FROM PaymentMethod pm WHERE pm.isDeleted = false AND pm.status = 'ACTIVE' " +
-           "AND (pm.applyToAllBranches = true OR " +
-           "     EXISTS (SELECT 1 FROM PaymentMethodBranch pmb WHERE pmb.paymentMethodId = pm.id AND pmb.branchId = :branchId)) " +
+           "AND (COALESCE(pm.applyToAllBranches, true) = true OR " +
+           "     EXISTS (SELECT 1 FROM PaymentMethodBranch pmb WHERE pmb.paymentMethodId = pm.id AND pmb.branchId = :branchId AND (pmb.isDeleted IS NULL OR pmb.isDeleted = false))) " +
            "ORDER BY pm.sortOrder ASC")
     List<PaymentMethod> findActiveByBranchId(@Param("branchId") Long branchId);
 }

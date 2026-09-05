@@ -47,6 +47,10 @@ public class CreateProductRequest {
 
     private BigDecimal maxStock;
 
+    private String dimensions;
+
+    private Boolean allowNegativeStock = false;
+
     private String galleryImages;
 
     // Structured variants list (preferred)
@@ -62,7 +66,12 @@ public class CreateProductRequest {
     @NotNull(message = "ID đơn vị tính cơ bản không được để trống")
     private Long baseUnitId;
 
+    private Boolean isSerialTracked = false;
+    private Integer warrantyPeriodMonths;
+    private String originCountry;
+
     private List<ProductUnitRequest> conversionUnits;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
 
     // Top-level initial stock entries (for products with variantStrategy NONE)
     @Valid

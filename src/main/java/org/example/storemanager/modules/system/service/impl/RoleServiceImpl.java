@@ -183,8 +183,20 @@ public class RoleServiceImpl implements RoleService {
     public List<RoleResponse> getAllRoles(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, 1000, sorting);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || isActive != null
+                || includeDeleted;
 
-        Page<Role> pageResult = roleRepository.findAllRolesIncludeDeleted(search, isActive, includeDeleted, pageable);
+        Page<Role> pageResult;
+        if (!hasFilter) {
+            pageResult = roleRepository.findByIsDeletedFalse(pageable);
+        } else {
+            pageResult = roleRepository.findAllRolesIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    isActive,
+                    includeDeleted,
+                    pageable);
+        }
 
         return pageResult.getContent().stream()
                 .map(this::mapToResponse)
@@ -196,7 +208,20 @@ public class RoleServiceImpl implements RoleService {
     public PageResponse<RoleResponse> getRolesPaginated(String search, Boolean isActive, int page, int size, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
-        Page<Role> pageResult = roleRepository.findAllRolesIncludeDeleted(search, isActive, includeDeleted, pageable);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || isActive != null
+                || includeDeleted;
+
+        Page<Role> pageResult;
+        if (!hasFilter) {
+            pageResult = roleRepository.findByIsDeletedFalse(pageable);
+        } else {
+            pageResult = roleRepository.findAllRolesIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    isActive,
+                    includeDeleted,
+                    pageable);
+        }
 
         List<RoleResponse> content = pageResult.getContent().stream()
                 .map(this::mapToResponse)

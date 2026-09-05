@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/v1/inventory", "/api/v1/inventories"})
@@ -54,9 +55,11 @@ public class InventoryTrackingApiController {
     }
 
     @GetMapping("/batches/expiring")
-    public ResponseEntity<ApiResponse<List<ProductBatchDTO>>> getExpiringBatches() {
+    public ResponseEntity<ApiResponse<List<ProductBatchDTO>>> getExpiringBatches(
+            @RequestParam(value = "days", required = false) Integer days) {
+        int d = days != null && days > 0 ? days : 90;
         List<ProductBatchDTO> expiring = inventoryService.getAllProductBatches().stream()
-                .filter(b -> b.getExpiryDate() != null && b.getExpiryDate().isBefore(java.time.LocalDate.now().plusMonths(3)))
+                .filter(b -> b.getExpiryDate() != null && b.getExpiryDate().isBefore(java.time.LocalDate.now().plusDays(d)))
                 .toList();
         return ResponseEntity.ok(ApiResponse.ok(expiring));
     }
@@ -77,6 +80,18 @@ public class InventoryTrackingApiController {
     @PutMapping("/batches/{id}")
     public ResponseEntity<ApiResponse<ProductBatchDTO>> updateBatch(@PathVariable Long id, @Valid @RequestBody ProductBatchDTO dto) {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.updateProductBatch(id, dto)));
+    }
+
+    @PostMapping("/batches/{id}/adjust")
+    public ResponseEntity<ApiResponse<ProductBatchDTO>> adjustBatch(
+            @PathVariable Long id,
+            @RequestBody org.example.storemanager.modules.catalog.dto.request.inventory.BatchAdjustRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.adjustProductBatch(id, request)));
+    }
+
+    @PostMapping("/batches/{id}/expire")
+    public ResponseEntity<ApiResponse<ProductBatchDTO>> expireBatch(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.expireProductBatch(id)));
     }
 
     @DeleteMapping("/batches/{id}")
@@ -113,6 +128,7 @@ public class InventoryTrackingApiController {
     }
 
     @PatchMapping("/serials/{id}/status")
+    @Transactional
     public ResponseEntity<ApiResponse<SerialNumberDTO>> updateSerialStatus(
             @PathVariable Long id,
             @RequestParam String status) {
@@ -122,6 +138,98 @@ public class InventoryTrackingApiController {
         sn.setStatus(status);
         SerialNumber saved = serialNumberRepository.save(sn);
         return ResponseEntity.ok(ApiResponse.ok(toSerialDTO(saved)));
+    }
+
+    @PostMapping("/serials")
+    @Transactional
+    public ResponseEntity<ApiResponse<SerialNumberDTO>> createSerial(@RequestBody Map<String, Object> req) {
+        String sn = req.get("serialNumber") != null ? String.valueOf(req.get("serialNumber")) : null;
+        if (sn == null || sn.isBlank()) {
+            throw new IllegalArgumentException("Mã Serial/IMEI không được để trống");
+        }
+        Long productId = null;
+        if (req.get("productId") != null) {
+            try {
+                productId = Long.parseLong(String.valueOf(req.get("productId")));
+            } catch (Exception ignored) {}
+        }
+        Product product = null;
+        if (productId != null) {
+            product = productRepository.findByIdAndIsDeletedFalse(productId).orElse(null);
+        }
+        if (product == null) {
+            product = productRepository.findAll().stream().filter(p -> !Boolean.TRUE.equals(p.getIsDeleted())).findFirst().orElse(null);
+        }
+        if (product == null) {
+            throw new ResourceNotFoundException("Product", "id", productId != null ? productId : 1L);
+        }
+
+        String status = req.get("status") != null ? String.valueOf(req.get("status")) : "AVAILABLE";
+        Long importReceiptId = null;
+        if (req.get("importReceiptId") != null) {
+            try {
+                importReceiptId = Long.parseLong(String.valueOf(req.get("importReceiptId")));
+            } catch (Exception ignored) {}
+        }
+
+        SerialNumber serialEntity = SerialNumber.builder()
+                .serialNumber(sn)
+                .status(status)
+                .product(product)
+                .importReceiptId(importReceiptId)
+                .macAddress(req.get("macAddress") != null ? String.valueOf(req.get("macAddress")) : null)
+                .imei1(req.get("imei1") != null ? String.valueOf(req.get("imei1")) : null)
+                .imei2(req.get("imei2") != null ? String.valueOf(req.get("imei2")) : null)
+                .build();
+        serialEntity.setIsDeleted(false);
+        SerialNumber saved = serialNumberRepository.save(serialEntity);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.created(toSerialDTO(saved)));
+    }
+
+    @PutMapping("/serials/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<SerialNumberDTO>> updateSerial(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> req) {
+        SerialNumber sn = serialNumberRepository.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("SerialNumber", "id", id));
+
+        if (req.containsKey("serialNumber") && req.get("serialNumber") != null) {
+            sn.setSerialNumber(String.valueOf(req.get("serialNumber")));
+        }
+        if (req.containsKey("status") && req.get("status") != null) {
+            sn.setStatus(String.valueOf(req.get("status")));
+        }
+        if (req.containsKey("productId") && req.get("productId") != null) {
+            try {
+                Long pid = Long.parseLong(String.valueOf(req.get("productId")));
+                productRepository.findByIdAndIsDeletedFalse(pid).ifPresent(sn::setProduct);
+            } catch (Exception ignored) {}
+        }
+        if (req.containsKey("macAddress")) {
+            sn.setMacAddress(req.get("macAddress") != null ? String.valueOf(req.get("macAddress")) : null);
+        }
+        if (req.containsKey("imei1")) {
+            sn.setImei1(req.get("imei1") != null ? String.valueOf(req.get("imei1")) : null);
+        }
+        if (req.containsKey("imei2")) {
+            sn.setImei2(req.get("imei2") != null ? String.valueOf(req.get("imei2")) : null);
+        }
+
+        SerialNumber saved = serialNumberRepository.save(sn);
+        return ResponseEntity.ok(ApiResponse.ok(toSerialDTO(saved)));
+    }
+
+    @DeleteMapping("/serials/{id}")
+    @Transactional
+    public ResponseEntity<ApiResponse<Void>> deleteSerial(@PathVariable Long id) {
+        SerialNumber sn = serialNumberRepository.findById(id)
+                .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                .orElseThrow(() -> new ResourceNotFoundException("SerialNumber", "id", id));
+        sn.setIsDeleted(true);
+        serialNumberRepository.save(sn);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // ==========================================

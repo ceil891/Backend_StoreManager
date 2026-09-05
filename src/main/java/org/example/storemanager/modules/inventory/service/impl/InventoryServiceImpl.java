@@ -1,6 +1,7 @@
 package org.example.storemanager.modules.inventory.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.catalog.dto.request.inventory.InventoryAdjustRequest;
 import org.example.storemanager.modules.catalog.dto.request.inventory.SearchInventoryRequest;
 import org.example.storemanager.modules.catalog.dto.response.inventory.AdjustmentResponse;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -222,6 +224,41 @@ public class InventoryServiceImpl implements InventoryService {
                 .product(product)
                 .build();
         stockLedgerRepository.save(ledger);
+
+        // Also update InventoryBalance and record InventoryTransaction
+        if (zone.getBranch() != null) {
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (variant != null) {
+                InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), zone.getBranch().getId())
+                        .orElseGet(() -> InventoryBalance.builder()
+                                .productVariant(variant)
+                                .branch(zone.getBranch())
+                                .availableQuantity(BigDecimal.ZERO)
+                                .reservedQuantity(BigDecimal.ZERO)
+                                .damagedQuantity(BigDecimal.ZERO)
+                                .build());
+                BigDecimal balBefore = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                BigDecimal balAfter = balBefore.add(diff).max(BigDecimal.ZERO);
+                balance.setAvailableQuantity(balAfter);
+                balance.setLastUpdated(LocalDateTime.now());
+                inventoryBalanceRepository.save(balance);
+
+                String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                        + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                InventoryTransaction tx = InventoryTransaction.builder()
+                        .transactionCode(txCode)
+                        .productVariant(variant)
+                        .sourceBranch(zone.getBranch())
+                        .transactionType(InventoryTransactionType.ADJUSTMENT)
+                        .quantity(diff.abs())
+                        .beforeQuantity(balBefore)
+                        .afterQuantity(balAfter)
+                        .build();
+                tx.setIsDeleted(false);
+                tx.setCreatedBy(getCurrentUsername());
+                inventoryTransactionRepository.save(tx);
+            }
+        }
 
         return AdjustmentResponse.builder()
                 .inventoryId(inventory.getId())
@@ -528,6 +565,45 @@ public class InventoryServiceImpl implements InventoryService {
         }
         stockLedgerRepository.save(ledger);
 
+        // Đồng bộ cộng tồn kho trong InventoryBalance và tạo InventoryTransaction type PURCHASE
+        List<ProductVariant> pvList = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId());
+        if (!pvList.isEmpty()) {
+            ProductVariant variant = pvList.get(0);
+            InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), zone.getBranch().getId())
+                    .orElseGet(() -> {
+                        InventoryBalance ib = InventoryBalance.builder()
+                            .productVariant(variant)
+                            .branch(zone.getBranch())
+                            .availableQuantity(BigDecimal.ZERO)
+                            .reservedQuantity(BigDecimal.ZERO)
+                            .damagedQuantity(BigDecimal.ZERO)
+                            .build();
+                        ib.setIsDeleted(false);
+                        return inventoryBalanceRepository.save(ib);
+                    });
+            BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+            BigDecimal afterQty = beforeQty.add(quantity);
+            balance.setAvailableQuantity(afterQty);
+            balance.setLastUpdated(LocalDateTime.now());
+            inventoryBalanceRepository.save(balance);
+
+            String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+
+            InventoryTransaction tx = InventoryTransaction.builder()
+                    .transactionCode(txCode)
+                    .productVariant(variant)
+                    .sourceBranch(zone.getBranch())
+                    .transactionType(InventoryTransactionType.IMPORT)
+                    .quantity(quantity)
+                    .beforeQuantity(beforeQty)
+                    .afterQuantity(afterQty)
+                    .build();
+            tx.setIsDeleted(false);
+            tx.setCreatedBy(getCurrentUsername());
+            inventoryTransactionRepository.save(tx);
+        }
+
         return AdjustmentResponse.builder()
                 .inventoryId(inventory.getId())
                 .oldQuantity(oldQty)
@@ -607,6 +683,21 @@ public class InventoryServiceImpl implements InventoryService {
                     .findFirst().orElse(null);
         }
 
+        if (purchaseOrder != null) {
+            final Long poTargetId = purchaseOrder.getId();
+            boolean alreadyHasReceipt = importReceiptRepository.findAll().stream()
+                    .anyMatch(ir -> !Boolean.TRUE.equals(ir.getIsDeleted())
+                            && ir.getPurchaseOrder() != null
+                            && ir.getPurchaseOrder().getId().equals(poTargetId)
+                            && !"CANCELLED".equalsIgnoreCase(ir.getStatus())
+                            && !"DA_HUY".equalsIgnoreCase(ir.getStatus()));
+            if (alreadyHasReceipt) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Đơn mua hàng " + (purchaseOrder.getPoCode() != null ? purchaseOrder.getPoCode() : purchaseOrder.getId())
+                                + " đã được tạo đơn nhập kho trước đó! Không thể tạo thêm.");
+            }
+        }
+
         if (dto.getReceiptDate() != null && dto.getReceiptDate().toLocalDate().isBefore(java.time.LocalDate.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày dự kiến nhận không được nằm trong quá khứ");
         }
@@ -626,6 +717,12 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
         receipt.setIsDeleted(false);
         ImportReceipt saved = importReceiptRepository.save(receipt);
+
+        if (saved.getPurchaseOrder() != null) {
+            org.example.storemanager.modules.sales.entity.PurchaseOrder poToUpdate = saved.getPurchaseOrder();
+            poToUpdate.setStatus("RECEIVED");
+            purchaseOrderRepository.save(poToUpdate);
+        }
 
         java.util.Map<Long, BigDecimal> orderedQtys = new java.util.HashMap<>();
         java.util.Map<Long, BigDecimal> alreadyReceived = new java.util.HashMap<>();
@@ -838,6 +935,21 @@ public class InventoryServiceImpl implements InventoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("ImportReceipt", "id", id));
         r.setIsDeleted(true);
         importReceiptRepository.save(r);
+
+        if (r.getPurchaseOrder() != null) {
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = r.getPurchaseOrder();
+            final Long poIdVal = po.getId();
+            final Long rIdVal = r.getId();
+            boolean hasOther = importReceiptRepository.findAll().stream()
+                    .anyMatch(ir -> !Boolean.TRUE.equals(ir.getIsDeleted())
+                            && !ir.getId().equals(rIdVal)
+                            && ir.getPurchaseOrder() != null
+                            && ir.getPurchaseOrder().getId().equals(poIdVal));
+            if (!hasOther && "RECEIVED".equals(po.getStatus())) {
+                po.setStatus("APPROVED");
+                purchaseOrderRepository.save(po);
+            }
+        }
     }
 
     @Override
@@ -878,6 +990,12 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         ImportReceipt saved = importReceiptRepository.save(r);
+
+        if (saved.getPurchaseOrder() != null) {
+            org.example.storemanager.modules.sales.entity.PurchaseOrder po = saved.getPurchaseOrder();
+            po.setStatus("RECEIVED");
+            purchaseOrderRepository.save(po);
+        }
 
         List<ImportReceiptDetail> details = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(id);
         WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(r.getBranch());
@@ -1217,7 +1335,9 @@ public class InventoryServiceImpl implements InventoryService {
     public ReturnToSupplierDTO approveReturnToSupplier(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.ReturnApprovalRequest request) {
         ReturnToSupplier r = returnToSupplierRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReturnToSupplier", "id", id));
-        if (r.getStatus() == org.example.storemanager.shared.enums.inventory.ReturnToSupplierStatus.APPROVED_CREDIT_NOTE) {
+        if (r.getStatus() == org.example.storemanager.shared.enums.inventory.ReturnToSupplierStatus.APPROVED_CREDIT_NOTE
+                || r.getStatus() == org.example.storemanager.shared.enums.inventory.ReturnToSupplierStatus.APPROVED
+                || r.getStatus() == org.example.storemanager.shared.enums.inventory.ReturnToSupplierStatus.COMPLETE) {
             return toReturnToSupplierDTO(r);
         }
 
@@ -1226,16 +1346,7 @@ public class InventoryServiceImpl implements InventoryService {
             r.setReason(request.getApprovalNotes());
         }
         ReturnToSupplier saved = returnToSupplierRepository.save(r);
-
-        List<ReturnToSupplierDetail> details = returnToSupplierDetailRepository.findByReturnReceiptIdAndIsDeletedFalse(id);
-        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(r.getBranch());
-
-        for (ReturnToSupplierDetail detail : details) {
-            deductStock(defaultZone.getId(), r.getBranch().getId(), detail.getProduct().getId(),
-                    null, null, detail.getQuantity(),
-                    "RETURN", r.getReturnCode(), r.getId());
-        }
-
+        applyReturnToSupplierDeductions(saved);
         return toReturnToSupplierDTO(saved);
     }
 
@@ -1244,12 +1355,166 @@ public class InventoryServiceImpl implements InventoryService {
     public ReturnToSupplierDTO rejectReturnToSupplier(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.ReturnRejectRequest request) {
         ReturnToSupplier r = returnToSupplierRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReturnToSupplier", "id", id));
+        ReturnToSupplierStatus prevStatus = r.getStatus();
         r.setStatus(org.example.storemanager.shared.enums.inventory.ReturnToSupplierStatus.REJECTED);
         if (request != null && request.getRejectNotes() != null) {
             r.setReason(request.getRejectNotes());
         }
         ReturnToSupplier saved = returnToSupplierRepository.save(r);
+        if (prevStatus == ReturnToSupplierStatus.APPROVED_CREDIT_NOTE
+                || prevStatus == ReturnToSupplierStatus.APPROVED
+                || prevStatus == ReturnToSupplierStatus.COMPLETE) {
+            restoreReturnToSupplierStock(saved);
+        }
         return toReturnToSupplierDTO(saved);
+    }
+
+    private void applyReturnToSupplierDeductions(ReturnToSupplier r) {
+        List<ReturnToSupplierDetail> details = returnToSupplierDetailRepository.findByReturnReceiptIdAndIsDeletedFalse(r.getId());
+        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(r.getBranch());
+        String username = getCurrentUsername();
+        Branch branch = r.getBranch();
+
+        for (ReturnToSupplierDetail detail : details) {
+            Product product = detail.getProduct();
+            if (product == null) continue;
+            BigDecimal quantity = detail.getQuantity() != null ? detail.getQuantity() : BigDecimal.ONE;
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            // 1. Deduct SizeInventory
+            try {
+                deductStock(defaultZone.getId(), branch != null ? branch.getId() : null, product.getId(),
+                        null, null, quantity,
+                        "RETURN", r.getReturnCode(), r.getId());
+            } catch (Exception e) {
+                log.warn("deductStock failed for ReturnToSupplier {}: {}", r.getId(), e.getMessage());
+            }
+
+            // 2. Deduct ProductLocation
+            try {
+                List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
+                BigDecimal remainingToDeduct = quantity;
+                for (ProductLocation loc : locations) {
+                    if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
+                    BigDecimal available = loc.getQuantity();
+                    if (available == null || available.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                    BigDecimal deduct = available.min(remainingToDeduct);
+                    loc.setQuantity(available.subtract(deduct));
+                    productLocationRepository.save(loc);
+                    remainingToDeduct = remainingToDeduct.subtract(deduct);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to update ProductLocation for ReturnToSupplier {}: {}", r.getId(), e.getMessage());
+            }
+
+            // 3. Deduct InventoryBalance and record InventoryTransaction
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (variant != null && branch != null) {
+                try {
+                    InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
+                            .orElseGet(() -> InventoryBalance.builder()
+                                    .productVariant(variant)
+                                    .branch(branch)
+                                    .availableQuantity(BigDecimal.ZERO)
+                                    .reservedQuantity(BigDecimal.ZERO)
+                                    .damagedQuantity(BigDecimal.ZERO)
+                                    .build());
+
+                    BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                    BigDecimal afterQty = beforeQty.subtract(quantity).max(BigDecimal.ZERO);
+                    balance.setAvailableQuantity(afterQty);
+                    balance.setLastUpdated(LocalDateTime.now());
+                    inventoryBalanceRepository.save(balance);
+
+                    String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                            + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+
+                    InventoryTransaction tx = InventoryTransaction.builder()
+                            .transactionCode(txCode)
+                            .productVariant(variant)
+                            .sourceBranch(branch)
+                            .transactionType(InventoryTransactionType.RETURN_TO_SUPPLIER)
+                            .quantity(quantity)
+                            .beforeQuantity(beforeQty)
+                            .afterQuantity(afterQty)
+                            .build();
+                    tx.setIsDeleted(false);
+                    tx.setCreatedBy(username);
+                    inventoryTransactionRepository.save(tx);
+                } catch (Exception e) {
+                    log.warn("Failed to update InventoryBalance for ReturnToSupplier {}: {}", r.getId(), e.getMessage());
+                }
+            }
+        }
+    }
+
+    private void restoreReturnToSupplierStock(ReturnToSupplier r) {
+        List<ReturnToSupplierDetail> details = returnToSupplierDetailRepository.findByReturnReceiptIdAndIsDeletedFalse(r.getId());
+        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(r.getBranch());
+        String username = getCurrentUsername();
+        Branch branch = r.getBranch();
+
+        for (ReturnToSupplierDetail detail : details) {
+            Product product = detail.getProduct();
+            if (product == null) continue;
+            BigDecimal quantity = detail.getQuantity() != null ? detail.getQuantity() : BigDecimal.ONE;
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            try {
+                addStock(defaultZone.getId(), branch != null ? branch.getId() : null, product.getId(),
+                        null, null, quantity,
+                        "RETURN_REVERSED", r.getReturnCode(), r.getId());
+            } catch (Exception e) {
+                log.warn("addStock failed for restoreReturnToSupplierStock: {}", e.getMessage());
+            }
+
+            try {
+                ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), defaultZone.getId())
+                        .orElseGet(() -> ProductLocation.builder().product(product).quantity(BigDecimal.ZERO).build());
+                loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
+                loc.setIsDeleted(false);
+                productLocationRepository.save(loc);
+            } catch (Exception e) {
+                log.warn("Failed to restore ProductLocation: {}", e.getMessage());
+            }
+
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (variant != null && branch != null) {
+                try {
+                    InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
+                            .orElseGet(() -> InventoryBalance.builder()
+                                    .productVariant(variant)
+                                    .branch(branch)
+                                    .availableQuantity(BigDecimal.ZERO)
+                                    .reservedQuantity(BigDecimal.ZERO)
+                                    .damagedQuantity(BigDecimal.ZERO)
+                                    .build());
+                    BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                    BigDecimal afterQty = beforeQty.add(quantity);
+                    balance.setAvailableQuantity(afterQty);
+                    balance.setLastUpdated(LocalDateTime.now());
+                    inventoryBalanceRepository.save(balance);
+
+                    String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                            + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                    InventoryTransaction tx = InventoryTransaction.builder()
+                            .transactionCode(txCode)
+                            .productVariant(variant)
+                            .sourceBranch(branch)
+                            .transactionType(InventoryTransactionType.ADJUSTMENT)
+                            .quantity(quantity)
+                            .beforeQuantity(beforeQty)
+                            .afterQuantity(afterQty)
+                            .build();
+                    tx.setIsDeleted(false);
+                    tx.setCreatedBy(username);
+                    inventoryTransactionRepository.save(tx);
+                } catch (Exception e) {
+                    log.warn("Failed to restore InventoryBalance: {}", e.getMessage());
+                }
+            }
+        }
     }
 
     // --- CANCEL ISSUE ---
@@ -1385,8 +1650,20 @@ public class InventoryServiceImpl implements InventoryService {
         List<StockTransferDetailDTO> savedLines = new ArrayList<>();
         if (dto.getTransferLines() != null) {
             for (StockTransferDetailDTO line : dto.getTransferLines()) {
-                ProductVariant variant = productVariantRepository.findById(line.getProductVariantId())
-                        .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "id", line.getProductVariantId()));
+                ProductVariant variant = null;
+                if (line.getProductVariantId() != null) {
+                    variant = productVariantRepository.findById(line.getProductVariantId()).orElse(null);
+                }
+                if (variant == null && line.getProductId() != null) {
+                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(line.getProductId());
+                    if (!pvs.isEmpty()) variant = pvs.get(0);
+                }
+                if (variant == null) {
+                    variant = productVariantRepository.findAll().stream().filter(v -> !Boolean.TRUE.equals(v.getIsDeleted())).findFirst().orElse(null);
+                }
+                if (variant == null) {
+                    throw new ResourceNotFoundException("ProductVariant", "id", line.getProductVariantId());
+                }
 
                 StockTransferDetail detail = StockTransferDetail.builder()
                         .transfer(saved)
@@ -1432,7 +1709,16 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional(readOnly = true)
     public List<ProductBatchDTO> getAllProductBatches() {
         return productBatchRepository.findAllWithAssociations().stream()
-                .map(this::toProductBatchDTO)
+                .map(b -> {
+                    // Auto-recalculate status on read based on expiry date
+                    if (b.getExpiryDate() != null && b.getExpiryDate().isBefore(java.time.LocalDate.now())) {
+                        if (!"EXPIRED".equalsIgnoreCase(b.getQualityStatus())) {
+                            b.setQualityStatus("EXPIRED");
+                            b.setStatus("EXPIRED");
+                        }
+                    }
+                    return toProductBatchDTO(b);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -1522,7 +1808,8 @@ public class InventoryServiceImpl implements InventoryService {
     public CancelIssueDTO approveCancelIssue(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.CancelIssueApprovalRequest request) {
         CancelIssue c = cancelIssueRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CancelIssue", "id", id));
-        if (org.example.storemanager.shared.enums.inventory.CancelIssueStatus.APPROVED.equals(c.getStatus())) {
+        if (org.example.storemanager.shared.enums.inventory.CancelIssueStatus.APPROVED.equals(c.getStatus())
+                || org.example.storemanager.shared.enums.inventory.CancelIssueStatus.COMPLETE.equals(c.getStatus())) {
             return toCancelIssueDTO(c);
         }
         c.setStatus(org.example.storemanager.shared.enums.inventory.CancelIssueStatus.APPROVED);
@@ -1530,15 +1817,7 @@ public class InventoryServiceImpl implements InventoryService {
             c.setReason(c.getReason() != null ? c.getReason() + " | " + request.getApprovalNotes() : request.getApprovalNotes());
         }
         CancelIssue saved = cancelIssueRepository.save(c);
-
-        List<CancelIssueDetail> details = cancelIssueDetailRepository.findByCancelIssueIdAndIsDeletedFalse(id);
-        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(c.getBranch());
-
-        for (CancelIssueDetail detail : details) {
-            deductStock(defaultZone.getId(), c.getBranch().getId(), detail.getProduct().getId(),
-                    null, null, detail.getQuantity(),
-                    "CANCEL_ISSUE", c.getCancelCode(), c.getId());
-        }
+        applyCancelIssueDeductions(saved);
         return toCancelIssueDTO(saved);
     }
 
@@ -1547,12 +1826,164 @@ public class InventoryServiceImpl implements InventoryService {
     public CancelIssueDTO rejectCancelIssue(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.CancelIssueRejectRequest request) {
         CancelIssue c = cancelIssueRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CancelIssue", "id", id));
+        CancelIssueStatus prevStatus = c.getStatus();
         c.setStatus(org.example.storemanager.shared.enums.inventory.CancelIssueStatus.REJECTED);
         if (request != null && request.getRejectNotes() != null) {
             c.setReason(c.getReason() != null ? c.getReason() + " | " + request.getRejectNotes() : request.getRejectNotes());
         }
         CancelIssue saved = cancelIssueRepository.save(c);
+        if (CancelIssueStatus.APPROVED.equals(prevStatus) || CancelIssueStatus.COMPLETE.equals(prevStatus)) {
+            restoreCancelIssueStock(saved);
+        }
         return toCancelIssueDTO(saved);
+    }
+
+    private void applyCancelIssueDeductions(CancelIssue c) {
+        List<CancelIssueDetail> details = cancelIssueDetailRepository.findByCancelIssueIdAndIsDeletedFalse(c.getId());
+        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(c.getBranch());
+        String username = getCurrentUsername();
+        Branch branch = c.getBranch();
+
+        for (CancelIssueDetail detail : details) {
+            Product product = detail.getProduct();
+            if (product == null) continue;
+            BigDecimal quantity = detail.getQuantity() != null ? detail.getQuantity() : BigDecimal.ONE;
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            // 1. Deduct SizeInventory
+            try {
+                deductStock(defaultZone.getId(), branch != null ? branch.getId() : null, product.getId(),
+                        null, null, quantity,
+                        "CANCEL_ISSUE", c.getCancelCode(), c.getId());
+            } catch (Exception e) {
+                log.warn("deductStock failed for CancelIssue {}: {}", c.getId(), e.getMessage());
+            }
+
+            // 2. Deduct ProductLocation
+            try {
+                List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
+                BigDecimal remainingToDeduct = quantity;
+                for (ProductLocation loc : locations) {
+                    if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
+                    BigDecimal available = loc.getQuantity();
+                    if (available == null || available.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                    BigDecimal deduct = available.min(remainingToDeduct);
+                    loc.setQuantity(available.subtract(deduct));
+                    productLocationRepository.save(loc);
+                    remainingToDeduct = remainingToDeduct.subtract(deduct);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to update ProductLocation for CancelIssue {}: {}", c.getId(), e.getMessage());
+            }
+
+            // 3. Deduct InventoryBalance and record InventoryTransaction
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (variant != null && branch != null) {
+                try {
+                    InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
+                            .orElseGet(() -> InventoryBalance.builder()
+                                    .productVariant(variant)
+                                    .branch(branch)
+                                    .availableQuantity(BigDecimal.ZERO)
+                                    .reservedQuantity(BigDecimal.ZERO)
+                                    .damagedQuantity(BigDecimal.ZERO)
+                                    .build());
+
+                    BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                    BigDecimal afterQty = beforeQty.subtract(quantity).max(BigDecimal.ZERO);
+                    balance.setAvailableQuantity(afterQty);
+                    balance.setLastUpdated(LocalDateTime.now());
+                    inventoryBalanceRepository.save(balance);
+
+                    String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                            + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+
+                    InventoryTransaction tx = InventoryTransaction.builder()
+                            .transactionCode(txCode)
+                            .productVariant(variant)
+                            .sourceBranch(branch)
+                            .transactionType(InventoryTransactionType.CANCEL_ISSUE)
+                            .quantity(quantity)
+                            .beforeQuantity(beforeQty)
+                            .afterQuantity(afterQty)
+                            .build();
+                    tx.setIsDeleted(false);
+                    tx.setCreatedBy(username);
+                    inventoryTransactionRepository.save(tx);
+                } catch (Exception e) {
+                    log.warn("Failed to update InventoryBalance for CancelIssue {}: {}", c.getId(), e.getMessage());
+                }
+            }
+        }
+    }
+
+    private void restoreCancelIssueStock(CancelIssue c) {
+        List<CancelIssueDetail> details = cancelIssueDetailRepository.findByCancelIssueIdAndIsDeletedFalse(c.getId());
+        WarehouseZone defaultZone = warehouseService.getOrCreateDefaultZone(c.getBranch());
+        String username = getCurrentUsername();
+        Branch branch = c.getBranch();
+
+        for (CancelIssueDetail detail : details) {
+            Product product = detail.getProduct();
+            if (product == null) continue;
+            BigDecimal quantity = detail.getQuantity() != null ? detail.getQuantity() : BigDecimal.ONE;
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            try {
+                addStock(defaultZone.getId(), branch != null ? branch.getId() : null, product.getId(),
+                        null, null, quantity,
+                        "CANCEL_ISSUE_REVERSED", c.getCancelCode(), c.getId());
+            } catch (Exception e) {
+                log.warn("addStock failed for restoreCancelIssueStock: {}", e.getMessage());
+            }
+
+            try {
+                ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), defaultZone.getId())
+                        .orElseGet(() -> ProductLocation.builder().product(product).quantity(BigDecimal.ZERO).build());
+                loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
+                loc.setIsDeleted(false);
+                productLocationRepository.save(loc);
+            } catch (Exception e) {
+                log.warn("Failed to restore ProductLocation: {}", e.getMessage());
+            }
+
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (variant != null && branch != null) {
+                try {
+                    InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
+                            .orElseGet(() -> InventoryBalance.builder()
+                                    .productVariant(variant)
+                                    .branch(branch)
+                                    .availableQuantity(BigDecimal.ZERO)
+                                    .reservedQuantity(BigDecimal.ZERO)
+                                    .damagedQuantity(BigDecimal.ZERO)
+                                    .build());
+                    BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                    BigDecimal afterQty = beforeQty.add(quantity);
+                    balance.setAvailableQuantity(afterQty);
+                    balance.setLastUpdated(LocalDateTime.now());
+                    inventoryBalanceRepository.save(balance);
+
+                    String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                            + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                    InventoryTransaction tx = InventoryTransaction.builder()
+                            .transactionCode(txCode)
+                            .productVariant(variant)
+                            .sourceBranch(branch)
+                            .transactionType(InventoryTransactionType.ADJUSTMENT)
+                            .quantity(quantity)
+                            .beforeQuantity(beforeQty)
+                            .afterQuantity(afterQty)
+                            .build();
+                    tx.setIsDeleted(false);
+                    tx.setCreatedBy(username);
+                    inventoryTransactionRepository.save(tx);
+                } catch (Exception e) {
+                    log.warn("Failed to restore InventoryBalance: {}", e.getMessage());
+                }
+            }
+        }
     }
 
     @Override
@@ -1563,11 +1994,20 @@ public class InventoryServiceImpl implements InventoryService {
         if (TransferStatus.RECEIVED.name().equals(t.getStatus())) {
             return toStockTransferDTO(t);
         }
+
+        if (!TransferStatus.SHIPPED.name().equals(t.getStatus()) && !TransferStatus.IN_TRANSIT.name().equals(t.getStatus())) {
+            // Transfer has not been shipped yet; deduct stock from origin branch first
+            shipStockTransfer(id);
+            t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        }
+
         t.setStatus(TransferStatus.RECEIVED.name());
         StockTransfer saved = stockTransferRepository.save(t);
 
+        final Branch toBranch = t.getToBranch();
         List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
-        WarehouseZone toZone = warehouseService.getOrCreateDefaultZone(t.getToBranch());
+        WarehouseZone toZone = warehouseService.getOrCreateDefaultZone(toBranch);
         String username = getCurrentUsername();
 
         for (StockTransferDetail detail : details) {
@@ -1576,7 +2016,7 @@ public class InventoryServiceImpl implements InventoryService {
             BigDecimal quantity = detail.getQuantityShipped();
 
             // Target physical size inventory add
-            addStock(toZone.getId(), t.getToBranch().getId(), product.getId(),
+            addStock(toZone.getId(), toBranch.getId(), product.getId(),
                     null, null, quantity,
                     "TRANSFER_IN", t.getTransferCode(), t.getId());
 
@@ -1592,10 +2032,10 @@ public class InventoryServiceImpl implements InventoryService {
 
             if (variant != null) {
                 // Increase InventoryBalance at destination branch
-                InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), t.getToBranch().getId())
+                InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), toBranch.getId())
                         .orElseGet(() -> InventoryBalance.builder()
                                 .productVariant(variant)
-                                .branch(t.getToBranch())
+                                .branch(toBranch)
                                 .availableQuantity(BigDecimal.ZERO)
                                 .reservedQuantity(BigDecimal.ZERO)
                                 .damagedQuantity(BigDecimal.ZERO)
@@ -1632,11 +2072,91 @@ public class InventoryServiceImpl implements InventoryService {
     public StockTransferDTO cancelStockTransfer(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.TransferCancelRequest request) {
         StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
-        if ("COMPLETED".equals(t.getStatus())) {
+        if (TransferStatus.RECEIVED.name().equalsIgnoreCase(t.getStatus()) || "COMPLETED".equalsIgnoreCase(t.getStatus())) {
             throw new org.example.storemanager.shared.exception.inventory.InvalidStatusTransitionException(t.getStatus(), "CANCELLED");
         }
+        String previousStatus = t.getStatus();
         t.setStatus("CANCELLED");
+        if (request != null && request.getCancelReason() != null) {
+            t.setNote(t.getNote() != null ? t.getNote() + " | " + request.getCancelReason() : request.getCancelReason());
+        }
+        t.setUpdatedBy(getCurrentUsername());
         StockTransfer saved = stockTransferRepository.save(t);
+
+        // If goods were already shipped, restore them back to fromBranch
+        if (TransferStatus.SHIPPED.name().equalsIgnoreCase(previousStatus) || TransferStatus.IN_TRANSIT.name().equalsIgnoreCase(previousStatus)) {
+            final Branch fromBranch = t.getFromBranch();
+            List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
+            WarehouseZone fromZone = warehouseService.getOrCreateDefaultZone(fromBranch);
+            String username = getCurrentUsername();
+
+            for (StockTransferDetail detail : details) {
+                Product product = detail.getProduct();
+                if (product == null) continue;
+                ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+                BigDecimal quantity = detail.getQuantityShipped();
+                if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                    quantity = BigDecimal.ONE;
+                }
+
+                // Add stock back to SizeInventory
+                try {
+                    addStock(fromZone.getId(), fromBranch.getId(), product.getId(),
+                            null, null, quantity,
+                            "TRANSFER_CANCEL_RESTORE", t.getTransferCode(), t.getId());
+                } catch (Exception e) {
+                    log.warn("addStock failed for cancelStockTransfer: {}", e.getMessage());
+                }
+
+                // Restore ProductLocation
+                try {
+                    ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), fromZone.getId())
+                            .orElseGet(() -> ProductLocation.builder().product(product).quantity(BigDecimal.ZERO).build());
+                    loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
+                    loc.setIsDeleted(false);
+                    productLocationRepository.save(loc);
+                } catch (Exception e) {
+                    log.warn("Failed to restore ProductLocation: {}", e.getMessage());
+                }
+
+                if (variant != null && fromBranch != null) {
+                    try {
+                        InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), fromBranch.getId())
+                                .orElseGet(() -> InventoryBalance.builder()
+                                        .productVariant(variant)
+                                        .branch(fromBranch)
+                                        .availableQuantity(BigDecimal.ZERO)
+                                        .reservedQuantity(BigDecimal.ZERO)
+                                        .damagedQuantity(BigDecimal.ZERO)
+                                        .build());
+                        BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                        BigDecimal afterQty = beforeQty.add(quantity);
+                        balance.setAvailableQuantity(afterQty);
+                        balance.setLastUpdated(LocalDateTime.now());
+                        inventoryBalanceRepository.save(balance);
+
+                        String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                                + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+
+                        InventoryTransaction tx = InventoryTransaction.builder()
+                                .transactionCode(txCode)
+                                .productVariant(variant)
+                                .sourceBranch(fromBranch)
+                                .transactionType(InventoryTransactionType.ADJUSTMENT)
+                                .quantity(quantity)
+                                .beforeQuantity(beforeQty)
+                                .afterQuantity(afterQty)
+                                .build();
+                        tx.setIsDeleted(false);
+                        tx.setCreatedBy(username);
+                        inventoryTransactionRepository.save(tx);
+                    } catch (Exception e) {
+                        log.warn("Failed to restore InventoryBalance for cancelStockTransfer: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
         return toStockTransferDTO(saved);
     }
 
@@ -1786,6 +2306,33 @@ public class InventoryServiceImpl implements InventoryService {
         c.setStatus(dto.getStatus() != null ? dto.getStatus() : c.getStatus());
         if (dto.getCheckDate() != null) c.setCheckDate(dto.getCheckDate());
         InventoryCheck saved = inventoryCheckRepository.save(c);
+
+        if (dto.getCheckLines() != null) {
+            List<InventoryCheckDetail> existing = inventoryCheckDetailRepository.findByCheckIdAndIsDeletedFalse(id);
+            for (InventoryCheckDetail d : existing) {
+                d.setIsDeleted(true);
+                inventoryCheckDetailRepository.save(d);
+            }
+            for (InventoryCheckDetailDTO line : dto.getCheckLines()) {
+                if (line.getProductId() == null) continue;
+                Product product = productRepository.findById(line.getProductId()).orElse(null);
+                if (product == null) continue;
+                BigDecimal systemQty = line.getSystemQty() != null ? line.getSystemQty() : BigDecimal.ZERO;
+                BigDecimal actualQty = line.getActualQty() != null ? line.getActualQty() : BigDecimal.ZERO;
+                BigDecimal diffQty = line.getDiffQty() != null ? line.getDiffQty() : actualQty.subtract(systemQty);
+                InventoryCheckDetail detail = InventoryCheckDetail.builder()
+                        .check(saved)
+                        .product(product)
+                        .systemQty(systemQty)
+                        .actualQty(actualQty)
+                        .diffQty(diffQty)
+                        .reason(line.getReason())
+                        .build();
+                detail.setIsDeleted(false);
+                inventoryCheckDetailRepository.save(detail);
+            }
+        }
+
         return toInventoryCheckDTO(saved);
     }
 
@@ -1811,18 +2358,75 @@ public class InventoryServiceImpl implements InventoryService {
         c.setStatus("BALANCED");
         InventoryCheck saved = inventoryCheckRepository.save(c);
 
+        WarehouseZone zone = c.getWarehouseZone();
+        if (zone == null && c.getBranch() != null) {
+            zone = warehouseService.getOrCreateDefaultZone(c.getBranch());
+        }
+        Long zoneId = zone != null ? zone.getId() : null;
+        Long branchId = c.getBranch() != null ? c.getBranch().getId() : null;
+
         List<InventoryCheckDetail> details = inventoryCheckDetailRepository.findByCheckIdAndIsDeletedFalse(id);
         
         for (InventoryCheckDetail detail : details) {
             BigDecimal diff = detail.getDiffQty();
-            if (diff != null && diff.compareTo(BigDecimal.ZERO) > 0) {
+            if (diff == null && detail.getActualQty() != null && detail.getSystemQty() != null) {
+                diff = detail.getActualQty().subtract(detail.getSystemQty());
+            }
+            if (diff != null && diff.compareTo(BigDecimal.ZERO) > 0 && zoneId != null && branchId != null && detail.getProduct() != null) {
                 // actual > system => add stock
-                addStock(c.getWarehouseZone().getId(), c.getBranch().getId(), detail.getProduct().getId(),
-                        null, null, diff, "CHECK_ADJUST", c.getCheckCode(), c.getId());
-            } else if (diff != null && diff.compareTo(BigDecimal.ZERO) < 0) {
+                try {
+                    addStock(zoneId, branchId, detail.getProduct().getId(),
+                            null, null, diff, "CHECK_ADJUST", c.getCheckCode(), c.getId());
+                } catch (Exception e) {
+                    log.warn("addStock failed for approveInventoryCheck: {}", e.getMessage());
+                }
+            } else if (diff != null && diff.compareTo(BigDecimal.ZERO) < 0 && zoneId != null && branchId != null && detail.getProduct() != null) {
                 // actual < system => deduct stock
-                deductStock(c.getWarehouseZone().getId(), c.getBranch().getId(), detail.getProduct().getId(),
-                        null, null, diff.abs(), "CHECK_ADJUST", c.getCheckCode(), c.getId());
+                try {
+                    deductStock(zoneId, branchId, detail.getProduct().getId(),
+                            null, null, diff.abs(), "CHECK_ADJUST", c.getCheckCode(), c.getId());
+                } catch (Exception e) {
+                    log.warn("deductStock failed for approveInventoryCheck: {}", e.getMessage());
+                }
+            }
+
+            // Sync InventoryBalance and record InventoryTransaction
+            if (diff != null && diff.compareTo(BigDecimal.ZERO) != 0 && branchId != null && detail.getProduct() != null) {
+                ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(detail.getProduct().getId()).stream().findFirst().orElse(null);
+                if (variant != null && c.getBranch() != null) {
+                    try {
+                        InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branchId)
+                                .orElseGet(() -> InventoryBalance.builder()
+                                        .productVariant(variant)
+                                        .branch(c.getBranch())
+                                        .availableQuantity(BigDecimal.ZERO)
+                                        .reservedQuantity(BigDecimal.ZERO)
+                                        .damagedQuantity(BigDecimal.ZERO)
+                                        .build());
+                        BigDecimal balBefore = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                        BigDecimal balAfter = balBefore.add(diff).max(BigDecimal.ZERO);
+                        balance.setAvailableQuantity(balAfter);
+                        balance.setLastUpdated(LocalDateTime.now());
+                        inventoryBalanceRepository.save(balance);
+
+                        String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                                + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                        InventoryTransaction tx = InventoryTransaction.builder()
+                                .transactionCode(txCode)
+                                .productVariant(variant)
+                                .sourceBranch(c.getBranch())
+                                .transactionType(InventoryTransactionType.ADJUSTMENT)
+                                .quantity(diff.abs())
+                                .beforeQuantity(balBefore)
+                                .afterQuantity(balAfter)
+                                .build();
+                        tx.setIsDeleted(false);
+                        tx.setCreatedBy(getCurrentUsername());
+                        inventoryTransactionRepository.save(tx);
+                    } catch (Exception e) {
+                        log.warn("Failed to sync InventoryBalance for approveInventoryCheck: {}", e.getMessage());
+                    }
+                }
             }
         }
         return toInventoryCheckDTO(saved);
@@ -1858,6 +2462,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .discrepancyCount(discrepancyCount)
                 .netVariance(netVariance)
                 .createdBy(c.getCreatedBy())
+                .checkLines(lines.stream().map(this::toInventoryCheckDetailDTO).collect(Collectors.toList()))
                 .build();
     }
 
@@ -1875,6 +2480,11 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private ImportReceiptDTO toImportReceiptDTO(ImportReceipt r) {
+        List<ImportReceiptDetail> details = importReceiptDetailRepository.findByReceiptIdAndIsDeletedFalse(r.getId());
+        List<ImportReceiptDetailDTO> lines = details.stream()
+                .map(this::toImportReceiptDetailDTO)
+                .collect(Collectors.toList());
+
         return ImportReceiptDTO.builder()
                 .id(r.getId())
                 .receiptCode(r.getReceiptCode())
@@ -1892,6 +2502,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .createdBy(r.getCreatedBy())
                 .inspectedBy(r.getInspectedBy())
                 .note(r.getNote())
+                .receiptLines(lines)
                 .build();
     }
 
@@ -1914,6 +2525,11 @@ public class InventoryServiceImpl implements InventoryService {
 
 
     private ReturnToSupplierDTO toReturnToSupplierDTO(ReturnToSupplier r) {
+        List<ReturnToSupplierDetail> details = returnToSupplierDetailRepository.findByReturnReceiptIdAndIsDeletedFalse(r.getId());
+        List<ReturnToSupplierDetailDTO> lines = details.stream()
+                .map(this::toReturnToSupplierDetailDTO)
+                .collect(Collectors.toList());
+
         return ReturnToSupplierDTO.builder()
                 .id(r.getId())
                 .returnCode(r.getReturnCode())
@@ -1928,6 +2544,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .grnRefNumber(r.getGrnRefNumber())
                 .createdBy(r.getCreatedBy())
                 .note(r.getNote())
+                .returnLines(lines)
                 .build();
     }
 
@@ -1944,6 +2561,11 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private CancelIssueDTO toCancelIssueDTO(CancelIssue c) {
+        List<CancelIssueDetail> details = cancelIssueDetailRepository.findByCancelIssueIdAndIsDeletedFalse(c.getId());
+        List<CancelIssueDetailDTO> lines = details.stream()
+                .map(this::toCancelIssueDetailDTO)
+                .collect(Collectors.toList());
+
         return CancelIssueDTO.builder()
                 .id(c.getId())
                 .cancelCode(c.getCancelCode())
@@ -1955,6 +2577,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .branchName(c.getBranch() != null ? c.getBranch().getBranchName() : null)
                 .createdBy(c.getCreatedBy())
                 .note(c.getNote())
+                .cancelLines(lines)
                 .build();
     }
 
@@ -1970,6 +2593,11 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockTransferDTO toStockTransferDTO(StockTransfer t) {
+        List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(t.getId());
+        List<StockTransferDetailDTO> lines = details.stream()
+                .map(this::toStockTransferDetailDTO)
+                .collect(Collectors.toList());
+
         return StockTransferDTO.builder()
                 .id(t.getId())
                 .transferCode(t.getTransferCode())
@@ -1986,12 +2614,14 @@ public class InventoryServiceImpl implements InventoryService {
                 .estArrivalDate(t.getEstArrivalDate())
                 .createdBy(t.getCreatedBy())
                 .note(t.getNote())
+                .transferLines(lines)
                 .build();
     }
 
     private StockTransferDetailDTO toStockTransferDetailDTO(StockTransferDetail d) {
         return StockTransferDetailDTO.builder()
                 .id(d.getId())
+                .productId(d.getProduct() != null ? d.getProduct().getId() : null)
                 .productVariantId(d.getProduct() != null ? d.getProduct().getId() : null)
                 .productCode(d.getProduct() != null ? d.getProduct().getProductCode() : null)
                 .productName(d.getProduct() != null ? d.getProduct().getName() : null)
@@ -2042,58 +2672,14 @@ public class InventoryServiceImpl implements InventoryService {
             return toReturnToSupplierDTO(r);
         }
 
+        boolean alreadyDeducted = ReturnToSupplierStatus.APPROVED_CREDIT_NOTE.equals(r.getStatus())
+                || ReturnToSupplierStatus.APPROVED.equals(r.getStatus());
         r.setStatus(ReturnToSupplierStatus.COMPLETE);
+        r.setUpdatedBy(getCurrentUsername());
         ReturnToSupplier saved = returnToSupplierRepository.save(r);
 
-        List<ReturnToSupplierDetail> details = returnToSupplierDetailRepository.findByReturnReceiptIdAndIsDeletedFalse(id);
-        String username = getCurrentUsername();
-        Branch branch = r.getBranch();
-
-        for (ReturnToSupplierDetail detail : details) {
-            Product product = detail.getProduct();
-            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
-            if (variant == null) {
-                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Không tìm thấy biến thể cho sản phẩm: " + product.getName());
-            }
-            BigDecimal quantity = detail.getQuantity();
-
-            List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
-            BigDecimal remainingToDeduct = quantity;
-            for (ProductLocation loc : locations) {
-                if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
-                BigDecimal available = loc.getQuantity();
-                if (available.compareTo(BigDecimal.ZERO) <= 0) continue;
-
-                BigDecimal deduct = available.min(remainingToDeduct);
-                loc.setQuantity(available.subtract(deduct));
-                productLocationRepository.save(loc);
-                remainingToDeduct = remainingToDeduct.subtract(deduct);
-            }
-
-            InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BUSINESS_ERROR, "Không tìm thấy số dư tồn kho để trả hàng"));
-            
-            BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
-            BigDecimal afterQty = beforeQty.subtract(quantity);
-            balance.setAvailableQuantity(afterQty);
-            balance.setLastUpdated(LocalDateTime.now());
-            inventoryBalanceRepository.save(balance);
-
-            String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
-
-            InventoryTransaction tx = InventoryTransaction.builder()
-                    .transactionCode(txCode)
-                    .productVariant(variant)
-                    .sourceBranch(branch)
-                    .transactionType(InventoryTransactionType.RETURN_TO_SUPPLIER)
-                    .quantity(quantity)
-                    .beforeQuantity(beforeQty)
-                    .afterQuantity(afterQty)
-                    .build();
-            tx.setIsDeleted(false);
-            tx.setCreatedBy(username);
-            inventoryTransactionRepository.save(tx);
+        if (!alreadyDeducted) {
+            applyReturnToSupplierDeductions(saved);
         }
 
         return toReturnToSupplierDTO(saved);
@@ -2104,9 +2690,17 @@ public class InventoryServiceImpl implements InventoryService {
     public ReturnToSupplierDTO cancelReturnToSupplier(Long id) {
         ReturnToSupplier r = returnToSupplierRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReturnToSupplier", "id", id));
+        ReturnToSupplierStatus prevStatus = r.getStatus();
         r.setStatus(ReturnToSupplierStatus.CANCELLED);
         r.setUpdatedBy(getCurrentUsername());
-        return toReturnToSupplierDTO(returnToSupplierRepository.save(r));
+        ReturnToSupplier saved = returnToSupplierRepository.save(r);
+
+        if (prevStatus == ReturnToSupplierStatus.APPROVED_CREDIT_NOTE
+                || prevStatus == ReturnToSupplierStatus.APPROVED
+                || prevStatus == ReturnToSupplierStatus.COMPLETE) {
+            restoreReturnToSupplierStock(saved);
+        }
+        return toReturnToSupplierDTO(saved);
     }
 
     // --- Cancel Issue Actions ---
@@ -2130,58 +2724,13 @@ public class InventoryServiceImpl implements InventoryService {
             return toCancelIssueDTO(r);
         }
 
+        boolean alreadyDeducted = CancelIssueStatus.APPROVED.equals(r.getStatus());
         r.setStatus(CancelIssueStatus.COMPLETE);
+        r.setUpdatedBy(getCurrentUsername());
         CancelIssue saved = cancelIssueRepository.save(r);
 
-        List<CancelIssueDetail> details = cancelIssueDetailRepository.findByCancelIssueIdAndIsDeletedFalse(id);
-        String username = getCurrentUsername();
-        Branch branch = r.getBranch();
-
-        for (CancelIssueDetail detail : details) {
-            Product product = detail.getProduct();
-            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
-            if (variant == null) {
-                throw new BusinessException(ErrorCode.BUSINESS_ERROR, "Không tìm thấy biến thể cho sản phẩm: " + product.getName());
-            }
-            BigDecimal quantity = detail.getQuantity();
-
-            List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
-            BigDecimal remainingToDeduct = quantity;
-            for (ProductLocation loc : locations) {
-                if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
-                BigDecimal available = loc.getQuantity();
-                if (available.compareTo(BigDecimal.ZERO) <= 0) continue;
-
-                BigDecimal deduct = available.min(remainingToDeduct);
-                loc.setQuantity(available.subtract(deduct));
-                productLocationRepository.save(loc);
-                remainingToDeduct = remainingToDeduct.subtract(deduct);
-            }
-
-            InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), branch.getId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BUSINESS_ERROR, "Không tìm thấy số dư tồn kho để xuất hủy"));
-
-            BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
-            BigDecimal afterQty = beforeQty.subtract(quantity);
-            balance.setAvailableQuantity(afterQty);
-            balance.setLastUpdated(LocalDateTime.now());
-            inventoryBalanceRepository.save(balance);
-
-            String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
-
-            InventoryTransaction tx = InventoryTransaction.builder()
-                    .transactionCode(txCode)
-                    .productVariant(variant)
-                    .sourceBranch(branch)
-                    .transactionType(InventoryTransactionType.CANCEL_ISSUE)
-                    .quantity(quantity)
-                    .beforeQuantity(beforeQty)
-                    .afterQuantity(afterQty)
-                    .build();
-            tx.setIsDeleted(false);
-            tx.setCreatedBy(username);
-            inventoryTransactionRepository.save(tx);
+        if (!alreadyDeducted) {
+            applyCancelIssueDeductions(saved);
         }
 
         return toCancelIssueDTO(saved);
@@ -2192,9 +2741,15 @@ public class InventoryServiceImpl implements InventoryService {
     public CancelIssueDTO cancelCancelIssue(Long id) {
         CancelIssue r = cancelIssueRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CancelIssue", "id", id));
+        CancelIssueStatus prevStatus = r.getStatus();
         r.setStatus(CancelIssueStatus.CANCELLED);
         r.setUpdatedBy(getCurrentUsername());
-        return toCancelIssueDTO(cancelIssueRepository.save(r));
+        CancelIssue saved = cancelIssueRepository.save(r);
+
+        if (CancelIssueStatus.APPROVED.equals(prevStatus) || CancelIssueStatus.COMPLETE.equals(prevStatus)) {
+            restoreCancelIssueStock(saved);
+        }
+        return toCancelIssueDTO(saved);
     }
 
     // --- Stock Transfer Actions ---
@@ -2224,6 +2779,7 @@ public class InventoryServiceImpl implements InventoryService {
         StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
         t.setStatus(TransferStatus.SHIPPED.name());
+        t.setUpdatedBy(getCurrentUsername());
         StockTransfer saved = stockTransferRepository.save(t);
 
         List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
@@ -2232,6 +2788,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         for (StockTransferDetail detail : details) {
             Product product = detail.getProduct();
+            if (product == null) continue;
             ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
             BigDecimal quantity = detail.getQuantityShipped();
             if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
@@ -2240,59 +2797,69 @@ public class InventoryServiceImpl implements InventoryService {
                 stockTransferDetailRepository.save(detail);
             }
 
-            deductStock(fromZone.getId(), t.getFromBranch().getId(), product.getId(),
-                    null, null, quantity,
-                    "TRANSFER_OUT", t.getTransferCode(), t.getId());
-
-            List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
-            BigDecimal remainingToDeduct = quantity;
-            for (ProductLocation loc : locations) {
-                if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
-                BigDecimal available = loc.getQuantity();
-                if (available.compareTo(BigDecimal.ZERO) <= 0) continue;
-
-                BigDecimal deduct = available.min(remainingToDeduct);
-                loc.setQuantity(available.subtract(deduct));
-                productLocationRepository.save(loc);
-                remainingToDeduct = remainingToDeduct.subtract(deduct);
+            // 1. Deduct SizeInventory
+            try {
+                deductStock(fromZone.getId(), t.getFromBranch().getId(), product.getId(),
+                        null, null, quantity,
+                        "TRANSFER_OUT", t.getTransferCode(), t.getId());
+            } catch (Exception e) {
+                log.warn("deductStock failed for shipStockTransfer: {}", e.getMessage());
             }
 
-            if (variant != null) {
-                final BigDecimal finalQty = quantity;
-                InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), t.getFromBranch().getId())
-                        .orElseGet(() -> {
-                            InventoryBalance b = InventoryBalance.builder()
+            // 2. Deduct ProductLocation
+            try {
+                List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(product.getId());
+                BigDecimal remainingToDeduct = quantity;
+                for (ProductLocation loc : locations) {
+                    if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
+                    BigDecimal available = loc.getQuantity();
+                    if (available == null || available.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                    BigDecimal deduct = available.min(remainingToDeduct);
+                    loc.setQuantity(available.subtract(deduct));
+                    productLocationRepository.save(loc);
+                    remainingToDeduct = remainingToDeduct.subtract(deduct);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to update ProductLocation for shipStockTransfer: {}", e.getMessage());
+            }
+
+            // 3. Deduct InventoryBalance at fromBranch and record InventoryTransaction
+            if (variant != null && t.getFromBranch() != null) {
+                try {
+                    InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(variant.getId(), t.getFromBranch().getId())
+                            .orElseGet(() -> InventoryBalance.builder()
                                     .productVariant(variant)
                                     .branch(t.getFromBranch())
-                                    .availableQuantity(finalQty)
+                                    .availableQuantity(BigDecimal.ZERO)
                                     .reservedQuantity(BigDecimal.ZERO)
                                     .damagedQuantity(BigDecimal.ZERO)
-                                    .build();
-                            b.setIsDeleted(false);
-                            return inventoryBalanceRepository.save(b);
-                        });
-                BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
-                BigDecimal afterQty = beforeQty.subtract(quantity);
-                if (afterQty.compareTo(BigDecimal.ZERO) < 0) afterQty = BigDecimal.ZERO;
-                balance.setAvailableQuantity(afterQty);
-                balance.setLastUpdated(LocalDateTime.now());
-                inventoryBalanceRepository.save(balance);
+                                    .build());
+                    BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                    BigDecimal afterQty = beforeQty.subtract(quantity).max(BigDecimal.ZERO);
+                    balance.setAvailableQuantity(afterQty);
+                    balance.setLastUpdated(LocalDateTime.now());
+                    inventoryBalanceRepository.save(balance);
 
-                String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                        + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                    String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                            + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
 
-                InventoryTransaction tx = InventoryTransaction.builder()
-                        .transactionCode(txCode)
-                        .productVariant(variant)
-                        .sourceBranch(t.getFromBranch())
-                        .transactionType(InventoryTransactionType.TRANSFER_OUT)
-                        .quantity(quantity)
-                        .beforeQuantity(beforeQty)
-                        .afterQuantity(afterQty)
-                        .build();
-                tx.setIsDeleted(false);
-                tx.setCreatedBy(username);
-                inventoryTransactionRepository.save(tx);
+                    InventoryTransaction tx = InventoryTransaction.builder()
+                            .transactionCode(txCode)
+                            .productVariant(variant)
+                            .sourceBranch(t.getFromBranch())
+                            .destinationBranch(t.getToBranch())
+                            .transactionType(InventoryTransactionType.TRANSFER_OUT)
+                            .quantity(quantity)
+                            .beforeQuantity(beforeQty)
+                            .afterQuantity(afterQty)
+                            .build();
+                    tx.setIsDeleted(false);
+                    tx.setCreatedBy(username);
+                    inventoryTransactionRepository.save(tx);
+                } catch (Exception e) {
+                    log.warn("Failed to update InventoryBalance for shipStockTransfer: {}", e.getMessage());
+                }
             }
         }
 
@@ -2327,6 +2894,12 @@ public class InventoryServiceImpl implements InventoryService {
             });
         }
         StockOut saved = stockOutRepository.save(entity);
+
+        // Deduct inventory if status is DA_XUAT or COMPLETED
+        if ("DA_XUAT".equalsIgnoreCase(saved.getStatus()) || "COMPLETED".equalsIgnoreCase(saved.getStatus())) {
+            applyStockOutDeductions(saved);
+        }
+
         return stockOutMapper.toDTO(saved);
     }
 
@@ -2336,6 +2909,7 @@ public class InventoryServiceImpl implements InventoryService {
         StockOut existing = stockOutRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StockOut", "id", id));
 
+        String previousStatus = existing.getStatus();
         existing.setStockOutCode(dto.getStockOutCode());
         existing.setOutType(dto.getOutType());
         existing.setWarehouseName(dto.getWarehouseName());
@@ -2366,7 +2940,238 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         StockOut saved = stockOutRepository.save(existing);
+
+        // Deduct inventory if transitioning to DA_XUAT or COMPLETED
+        if (("DA_XUAT".equalsIgnoreCase(saved.getStatus()) || "COMPLETED".equalsIgnoreCase(saved.getStatus()))
+                && !("DA_XUAT".equalsIgnoreCase(previousStatus) || "COMPLETED".equalsIgnoreCase(previousStatus))) {
+            applyStockOutDeductions(saved);
+        }
+
+        // Restore inventory if transitioning from DA_XUAT or COMPLETED to DA_HUY or CANCELLED
+        if (("DA_HUY".equalsIgnoreCase(saved.getStatus()) || "CANCELLED".equalsIgnoreCase(saved.getStatus()))
+                && ("DA_XUAT".equalsIgnoreCase(previousStatus) || "COMPLETED".equalsIgnoreCase(previousStatus))) {
+            restoreStockOut(existing);
+        }
+
         return stockOutMapper.toDTO(saved);
+    }
+
+    private void applyStockOutDeductions(StockOut stockOut) {
+        if (stockOut == null || stockOut.getDetails() == null || stockOut.getDetails().isEmpty()) {
+            return;
+        }
+
+        Branch branch = null;
+        if (stockOut.getWarehouseName() != null && !stockOut.getWarehouseName().isBlank()) {
+            branch = branchRepository.findByIsDeletedFalse().stream()
+                    .filter(b -> stockOut.getWarehouseName().toLowerCase().contains(b.getBranchName().toLowerCase())
+                            || b.getBranchName().toLowerCase().contains(stockOut.getWarehouseName().toLowerCase()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (branch == null) {
+            branch = branchRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+        }
+        final Branch effectiveBranch = branch;
+        WarehouseZone zone = effectiveBranch != null ? warehouseService.getOrCreateDefaultZone(effectiveBranch) : null;
+
+        for (StockOutDetail detail : stockOut.getDetails()) {
+            if (Boolean.TRUE.equals(detail.getIsDeleted())) continue;
+            BigDecimal qty = detail.getQuantity() != null ? BigDecimal.valueOf(detail.getQuantity()) : BigDecimal.ONE;
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            ProductVariant variant = null;
+            if (detail.getSku() != null && !detail.getSku().isBlank()) {
+                variant = productVariantRepository.findBySkuAndIsDeletedFalse(detail.getSku()).orElse(null);
+            }
+            if (variant == null && detail.getBarcode() != null && !detail.getBarcode().isBlank()) {
+                variant = productVariantRepository.findByBarcodeAndIsDeletedFalse(detail.getBarcode()).orElse(null);
+            }
+
+            Product product = variant != null ? variant.getProduct() : null;
+            if (product == null && detail.getProductName() != null && !detail.getProductName().isBlank()) {
+                product = productRepository.findByIsDeletedFalse().stream()
+                        .filter(p -> p.getName() != null && p.getName().equalsIgnoreCase(detail.getProductName()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            final ProductVariant finalVariant = variant;
+            final Product finalProduct = product;
+
+            if (finalProduct != null) {
+                Long zoneId = zone != null ? zone.getId() : null;
+                Long branchId = effectiveBranch != null ? effectiveBranch.getId() : null;
+
+                try {
+                    deductStock(zoneId, branchId, finalProduct.getId(), null, null, qty,
+                            "STOCK_OUT_" + (stockOut.getOutType() != null ? stockOut.getOutType() : "EXPORT"),
+                            stockOut.getStockOutCode(), stockOut.getId());
+                } catch (Exception e) {
+                    log.warn("deductStock failed for product {}: {}", finalProduct.getId(), e.getMessage());
+                }
+
+                // Decrement ProductLocation
+                try {
+                    List<ProductLocation> locations = productLocationRepository.findByProductIdAndIsDeletedFalse(finalProduct.getId());
+                    BigDecimal remainingToDeduct = qty;
+                    for (ProductLocation loc : locations) {
+                        if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
+                        BigDecimal available = loc.getQuantity();
+                        if (available == null || available.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                        BigDecimal deduct = available.min(remainingToDeduct);
+                        loc.setQuantity(available.subtract(deduct));
+                        productLocationRepository.save(loc);
+                        remainingToDeduct = remainingToDeduct.subtract(deduct);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to update ProductLocation for product {}: {}", finalProduct.getId(), e.getMessage());
+                }
+
+                // Decrement InventoryBalance and record InventoryTransaction
+                if (finalVariant != null && effectiveBranch != null) {
+                    try {
+                        InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(finalVariant.getId(), effectiveBranch.getId())
+                                .orElseGet(() -> InventoryBalance.builder()
+                                        .productVariant(finalVariant)
+                                        .branch(effectiveBranch)
+                                        .availableQuantity(BigDecimal.ZERO)
+                                        .reservedQuantity(BigDecimal.ZERO)
+                                        .damagedQuantity(BigDecimal.ZERO)
+                                        .build());
+                        BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                        BigDecimal afterQty = beforeQty.subtract(qty).max(BigDecimal.ZERO);
+                        balance.setAvailableQuantity(afterQty);
+                        balance.setLastUpdated(LocalDateTime.now());
+                        inventoryBalanceRepository.save(balance);
+
+                        String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                                + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+
+                        InventoryTransaction tx = InventoryTransaction.builder()
+                                .transactionCode(txCode)
+                                .productVariant(finalVariant)
+                                .sourceBranch(effectiveBranch)
+                                .transactionType(InventoryTransactionType.ADJUSTMENT)
+                                .quantity(qty)
+                                .beforeQuantity(beforeQty)
+                                .afterQuantity(afterQty)
+                                .build();
+                        tx.setIsDeleted(false);
+                        tx.setCreatedBy(getCurrentUsername());
+                        inventoryTransactionRepository.save(tx);
+                    } catch (Exception e) {
+                        log.warn("Failed to update InventoryBalance: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    private void restoreStockOut(StockOut stockOut) {
+        if (stockOut == null || stockOut.getDetails() == null || stockOut.getDetails().isEmpty()) {
+            return;
+        }
+
+        Branch branch = null;
+        if (stockOut.getWarehouseName() != null && !stockOut.getWarehouseName().isBlank()) {
+            branch = branchRepository.findByIsDeletedFalse().stream()
+                    .filter(b -> stockOut.getWarehouseName().toLowerCase().contains(b.getBranchName().toLowerCase())
+                            || b.getBranchName().toLowerCase().contains(stockOut.getWarehouseName().toLowerCase()))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (branch == null) {
+            branch = branchRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+        }
+        final Branch effectiveBranch = branch;
+        WarehouseZone zone = effectiveBranch != null ? warehouseService.getOrCreateDefaultZone(effectiveBranch) : null;
+        String username = getCurrentUsername();
+
+        for (StockOutDetail detail : stockOut.getDetails()) {
+            if (Boolean.TRUE.equals(detail.getIsDeleted())) continue;
+            BigDecimal qty = detail.getQuantity() != null ? BigDecimal.valueOf(detail.getQuantity()) : BigDecimal.ONE;
+            if (qty.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            ProductVariant variant = null;
+            if (detail.getSku() != null && !detail.getSku().isBlank()) {
+                variant = productVariantRepository.findBySkuAndIsDeletedFalse(detail.getSku()).orElse(null);
+            }
+            if (variant == null && detail.getBarcode() != null && !detail.getBarcode().isBlank()) {
+                variant = productVariantRepository.findByBarcodeAndIsDeletedFalse(detail.getBarcode()).orElse(null);
+            }
+
+            Product product = variant != null ? variant.getProduct() : null;
+            if (product == null && detail.getProductName() != null && !detail.getProductName().isBlank()) {
+                product = productRepository.findByIsDeletedFalse().stream()
+                        .filter(p -> p.getName() != null && p.getName().equalsIgnoreCase(detail.getProductName()))
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            final ProductVariant finalVariant = variant;
+            final Product finalProduct = product;
+
+            if (finalProduct != null) {
+                Long zoneId = zone != null ? zone.getId() : null;
+                Long branchId = effectiveBranch != null ? effectiveBranch.getId() : null;
+
+                try {
+                    addStock(zoneId, branchId, finalProduct.getId(), null, null, qty,
+                            "STOCK_OUT_CANCELLED", stockOut.getStockOutCode(), stockOut.getId());
+                } catch (Exception e) {
+                    log.warn("addStock failed for StockOut restore {}: {}", finalProduct.getId(), e.getMessage());
+                }
+
+                // Increment ProductLocation
+                try {
+                    ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(finalProduct.getId(), zoneId)
+                            .orElseGet(() -> ProductLocation.builder().product(finalProduct).quantity(BigDecimal.ZERO).build());
+                    loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(qty));
+                    loc.setIsDeleted(false);
+                    productLocationRepository.save(loc);
+                } catch (Exception e) {
+                    log.warn("Failed to restore ProductLocation for product {}: {}", finalProduct.getId(), e.getMessage());
+                }
+
+                // Increment InventoryBalance
+                if (finalVariant != null && effectiveBranch != null) {
+                    try {
+                        InventoryBalance balance = inventoryBalanceRepository.findByProductVariantIdAndBranchId(finalVariant.getId(), effectiveBranch.getId())
+                                .orElseGet(() -> InventoryBalance.builder()
+                                        .productVariant(finalVariant)
+                                        .branch(effectiveBranch)
+                                        .availableQuantity(BigDecimal.ZERO)
+                                        .reservedQuantity(BigDecimal.ZERO)
+                                        .damagedQuantity(BigDecimal.ZERO)
+                                        .build());
+                        BigDecimal beforeQty = balance.getAvailableQuantity() != null ? balance.getAvailableQuantity() : BigDecimal.ZERO;
+                        BigDecimal afterQty = beforeQty.add(qty);
+                        balance.setAvailableQuantity(afterQty);
+                        balance.setLastUpdated(LocalDateTime.now());
+                        inventoryBalanceRepository.save(balance);
+
+                        String txCode = "TX-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                                + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID().toString().substring(0, 4);
+                        InventoryTransaction tx = InventoryTransaction.builder()
+                                .transactionCode(txCode)
+                                .productVariant(finalVariant)
+                                .sourceBranch(effectiveBranch)
+                                .transactionType(InventoryTransactionType.ADJUSTMENT)
+                                .quantity(qty)
+                                .beforeQuantity(beforeQty)
+                                .afterQuantity(afterQty)
+                                .build();
+                        tx.setIsDeleted(false);
+                        tx.setCreatedBy(username);
+                        inventoryTransactionRepository.save(tx);
+                    } catch (Exception e) {
+                        log.warn("Failed to update InventoryBalance: {}", e.getMessage());
+                    }
+                }
+            }
+        }
     }
 
     @Override

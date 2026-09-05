@@ -24,22 +24,22 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     // ==== Query CHỈ lấy chưa xóa (isDeleted = false) ====
     @Query("SELECT d FROM CatalogDepartment  d WHERE d.isDeleted = false AND " +
-           "(:isActive IS NULL OR d.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR d.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Department> findAllDepartments(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
             Pageable pageable);
 
     @Query("SELECT d FROM CatalogDepartment d WHERE d.isDeleted = false AND " +
-           "(:isActive IS NULL OR d.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR d.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Department> findAllDepartmentsList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive);
@@ -47,11 +47,11 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     // ==== Query lấy TẤT CẢ kể cả đã xóa (includeDeleted = true) ====
     @Query("SELECT d FROM CatalogDepartment d WHERE " +
            "(:includeDeleted = true OR d.isDeleted = false) AND " +
-           "(:isActive IS NULL OR d.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR d.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Department> findAllDepartmentsIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -60,11 +60,11 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     @Query("SELECT d FROM CatalogDepartment d WHERE " +
            "(:includeDeleted = true OR d.isDeleted = false) AND " +
-           "(:isActive IS NULL OR d.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(d.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR d.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(d.deptName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.deptCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(d.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Department> findAllDepartmentsListIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

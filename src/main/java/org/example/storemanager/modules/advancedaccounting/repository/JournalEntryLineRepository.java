@@ -10,5 +10,6 @@ import java.util.List;
 public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLine, Long> {
     Optional<JournalEntryLine> findByIdAndIsDeletedFalse(Long id);
     List<JournalEntryLine> findByIsDeletedFalse();
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"account"})
     List<JournalEntryLine> findByJournalEntryIdAndIsDeletedFalse(Long journalEntryId);
 }

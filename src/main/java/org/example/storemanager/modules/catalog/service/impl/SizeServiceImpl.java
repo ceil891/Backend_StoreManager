@@ -135,6 +135,9 @@ public class SizeServiceImpl implements SizeService {
     @Override
     @Transactional(readOnly = true)
     public List<MapSizeResponse> getAllSizes(String search, Boolean isActive, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<Size> page = sizeRepository.findAllSizesIncludeDeleted(search, isActive, includeDeleted, pageable);
@@ -153,6 +156,9 @@ public class SizeServiceImpl implements SizeService {
             String sort,
             boolean includeDeleted) {
 
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
 

@@ -27,6 +27,12 @@ public class SaleOrder extends BaseEntity {
     @Column(name = "expected_delivery")
     private LocalDateTime expectedDelivery;
 
+    @Column(name = "sub_total", precision = 18, scale = 2)
+    private BigDecimal subTotal;
+
+    @Column(name = "tax_amount", precision = 18, scale = 2)
+    private BigDecimal taxAmount;
+
     @Column(name = "total_amount", precision = 18, scale = 2)
     private BigDecimal totalAmount;
 
@@ -88,6 +94,18 @@ public class SaleOrder extends BaseEntity {
     @Column(name = "assigned_by", length = 100)
     private String assignedBy;
 
+    @Column(name = "voucher_code", length = 50)
+    private String voucherCode;
+
+    @Column(name = "voucher_discount_amount", precision = 18, scale = 2)
+    private BigDecimal voucherDiscountAmount;
+
+    @Column(name = "loyalty_points_used")
+    private Integer loyaltyPointsUsed;
+
+    @Column(name = "loyalty_points_earned")
+    private Integer loyaltyPointsEarned;
+
     @PrePersist
     public void prePersist() {
         if (this.paymentStatus == null || this.paymentStatus.trim().isEmpty()) {
@@ -125,4 +143,7 @@ public class SaleOrder extends BaseEntity {
 
     @Column(name = "payment_method_code", length = 50)
     private String paymentMethodCode;
+
+    @Column(name = "pos_session_id")
+    private Long posSessionId;
 }

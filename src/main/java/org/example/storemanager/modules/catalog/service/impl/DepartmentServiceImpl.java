@@ -139,6 +139,9 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<MapDepartmentResponse> getAllDepartments(String search, Boolean isActive, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<Department> page = departmentRepository.findAllDepartmentsIncludeDeleted(search, isActive, includeDeleted, pageable);
@@ -157,6 +160,9 @@ public class DepartmentServiceImpl implements DepartmentService {
             String sort,
             boolean includeDeleted) {
 
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
 

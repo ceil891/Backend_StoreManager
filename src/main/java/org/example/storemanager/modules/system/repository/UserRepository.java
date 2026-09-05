@@ -15,7 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUsername(String username);
 
+    Optional<User> findByUsernameIgnoreCase(String username);
+
     Optional<User> findByEmail(String email);
+
+    Optional<User> findByEmailIgnoreCase(String email);
 
     Optional<User> findByPhone(String phone);
 
@@ -39,16 +43,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUsernameAndIdNotAndIsDeletedFalse(String username, Long id);
 
+    Page<User> findByIsDeletedFalse(Pageable pageable);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"role", "branch"})
+    java.util.List<User> findByIsDeletedFalse();
+
     @Query("SELECT u FROM User u WHERE " +
             "(:includeDeleted = true OR u.isDeleted = false OR u.isDeleted IS NULL) AND " +
-            "(:status IS NULL OR u.status = :status) AND " +
-            "(:roleId IS NULL OR u.role.id = :roleId) AND " +
-            "(:branchId IS NULL OR u.branch.id = :branchId) AND " +
-            "(:search IS NULL OR :search = '' OR " +
-            "LOWER(u.username) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(u.phone) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(cast(:status as string) IS NULL OR u.status = :status) AND " +
+            "(cast(:roleId as long) IS NULL OR u.role.id = :roleId) AND " +
+            "(:roleId IS NOT NULL OR u.role IS NULL OR UPPER(TRIM(u.role.roleName)) NOT IN ('CUSTOMER', 'KHÁCH HÀNG', 'KHACH HANG', 'USER', 'NGƯỜI DÙNG', 'NGUOI DUNG')) AND " +
+            "(cast(:branchId as long) IS NULL OR u.branch.id = :branchId) AND " +
+            "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+            "LOWER(u.username) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+            "LOWER(u.phone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<User> findAllUsersIncludeDeleted(
             @Param("search") String search,
             @Param("status") String status,

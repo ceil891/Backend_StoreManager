@@ -44,6 +44,8 @@ public class CustomerServiceImpl implements CustomerService {
     private final UserRepository userRepository;
     private final PartnerGroupRepository partnerGroupRepository;
     private final AreaRepository areaRepository;
+    private final org.example.storemanager.modules.sales.repository.SaleOrderRepository saleOrderRepository;
+    private final org.example.storemanager.modules.finance.repository.DebtLedgerRepository debtLedgerRepository;
 
     private String getCurrentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -360,6 +362,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .groupName(c.getGroup() != null ? c.getGroup().getGroupName() : null)
                 .areaId(c.getArea() != null ? c.getArea().getId() : null)
                 .areaName(c.getArea() != null ? c.getArea().getAreaName() : null)
+                .isCreditBlocked(c.getIsCreditBlocked() != null ? c.getIsCreditBlocked() : false)
                 .build();
     }
 
@@ -411,11 +414,74 @@ public class CustomerServiceImpl implements CustomerService {
                 .areaId(c.getArea() != null ? c.getArea().getId() : null)
                 .areaName(c.getArea() != null ? c.getArea().getAreaName() : null)
                 .note(c.getNote())
+                .isCreditBlocked(c.getIsCreditBlocked() != null ? c.getIsCreditBlocked() : false)
                 .build();
     }
 
-    @Override public List<SalesHistoryResponse> getSalesHistory(Long id) { return Collections.emptyList(); }
-    @Override public List<DebtResponse> getCustomerDebts(Long id) { return Collections.emptyList(); }
+    @Override
+    public List<SalesHistoryResponse> getSalesHistory(Long id) {
+        Customer c = customerRepository.findByIdAndIsDeletedFalse(id).orElse(null);
+        if (c == null) return Collections.emptyList();
+
+        List<org.example.storemanager.modules.sales.entity.SaleOrder> orders =
+                saleOrderRepository.findByCustomerIdAndIsDeletedFalseOrderByOrderDateDesc(id);
+
+        return orders.stream().map(so -> SalesHistoryResponse.builder()
+                .id(so.getId())
+                .invoiceCode(so.getOrderCode())
+                .orderDate(so.getOrderDate())
+                .totalAmount(so.getFinalAmount() != null ? so.getFinalAmount() : so.getTotalAmount())
+                .build()
+        ).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public List<DebtResponse> getCustomerDebts(Long id) {
+        Customer c = customerRepository.findByIdAndIsDeletedFalse(id).orElse(null);
+        if (c == null) return Collections.emptyList();
+
+        // 1. Check direct debt ledgers
+        List<org.example.storemanager.modules.finance.entity.DebtLedger> ledgers =
+                debtLedgerRepository.findByPartnerIdAndEntityTypeAndIsDeletedFalseOrderByTransactionDateDesc(id, "CUSTOMER");
+
+        if (!ledgers.isEmpty()) {
+            return ledgers.stream().map(dl -> DebtResponse.builder()
+                    .id(dl.getId())
+                    .amount(dl.getBalance() != null ? dl.getBalance() : dl.getIncrease())
+                    .transactionDate(dl.getTransactionDate())
+                    .description("Chứng từ: " + (dl.getRefCode() != null ? dl.getRefCode() : "") +
+                            (dl.getStatus() != null ? " - " + dl.getStatus() : ""))
+                    .build()
+            ).collect(java.util.stream.Collectors.toList());
+        }
+
+        // 2. If no ledgers, check unpaid or partial sale orders
+        List<org.example.storemanager.modules.sales.entity.SaleOrder> unpaidOrders =
+                saleOrderRepository.findByCustomerIdAndPaymentStatusNotAndIsDeletedFalseOrderByOrderDateDesc(id, "PAID");
+
+        return unpaidOrders.stream().map(so -> DebtResponse.builder()
+                .id(so.getId())
+                .amount(so.getFinalAmount() != null ? so.getFinalAmount() : so.getTotalAmount())
+                .transactionDate(so.getOrderDate())
+                .description("Đơn hàng: " + so.getOrderCode() + " (" + so.getPaymentStatus() + ")")
+                .build()
+        ).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public CustomerDetailResponse toggleCreditBlock(Long id, Boolean blocked) {
+        Customer c = getOrCreateCustomerForUser(id);
+        if (blocked != null) {
+            c.setIsCreditBlocked(blocked);
+        } else {
+            c.setIsCreditBlocked(!Boolean.TRUE.equals(c.getIsCreditBlocked()));
+        }
+        c.setUpdatedBy(getCurrentUsername());
+        c.setUpdatedAt(LocalDateTime.now());
+        Customer saved = customerRepository.save(c);
+        return getCustomerById(saved.getId());
+    }
+
     @Override public String importCustomers(MultipartFile file) { return "OK"; }
     @Override public byte[] exportCustomers() { return new byte[0]; }
 

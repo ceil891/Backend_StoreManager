@@ -24,6 +24,11 @@ public class SupplierDetailResponse {
     private String accountHolder;
     private String description;
 
+    private Long groupId;
+    private String groupName;
+    private Long areaId;
+    private String areaName;
+
     private Boolean isActive;
 
     private String createdBy;

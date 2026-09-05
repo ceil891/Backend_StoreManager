@@ -27,4 +27,16 @@ public class SalesChannel extends BaseEntity {
 
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
+
+    @Column(name = "shop_id", length = 100)
+    private String shopId;
+
+    @Column(name = "status", length = 50)
+    private String status;
+
+    @Column(name = "last_synced_at", length = 50)
+    private String lastSyncedAt;
+
+    @Column(name = "product_count")
+    private Integer productCount = 0;
 }

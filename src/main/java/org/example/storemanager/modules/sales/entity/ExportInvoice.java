@@ -43,6 +43,24 @@ public class ExportInvoice extends BaseEntity {
     @Column(nullable = false, length = 30)
     private String status; // DRAFT, PAID, CANCELLED, RETURNED
 
+    @Column(name = "tax_id", length = 50)
+    private String taxId;
+
+    @Column(name = "company_name", length = 200)
+    private String companyName;
+
+    @Column(name = "due_date")
+    private LocalDateTime dueDate;
+
+    @Column(name = "payment_terms", length = 50)
+    private String paymentTerms;
+
+    @Column(name = "einvoice_ref", length = 100)
+    private String einvoiceRef;
+
+    @Column(name = "note", columnDefinition = "TEXT")
+    private String note;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     private Customer customer;

@@ -29,6 +29,8 @@ public class ProductResponse {
     private BigDecimal reorderPoint;
     private BigDecimal minStock;
     private BigDecimal maxStock;
+    private String dimensions;
+    private Boolean allowNegativeStock;
     private String galleryImages;
     private String variants;
     private LocalDateTime createdAt;
@@ -47,4 +49,6 @@ public class ProductResponse {
     private List<ProductUnitResponse> units;
     private List<org.example.storemanager.modules.catalog.dto.response.variant.VariantResponse> variantList;
     private BigDecimal onHand;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
+    private BigDecimal vatRate;
 }

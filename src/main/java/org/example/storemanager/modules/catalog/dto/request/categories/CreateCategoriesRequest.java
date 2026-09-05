@@ -20,4 +20,8 @@ public class CreateCategoriesRequest {
     private Boolean isActive = true;
     private Long departmentId;
     private String imageUrl;
+    private String manager;
+    private String inventoryGlCode;
+    private String cogsGlCode;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
 }

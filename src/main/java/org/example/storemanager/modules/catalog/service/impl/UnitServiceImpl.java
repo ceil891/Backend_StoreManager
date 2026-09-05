@@ -143,6 +143,9 @@ public class UnitServiceImpl implements UnitService {
     @Override
     @Transactional(readOnly = true)
     public List<UnitResponse> getAllUnits(String search, Boolean isActive, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
         Page<Unit> page = unitRepository.findAllUnitsIncludeDeleted(search, isActive, includeDeleted, pageable);
@@ -154,6 +157,9 @@ public class UnitServiceImpl implements UnitService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<UnitResponse> getUnitsPaginated(String search, Boolean isActive, int page, int size, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<Unit> pageResult = unitRepository.findAllUnitsIncludeDeleted(search, isActive, includeDeleted, pageable);

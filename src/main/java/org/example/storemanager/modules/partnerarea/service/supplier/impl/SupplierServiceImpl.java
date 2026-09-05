@@ -21,6 +21,8 @@ import java.time.LocalDateTime;
 public class SupplierServiceImpl implements SupplierService {
 
     private final SupplierRepository repository;
+    private final org.example.storemanager.modules.partnerarea.repository.PartnerGroupRepository partnerGroupRepository;
+    private final org.example.storemanager.modules.partnerarea.repository.AreaRepository areaRepository;
 
     @Override
     public Page<SupplierListResponse> getAll(Boolean isActive, Pageable pageable) {
@@ -59,6 +61,10 @@ public class SupplierServiceImpl implements SupplierService {
                 .email(s.getEmail())
                 .address(s.getAddress())
                 .taxCode(s.getTaxCode())
+                .groupId(s.getGroup() != null ? s.getGroup().getId() : null)
+                .groupName(s.getGroup() != null ? s.getGroup().getGroupName() : null)
+                .areaId(s.getArea() != null ? s.getArea().getId() : null)
+                .areaName(s.getArea() != null ? s.getArea().getAreaName() : null)
                 .paymentTerm(s.getPaymentTerm())
                 .creditLimit(s.getCreditLimit())
                 .bankName(s.getBankName())
@@ -132,6 +138,13 @@ public class SupplierServiceImpl implements SupplierService {
                 .isActive(req.getIsActive() != null ? req.getIsActive() : true)
                 .build();
 
+        if (req.getGroupId() != null) {
+            s.setGroup(partnerGroupRepository.findById(req.getGroupId()).orElse(null));
+        }
+        if (req.getAreaId() != null) {
+            s.setArea(areaRepository.findById(req.getAreaId()).orElse(null));
+        }
+
         s.setCreatedBy(getCurrentUsername());
         Supplier saved = repository.save(s);
 
@@ -192,6 +205,17 @@ public class SupplierServiceImpl implements SupplierService {
         s.setAccountHolder(req.getAccountHolder());
         s.setDescription(req.getDescription());
 
+        if (req.getGroupId() != null) {
+            s.setGroup(partnerGroupRepository.findById(req.getGroupId()).orElse(null));
+        } else {
+            s.setGroup(null);
+        }
+        if (req.getAreaId() != null) {
+            s.setArea(areaRepository.findById(req.getAreaId()).orElse(null));
+        } else {
+            s.setArea(null);
+        }
+
         // 3. Audit
         s.setUpdatedBy(getCurrentUsername());
         s.setUpdatedAt(LocalDateTime.now());
@@ -229,17 +253,13 @@ public class SupplierServiceImpl implements SupplierService {
         Supplier s = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy nhà cung cấp với ID: " + id));
 
-        // 2. Kiểm tra: Nếu vẫn đang hoạt động thì không cho xóa
-        if (Boolean.TRUE.equals(s.getIsActive())) {
-            throw new RuntimeException("Không thể xóa: Nhà cung cấp đang ở trạng thái hoạt động (isActive = true). Vui lòng tắt hoạt động trước.");
-        }
-
-        // 3. Tiến hành xóa mềm (Soft Delete)
+        // 2. Tắt hoạt động và tiến hành xóa mềm (Soft Delete) an toàn tránh lỗi FK 409
+        s.setIsActive(false);
         s.setIsDeleted(true);
         s.setDeletedBy(getCurrentUsername());
         s.setDeletedAt(LocalDateTime.now());
 
-        // 4. Lưu lại thay đổi
+        // 3. Lưu lại thay đổi
         repository.save(s);
     }
 

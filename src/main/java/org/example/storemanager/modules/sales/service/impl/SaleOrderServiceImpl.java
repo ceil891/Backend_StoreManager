@@ -53,6 +53,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     private final org.example.storemanager.modules.wms.service.WarehouseService warehouseService;
     private final org.example.storemanager.modules.logistics.repository.DeliveryAssignmentHistoryRepository deliveryAssignmentHistoryRepository;
     private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
+    private final org.example.storemanager.modules.catalog.repository.ComboRepository comboRepository;
+    private final org.example.storemanager.modules.catalog.repository.ComboDetailRepository comboDetailRepository;
+    private final org.example.storemanager.modules.system.repository.PosSessionRepository posSessionRepository;
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
@@ -71,16 +74,34 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                     .filter(c -> c.getName() != null && c.getName().equalsIgnoreCase(cName))
                     .findFirst().orElse(null);
         }
-        if (customer == null) {
-            customer = customerRepository.findAll().stream()
-                    .filter(c -> Boolean.FALSE.equals(c.getIsDeleted()))
-                    .findFirst().orElse(null);
-        }
 
         Branch branch = branchRepository.findByIdAndIsDeletedFalse(request.getBranchId())
                 .orElseGet(() -> branchRepository.findAll().stream().filter(b -> Boolean.FALSE.equals(b.getIsDeleted())).findFirst().orElse(null));
 
         String username = getCurrentUsername();
+
+        String origin = request.getOrderOrigin();
+        if (origin == null || origin.trim().isEmpty() || "ONLINE_STORE".equalsIgnoreCase(origin)) {
+            origin = "ONLINE";
+        }
+
+        Long posSessionId = request.getPosSessionId();
+        if (posSessionId == null && ("POS".equalsIgnoreCase(origin) || (request.getOrderCode() != null && request.getOrderCode().startsWith("ORD-POS-")))) {
+            if (posSessionRepository != null) {
+                posSessionId = posSessionRepository.findByIsDeletedFalse().stream()
+                        .filter(s -> "OPEN".equalsIgnoreCase(s.getStatus()))
+                        .filter(s -> branch == null || s.getBranch() == null || s.getBranch().getId().equals(branch.getId()))
+                        .sorted((a, b) -> b.getStartTime().compareTo(a.getStartTime()))
+                        .map(org.example.storemanager.modules.system.entity.PosSession::getId)
+                        .findFirst()
+                        .orElseGet(() -> posSessionRepository.findByIsDeletedFalse().stream()
+                                .filter(s -> "OPEN".equalsIgnoreCase(s.getStatus()))
+                                .sorted((a, b) -> b.getStartTime().compareTo(a.getStartTime()))
+                                .map(org.example.storemanager.modules.system.entity.PosSession::getId)
+                                .findFirst()
+                                .orElse(null));
+            }
+        }
 
         SaleOrder order = SaleOrder.builder()
                 .orderCode(request.getOrderCode())
@@ -91,14 +112,11 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .branch(branch)
                 .paymentMethodId(request.getPaymentMethodId())
                 .paymentMethodCode(request.getPaymentMethodCode())
+                .posSessionId(posSessionId)
                 .build();
 
         order.setIsDeleted(false);
         order.setCreatedBy(username != null ? username : "ONLINE_STORE");
-        String origin = request.getOrderOrigin();
-        if (origin == null || origin.trim().isEmpty() || "ONLINE_STORE".equalsIgnoreCase(origin)) {
-            origin = "ONLINE";
-        }
         order.setOrderOrigin(origin);
         order.setPaymentStatus(request.getPaymentStatus() != null && !request.getPaymentStatus().trim().isEmpty() ? request.getPaymentStatus() : "UNPAID");
         order.setNote(request.getNote());
@@ -106,6 +124,22 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         order.setCustomerPhone(request.getCustomerPhone());
         order.setShippingAddress(request.getShippingAddress());
 
+        // Kiểm tra khách hàng bị khóa nợ
+        if (customer != null && Boolean.TRUE.equals(customer.getIsCreditBlocked())) {
+            String paymentSt = request.getPaymentStatus();
+            String pmCode = request.getPaymentMethodCode();
+            boolean isUnpaid = paymentSt == null || !"PAID".equalsIgnoreCase(paymentSt);
+            boolean isCreditMethod = pmCode != null && (pmCode.toUpperCase().contains("DEBT") || pmCode.toUpperCase().contains("CONG_NO") || pmCode.toUpperCase().contains("CREDIT"));
+            if (isUnpaid || isCreditMethod) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Khách hàng '" + customer.getName() + "' hiện đang bị khóa mua nợ (Credit Blocked). Vui lòng yêu cầu thanh toán ngay hoặc tất toán công nợ trước khi xuất đơn."
+                );
+            }
+        }
+
+        BigDecimal subTotalSum = BigDecimal.ZERO;
+        BigDecimal taxSum = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<SaleOrderDetail> details = new ArrayList<>();
 
@@ -113,39 +147,76 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             for (SaleOrderDetailRequest detailReq : request.getDetails()) {
                 Long reqVariantId = detailReq.getProductVariantId();
                 ProductVariant variant = null;
+                String comboName = null;
 
                 if (reqVariantId != null) {
-                    // 1. Kiểm tra nếu reqVariantId là Product ID (POS thường gửi Product ID)
-                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(reqVariantId);
-                    if (!pvs.isEmpty()) {
-                        variant = pvs.get(0);
-                    }
-                    // 2. Nếu không phải Product ID, tìm trực tiếp theo ProductVariant ID
+                    // 1. Tìm trực tiếp theo ProductVariant ID trước
+                    variant = productVariantRepository.findByIdAndIsDeletedFalse(reqVariantId).orElse(null);
+                    // 2. Nếu không tìm thấy, fallback kiểm tra nếu reqVariantId là Product ID (POS fallback)
                     if (variant == null) {
-                        variant = productVariantRepository.findByIdAndIsDeletedFalse(reqVariantId).orElse(null);
+                        List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(reqVariantId);
+                        if (!pvs.isEmpty()) {
+                            variant = pvs.get(0);
+                        }
+                    }
+                    // 3. Fallback kiểm tra nếu reqVariantId là Combo ID (POS Combo checkout)
+                    if (variant == null && comboRepository != null) {
+                        org.example.storemanager.modules.catalog.entity.Combo combo = comboRepository.findByIdAndIsDeletedFalse(reqVariantId).orElse(null);
+                        if (combo != null) {
+                            comboName = combo.getComboName();
+                            List<org.example.storemanager.modules.catalog.entity.ComboDetail> cDetails = comboDetailRepository.findByComboIdAndIsDeletedFalse(combo.getId());
+                            if (!cDetails.isEmpty() && cDetails.get(0).getProduct() != null) {
+                                List<ProductVariant> cpvs = productVariantRepository.findByProductIdAndIsDeletedFalse(cDetails.get(0).getProduct().getId());
+                                if (!cpvs.isEmpty()) {
+                                    variant = cpvs.get(0);
+                                }
+                            }
+                        }
                     }
                 }
 
+                // 4. Fallback an toàn để đơn hàng không bị ném ngoại lệ 404 làm mất dữ liệu
                 if (variant == null) {
-                    throw new ResourceNotFoundException("ProductVariant", "id", reqVariantId);
+                    variant = productVariantRepository.findAll().stream()
+                            .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()))
+                            .findFirst().orElse(null);
                 }
 
-                BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPriceSnapshot());
-                totalAmount = totalAmount.add(subTotal);
+                BigDecimal qty = detailReq.getQuantity() != null ? detailReq.getQuantity() : BigDecimal.ONE;
+                BigDecimal price = detailReq.getUnitPriceSnapshot() != null ? detailReq.getUnitPriceSnapshot() : BigDecimal.ZERO;
+                BigDecimal detailDiscount = detailReq.getDiscountAmount() != null ? detailReq.getDiscountAmount() : BigDecimal.ZERO;
+                BigDecimal subTotal = qty.multiply(price).subtract(detailDiscount);
+                if (subTotal.compareTo(BigDecimal.ZERO) < 0) subTotal = BigDecimal.ZERO;
+
+                BigDecimal detailTaxRate = detailReq.getTaxRate() != null
+                        ? detailReq.getTaxRate()
+                        : getTaxRateForProduct(variant != null ? variant.getProduct() : null);
+
+                BigDecimal detailTaxAmount = detailReq.getTaxAmount() != null
+                        ? detailReq.getTaxAmount()
+                        : subTotal.multiply(detailTaxRate).setScale(2, java.math.RoundingMode.HALF_UP);
+
+                BigDecimal detailTotal = subTotal.add(detailTaxAmount);
+
+                subTotalSum = subTotalSum.add(subTotal);
+                taxSum = taxSum.add(detailTaxAmount);
+                totalAmount = totalAmount.add(detailTotal);
 
                 SaleOrderDetail detail = SaleOrderDetail.builder()
                         .order(order)
                         .productVariant(variant)
-                        .productNameSnapshot(variant.getProduct() != null ? variant.getProduct().getName() : "Sản phẩm Online")
-                        .skuSnapshot(variant.getSku() != null ? variant.getSku() : "SKU-ONLINE")
-                        .barcodeSnapshot(variant.getBarcode())
-                        .variantDescriptionSnapshot(variant.getVariantCode())
-                        .quantity(detailReq.getQuantity())
-                        .unitPrice(detailReq.getUnitPriceSnapshot())
-                        .unitPriceSnapshot(detailReq.getUnitPriceSnapshot())
+                        .productNameSnapshot(comboName != null ? comboName : (variant != null && variant.getProduct() != null ? variant.getProduct().getName() : "Sản phẩm Bán hàng"))
+                        .skuSnapshot(variant != null && variant.getSku() != null ? variant.getSku() : "SKU-SALE")
+                        .barcodeSnapshot(variant != null ? variant.getBarcode() : null)
+                        .variantDescriptionSnapshot(variant != null ? variant.getVariantCode() : null)
+                        .quantity(qty)
+                        .unitPrice(price)
+                        .unitPriceSnapshot(price)
+                        .discountAmount(detailDiscount)
                         .subTotal(subTotal)
-                        .totalAmount(subTotal)
-                        .taxRate(getTaxRateForProduct(variant.getProduct()))
+                        .taxRate(detailTaxRate)
+                        .taxAmount(detailTaxAmount)
+                        .totalAmount(detailTotal)
                         .build();
 
                 detail.setIsDeleted(false);
@@ -154,8 +225,23 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             }
         }
 
+        BigDecimal voucherDiscount = request.getVoucherDiscountAmount() != null ? request.getVoucherDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal pointsDiscount = BigDecimal.ZERO;
+        if (request.getLoyaltyPointsUsed() != null && request.getLoyaltyPointsUsed() > 0) {
+            pointsDiscount = BigDecimal.valueOf(request.getLoyaltyPointsUsed() * 1000L);
+        }
+        BigDecimal finalAmount = totalAmount.subtract(voucherDiscount).subtract(pointsDiscount);
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
+        }
+
+        order.setSubTotal(subTotalSum);
+        order.setTaxAmount(taxSum);
         order.setTotalAmount(totalAmount);
-        order.setFinalAmount(totalAmount); // final_amount NOT NULL — set same as totalAmount for online orders
+        order.setVoucherDiscountAmount(voucherDiscount);
+        order.setLoyaltyPointsUsed(request.getLoyaltyPointsUsed());
+        order.setVoucherCode(request.getVoucherCode());
+        order.setFinalAmount(finalAmount);
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(details);
 
@@ -192,6 +278,19 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 );
             } catch (Exception e) {
                 System.err.println("Cảnh báo khi tích điểm tự động: " + e.getMessage());
+            }
+
+            if (request.getLoyaltyPointsUsed() != null && request.getLoyaltyPointsUsed() > 0) {
+                try {
+                    loyaltyService.processOrderRedeem(
+                            customer.getId(),
+                            savedOrder.getOrderCode(),
+                            request.getLoyaltyPointsUsed(),
+                            savedOrder
+                    );
+                } catch (Exception e) {
+                    System.err.println("Cảnh báo khi trừ điểm thưởng loyalty: " + e.getMessage());
+                }
             }
         }
 
@@ -258,6 +357,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         saleOrderDetailRepository.saveAll(oldDetails);
 
         // Add new details
+        BigDecimal subTotalSum = BigDecimal.ZERO;
+        BigDecimal taxSum = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
         List<SaleOrderDetail> newDetails = new ArrayList<>();
 
@@ -265,8 +366,25 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             ProductVariant variant = productVariantRepository.findByIdAndIsDeletedFalse(detailReq.getProductVariantId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductVariant", "id", detailReq.getProductVariantId()));
 
-            BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPriceSnapshot());
-            totalAmount = totalAmount.add(subTotal);
+            BigDecimal qty = detailReq.getQuantity() != null ? detailReq.getQuantity() : BigDecimal.ONE;
+            BigDecimal price = detailReq.getUnitPriceSnapshot() != null ? detailReq.getUnitPriceSnapshot() : BigDecimal.ZERO;
+            BigDecimal detailDiscount = detailReq.getDiscountAmount() != null ? detailReq.getDiscountAmount() : BigDecimal.ZERO;
+            BigDecimal subTotal = qty.multiply(price).subtract(detailDiscount);
+            if (subTotal.compareTo(BigDecimal.ZERO) < 0) subTotal = BigDecimal.ZERO;
+
+            BigDecimal detailTaxRate = detailReq.getTaxRate() != null
+                    ? detailReq.getTaxRate()
+                    : getTaxRateForProduct(variant.getProduct());
+
+            BigDecimal detailTaxAmount = detailReq.getTaxAmount() != null
+                    ? detailReq.getTaxAmount()
+                    : subTotal.multiply(detailTaxRate).setScale(2, java.math.RoundingMode.HALF_UP);
+
+            BigDecimal detailTotal = subTotal.add(detailTaxAmount);
+
+            subTotalSum = subTotalSum.add(subTotal);
+            taxSum = taxSum.add(detailTaxAmount);
+            totalAmount = totalAmount.add(detailTotal);
 
             SaleOrderDetail detail = SaleOrderDetail.builder()
                     .order(order)
@@ -275,12 +393,14 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                     .skuSnapshot(variant.getSku())
                     .barcodeSnapshot(variant.getBarcode())
                     .variantDescriptionSnapshot(variant.getVariantCode())
-                    .quantity(detailReq.getQuantity())
-                    .unitPrice(detailReq.getUnitPriceSnapshot())
-                    .unitPriceSnapshot(detailReq.getUnitPriceSnapshot())
+                    .quantity(qty)
+                    .unitPrice(price)
+                    .unitPriceSnapshot(price)
+                    .discountAmount(detailDiscount)
                     .subTotal(subTotal)
-                    .totalAmount(subTotal)
-                    .taxRate(getTaxRateForProduct(variant.getProduct()))
+                    .taxRate(detailTaxRate)
+                    .taxAmount(detailTaxAmount)
+                    .totalAmount(detailTotal)
                     .build();
 
             detail.setIsDeleted(false);
@@ -288,6 +408,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             newDetails.add(detail);
         }
 
+        order.setSubTotal(subTotalSum);
+        order.setTaxAmount(taxSum);
         order.setTotalAmount(totalAmount);
         order.setFinalAmount(totalAmount); // Keep final_amount in sync
         SaleOrder savedOrder = saleOrderRepository.save(order);
@@ -351,6 +473,13 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             delStatus = "IN_TRANSIT";
         } else if ("COMPLETED".equalsIgnoreCase(effectiveStatus) || "DELIVERED".equalsIgnoreCase(effectiveStatus)) {
             delStatus = "DELIVERED";
+            // Đơn giao thành công hoặc hoàn tất: tự động cập nhật đã thanh toán cho đơn COD / chưa thanh toán
+            if (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()) || "PENDING".equalsIgnoreCase(order.getPaymentStatus())) {
+                String pm = order.getPaymentMethodCode();
+                if (pm == null || pm.toLowerCase().contains("cod") || pm.toLowerCase().contains("tiền mặt") || "COMPLETED".equalsIgnoreCase(effectiveStatus)) {
+                    order.setPaymentStatus("PAID");
+                }
+            }
         } else if ("CANCELLED".equalsIgnoreCase(effectiveStatus)) {
             delStatus = "CANCELLED";
         }
@@ -402,6 +531,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                         warehouseService.getOrCreateDefaultZone(savedOrder.getBranch());
                 for (SaleOrderDetail detail : details) {
                     ProductVariant pv = detail.getProductVariant();
+                    if (pv == null && detail.getSkuSnapshot() != null) {
+                        pv = productVariantRepository.findBySkuAndIsDeletedFalse(detail.getSkuSnapshot()).orElse(null);
+                    }
                     if (pv != null && pv.getProduct() != null) {
                         inventoryService.deductStock(
                                 defaultZone.getId(),
@@ -421,8 +553,35 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             }
         }
 
+        // Tự động hoàn tồn kho nếu trước đó đã COMPLETED mà bị CANCELLED hoặc RETURNED
+        if (("CANCELLED".equalsIgnoreCase(savedOrder.getStatus()) || "RETURNED".equalsIgnoreCase(savedOrder.getStatus()))
+                && "COMPLETED".equalsIgnoreCase(oldStatus)) {
+            try {
+                org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
+                        warehouseService.getOrCreateDefaultZone(savedOrder.getBranch());
+                for (SaleOrderDetail detail : details) {
+                    ProductVariant pv = detail.getProductVariant();
+                    if (pv != null && pv.getProduct() != null) {
+                        inventoryService.addStock(
+                                defaultZone.getId(),
+                                savedOrder.getBranch().getId(),
+                                pv.getProduct().getId(),
+                                null,
+                                null,
+                                detail.getQuantity(),
+                                "RESTOCK",
+                                savedOrder.getOrderCode(),
+                                savedOrder.getId()
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Cảnh báo khi hoàn tồn kho đơn hàng bị hủy/trả: " + e.getMessage());
+            }
+        }
+
         // Tự động tích điểm cho khách khi chuyển đơn sang COMPLETED
-        if (savedOrder.getCustomer() != null && "COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
+        if (savedOrder.getCustomer() != null && "COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
             try {
                 loyaltyService.processOrderLoyaltyEarn(
                         savedOrder.getCustomer().getId(),
@@ -604,7 +763,11 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                             .imageUrl(imgUrl)
                             .quantity(d.getQuantity())
                             .unitPriceSnapshot(d.getUnitPriceSnapshot())
+                            .discountAmount(d.getDiscountAmount())
                             .subTotal(d.getSubTotal())
+                            .taxRate(d.getTaxRate())
+                            .taxAmount(d.getTaxAmount())
+                            .totalAmount(d.getTotalAmount())
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -614,7 +777,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .orderCode(o.getOrderCode())
                 .orderDate(o.getOrderDate())
                 .expectedDelivery(o.getExpectedDelivery())
+                .subTotal(o.getSubTotal() != null ? o.getSubTotal() : o.getTotalAmount())
+                .taxAmount(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(o.getTotalAmount())
+                .finalAmount(o.getFinalAmount() != null ? o.getFinalAmount() : o.getTotalAmount())
                 .status(o.getStatus())
                 .customerId(o.getCustomer() != null ? o.getCustomer().getId() : null)
                 .customerName(o.getCustomerName() != null ? o.getCustomerName() : (o.getCustomer() != null ? o.getCustomer().getName() : null))
@@ -644,14 +810,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     }
 
     private BigDecimal getTaxRateForProduct(org.example.storemanager.modules.catalog.entity.Product product) {
-        if (product.getCategory() != null && product.getCategory().getTaxClass() != null) {
-            switch (product.getCategory().getTaxClass()) {
-                case VAT_5: return BigDecimal.valueOf(0.05);
-                case VAT_8: return BigDecimal.valueOf(0.08);
-                case VAT_10: return BigDecimal.valueOf(0.10);
-                case EXEMPT: return BigDecimal.ZERO;
-            }
+        if (product == null) {
+            return BigDecimal.valueOf(0.08);
         }
-        return BigDecimal.valueOf(0.08); // fallback
+        return product.getEffectiveVatRate();
     }
 }

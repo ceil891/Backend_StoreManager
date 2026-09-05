@@ -17,12 +17,12 @@ public interface QuoteRepository extends JpaRepository<Quote, Long> {
 
     @Query("SELECT q FROM Quote q WHERE " +
            "(:includeDeleted = true OR q.isDeleted = false) AND " +
-           "(:status IS NULL OR q.status = :status) AND " +
-           "(:branchId IS NULL OR q.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(q.quoteCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(q.customer.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(q.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR q.status = cast(:status as string)) AND " +
+           "(cast(:branchId as long) IS NULL OR q.branch.id = cast(:branchId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(q.quoteCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(q.customer.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(q.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Quote> findAllQuotes(
             @Param("search") String search,
             @Param("status") String status,

@@ -13,7 +13,7 @@ services:
       - key: PORT
         value: 8080
       - key: JAVA_TOOL_OPTIONS
-        value: -Xms128m -Xmx300m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -Xss256k -XX:+UseSerialGC
+        value: -Xms96m -Xmx240m -XX:MaxMetaspaceSize=112m -XX:ReservedCodeCacheSize=48m -Xss256k -XX:+UseSerialGC
       - key: JWT_SECRET
         value: SmartRetailProject2026_SecureKeyForJWT_MustBeAtLeast64CharactersLong_For_HS512_Security
       - key: SPRING_DATA_REDIS_HOST

@@ -135,7 +135,7 @@ public class ReportsController {
         java.util.List<Map<String, Object>> result = new java.util.ArrayList<>();
         
         String[] months = {"T1", "T2", "T3", "T4", "T5", "T6", "T7"};
-        double[] defaultIncome = {400000.0, 300000.0, 500000.0, 600000.0, 480000.0, 550000.0, 620000.0}; // in thousands/millions to keep short
+        double[] defaultIncome = {400.0, 300.0, 500.0, 600.0, 480.0, 550.0, 620.0}; // in millions (e.g. 400 = 400M VND) to match frontend scaling
         double[] defaultCogsRatio = {0.60, 0.58, 0.62, 0.60, 0.61, 0.59, 0.60};
 
         List<org.example.storemanager.modules.sales.entity.SaleOrder> completedOrders = saleOrderRepository.findByIsDeletedFalse();

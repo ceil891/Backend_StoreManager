@@ -22,5 +22,9 @@ public class SaleOrderDetailResponse {
     private String imageUrl;
     private BigDecimal quantity;
     private BigDecimal unitPriceSnapshot;
+    private BigDecimal discountAmount;
     private BigDecimal subTotal;
+    private BigDecimal taxRate;
+    private BigDecimal taxAmount;
+    private BigDecimal totalAmount;
 }

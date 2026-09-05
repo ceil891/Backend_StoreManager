@@ -49,6 +49,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final org.example.storemanager.shared.service.EmailService emailService;
     private final org.example.storemanager.modules.partnerarea.repository.CustomerRepository customerRepository;
+    private final org.example.storemanager.modules.system.repository.RefreshTokenRepository refreshTokenRepository;
 
 
     @Override
@@ -147,6 +148,9 @@ public class UserServiceImpl implements UserService {
 
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
             user.setStatus(request.getStatus().toUpperCase());
+            if (!"ACTIVE".equalsIgnoreCase(request.getStatus())) {
+                refreshTokenRepository.revokeAllByUser(user);
+            }
         }
 
         user.setFullName(request.getFullName());
@@ -204,6 +208,11 @@ public class UserServiceImpl implements UserService {
         user.setStatus(status.toUpperCase());
         user.setUpdatedBy(getCurrentUsername());
 
+        // Thu hồi toàn bộ Refresh Token nếu bị khóa / đình chỉ / hủy
+        if (!"ACTIVE".equalsIgnoreCase(status)) {
+            refreshTokenRepository.revokeAllByUser(user);
+        }
+
         User updatedUser = userRepository.save(user);
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getUsername());
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(updatedUser.getEmail());
@@ -237,6 +246,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setUpdatedBy(getCurrentUsername());
         userRepository.save(user);
+        refreshTokenRepository.revokeAllByUser(user);
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getUsername());
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
     }
@@ -263,6 +273,7 @@ public class UserServiceImpl implements UserService {
         user.setDeletedBy(username);
         user.setUpdatedBy(username);
 
+        refreshTokenRepository.revokeAllByUser(user);
         User deletedUser = userRepository.save(user);
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(deletedUser.getUsername());
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(deletedUser.getEmail());
@@ -289,7 +300,24 @@ public class UserServiceImpl implements UserService {
     public List<UserResponse> getAllUsers(String search, String status, Long roleId, Long branchId, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, 1000, sorting);
-        Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || (status != null && !status.trim().isEmpty())
+                || roleId != null
+                || branchId != null
+                || includeDeleted;
+
+        Page<User> pageResult;
+        if (!hasFilter) {
+            pageResult = userRepository.findByIsDeletedFalse(pageable);
+        } else {
+            pageResult = userRepository.findAllUsersIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    (status != null && !status.trim().isEmpty()) ? status.trim() : null,
+                    roleId,
+                    branchId,
+                    includeDeleted,
+                    pageable);
+        }
 
         java.util.Set<String> customerRoles = java.util.Set.of("CUSTOMER", "KHÁCH HÀNG", "KHACH HANG", "USER", "NGƯỜI DÙNG", "NGUOI DUNG");
         return pageResult.getContent().stream()
@@ -308,7 +336,24 @@ public class UserServiceImpl implements UserService {
     public PageResponse<UserResponse> getUsersPaginated(String search, String status, Long roleId, Long branchId, int page, int size, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
-        Page<User> pageResult = userRepository.findAllUsersIncludeDeleted(search, status, roleId, branchId, includeDeleted, pageable);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || (status != null && !status.trim().isEmpty())
+                || roleId != null
+                || branchId != null
+                || includeDeleted;
+
+        Page<User> pageResult;
+        if (!hasFilter) {
+            pageResult = userRepository.findByIsDeletedFalse(pageable);
+        } else {
+            pageResult = userRepository.findAllUsersIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    (status != null && !status.trim().isEmpty()) ? status.trim() : null,
+                    roleId,
+                    branchId,
+                    includeDeleted,
+                    pageable);
+        }
 
         java.util.Set<String> customerRoles = java.util.Set.of("CUSTOMER", "KHÁCH HÀNG", "KHACH HANG", "USER", "NGƯỜI DÙNG", "NGUOI DUNG");
         List<UserResponse> content = pageResult.getContent().stream()

@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface SystemConfigRepository extends JpaRepository<SystemConfig, Long> {
     Optional<SystemConfig> findByIdAndIsDeletedFalse(Long id);
+    Optional<SystemConfig> findByConfigKeyAndIsDeletedFalse(String configKey);
     List<SystemConfig> findByIsDeletedFalse();
 }

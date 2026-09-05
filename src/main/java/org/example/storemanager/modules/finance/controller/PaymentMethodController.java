@@ -158,14 +158,33 @@ public class PaymentMethodController {
             card.setIsDeleted(false);
             paymentMethodRepository.save(card);
         }
+        // Fix any existing MoMo/E-wallet misclassifications in database
+        try {
+            paymentMethodRepository.findAll().stream()
+                    .filter(pm -> !Boolean.TRUE.equals(pm.getIsDeleted()))
+                    .filter(pm -> "MOMO".equalsIgnoreCase(pm.getMethodCode()) ||
+                            (pm.getMethodName() != null && pm.getMethodName().toUpperCase().contains("MOMO")))
+                    .filter(pm -> "CASH".equalsIgnoreCase(pm.getType()) || "CASH_DRAWER".equalsIgnoreCase(pm.getProviderType()))
+                    .forEach(pm -> {
+                        pm.setType("E_WALLET");
+                        pm.setProviderType("E_WALLET");
+                        paymentMethodRepository.save(pm);
+                    });
+        } catch (Exception ignored) {}
     }
 
     // GET /api/v1/payment-methods
     @GetMapping("/payment-methods")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllMethods() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllMethods(
+            @RequestParam(value = "branchId", required = false) Long branchId) {
         checkAndSeedPaymentMethods();
-        List<Map<String, Object>> result = paymentMethodRepository.findByIsDeletedFalse()
-                .stream().map(this::enrichMethod).collect(Collectors.toList());
+        List<PaymentMethod> methods;
+        if (branchId != null) {
+            methods = paymentMethodRepository.findActiveByBranchId(branchId);
+        } else {
+            methods = paymentMethodRepository.findByIsDeletedFalse();
+        }
+        List<Map<String, Object>> result = methods.stream().map(this::enrichMethod).collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.ok(result));
     }
 

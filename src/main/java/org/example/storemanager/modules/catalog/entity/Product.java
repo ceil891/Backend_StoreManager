@@ -76,4 +76,39 @@ public class Product extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "base_unit_id")
     private Unit baseUnit;
+
+    @Column(name = "warranty_period_months")
+    private Integer warrantyPeriodMonths;
+
+    @Column(name = "origin_country", length = 100)
+    private String originCountry;
+
+    @Column(name = "is_serial_tracked", columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean isSerialTracked = false;
+
+    @Column(name = "dimensions", length = 100)
+    private String dimensions;
+
+    @Column(name = "allow_negative_stock", columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean allowNegativeStock = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tax_class", length = 20)
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
+
+    public org.example.storemanager.shared.enums.catalog.TaxClass getEffectiveTaxClass() {
+        if (this.taxClass != null) {
+            return this.taxClass;
+        }
+        if (this.category != null && this.category.getTaxClass() != null) {
+            return this.category.getTaxClass();
+        }
+        return org.example.storemanager.shared.enums.catalog.TaxClass.VAT_8;
+    }
+
+    public BigDecimal getEffectiveVatRate() {
+        return getEffectiveTaxClass().getRate();
+    }
 }

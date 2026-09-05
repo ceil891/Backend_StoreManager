@@ -14,7 +14,7 @@ import javax.sql.DataSource;
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.migration.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "app.migration.enabled", havingValue = "true", matchIfMissing = true)
 public class DatabaseMigrationConfig {
 
     private final DataSource dataSource;
@@ -22,23 +22,21 @@ public class DatabaseMigrationConfig {
     @Bean
     CommandLineRunner runMigrations() {
         return args -> {
-            // Run asynchronously in background to avoid blocking Tomcat HTTP server startup
-            java.util.concurrent.CompletableFuture.runAsync(() -> {
-                try {
-                    ClassPathResource schemaResource = new ClassPathResource("schema.sql");
-                    if (schemaResource.exists()) {
-                        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
-                        populator.addScript(schemaResource);
-                        populator.setContinueOnError(true);
-                        populator.execute(dataSource);
-                        log.info("[Migration] Database migration scripts executed successfully.");
-                    } else {
-                        log.info("[Migration] No schema.sql found, skipping migration.");
-                    }
-                } catch (Exception e) {
-                    log.warn("[Migration] Database migration encountered an issue (non-fatal): {}", e.getMessage());
+            try {
+                ClassPathResource schemaResource = new ClassPathResource("schema.sql");
+                if (schemaResource.exists()) {
+                    log.info("[Migration] Executing database migration schema.sql...");
+                    ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+                    populator.addScript(schemaResource);
+                    populator.setContinueOnError(true);
+                    populator.execute(dataSource);
+                    log.info("[Migration] Database migration scripts executed successfully.");
+                } else {
+                    log.info("[Migration] No schema.sql found, skipping migration.");
                 }
-            });
+            } catch (Exception e) {
+                log.warn("[Migration] Database migration encountered an issue (non-fatal): {}", e.getMessage());
+            }
         };
     }
 }

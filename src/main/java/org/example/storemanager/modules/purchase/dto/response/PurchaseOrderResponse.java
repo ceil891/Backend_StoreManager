@@ -26,6 +26,11 @@ public class PurchaseOrderResponse {
     private String note;
     private String paymentStatus;
     private BigDecimal advanceAmount;
+    private String paymentTerms;
+    private BigDecimal shippingFee;
+    private BigDecimal vatRate;
+    private BigDecimal vatAmount;
+    private BigDecimal discountAmount;
     private LocalDateTime createdAt;
     private String createdBy;
     private List<PurchaseOrderDetailResponse> details;

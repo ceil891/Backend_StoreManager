@@ -107,9 +107,10 @@ public class LoyaltyServiceImpl implements LoyaltyService {
             customer.setTotalSpend(customer.getTotalSpend() + netPaidAmount.doubleValue());
         }
 
-        // Auto Upgrade Tier nếu đủ điểm
+        // Auto Upgrade Tier nếu đạt mốc mới (chỉ nâng hạng, không hạ hạng khi tiêu điểm)
+        LoyaltyTier currentTier = resolveCustomerTier(customer);
         LoyaltyTier newTier = resolveTierByPoints(balanceAfter);
-        if (newTier != null) {
+        if (newTier != null && (currentTier == null || (newTier.getMinPoints() != null && currentTier.getMinPoints() != null && newTier.getMinPoints() > currentTier.getMinPoints()))) {
             customer.setMembershipRank(newTier.getTierName());
         }
 

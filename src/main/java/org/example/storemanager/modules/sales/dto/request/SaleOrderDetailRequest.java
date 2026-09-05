@@ -17,4 +17,8 @@ public class SaleOrderDetailRequest {
     @NotNull(message = "Đơn giá snapshot không được để trống")
     @Positive(message = "Đơn giá phải lớn hơn 0")
     private BigDecimal unitPriceSnapshot;
+
+    private BigDecimal taxRate;
+    private BigDecimal taxAmount;
+    private BigDecimal discountAmount;
 }

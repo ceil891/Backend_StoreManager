@@ -227,9 +227,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
-        String input = request.getUsername();
+        String input = request.getUsername() != null ? request.getUsername().trim() : "";
         log.info("[AuthService] Step 1: Searching for user with input: [{}]", input);
-        User user = userRepository.findByUsername(input)
+        User user = userRepository.findByUsernameIgnoreCase(input)
+                .or(() -> userRepository.findByEmailIgnoreCase(input))
+                .or(() -> userRepository.findByPhone(input))
+                .or(() -> userRepository.findByUsername(input))
                 .or(() -> userRepository.findByEmail(input))
                 .orElse(null);
 
@@ -292,12 +295,18 @@ public class AuthServiceImpl implements AuthService {
             throw new JwtAuthenticationException(ErrorCode.TOKEN_EXPIRED, "Refresh token đã hết hạn");
         }
 
+        User user = storedToken.getUser();
+        if (user == null || Boolean.TRUE.equals(user.getIsDeleted()) || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+            storedToken.setIsRevoked(true);
+            refreshTokenRepository.save(storedToken);
+            throw new JwtAuthenticationException(ErrorCode.ACCOUNT_DISABLED, "Tài khoản của bạn đã bị vô hiệu hóa hoặc bị khóa.");
+        }
+
         // Thu hồi refresh token cũ (Rotation)
         storedToken.setIsRevoked(true);
         refreshTokenRepository.save(storedToken);
 
         // Cấp token mới
-        User user = storedToken.getUser();
         return issueTokenPair(user);
     }
 
@@ -348,6 +357,8 @@ public class AuthServiceImpl implements AuthService {
 
         // Thu hồi tất cả refresh token sau khi đổi mật khẩu
         refreshTokenRepository.revokeAllByUser(user);
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getUsername());
+        org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
     }
 
     // ==================== LẤY QUYỀN HIỆN TẠI ====================
@@ -497,9 +508,13 @@ public class AuthServiceImpl implements AuthService {
 
         String userAvatar = user.getAvatar();
         if ((userAvatar == null || userAvatar.isBlank()) && user.getEmail() != null && !user.getEmail().isBlank()) {
-            Customer cust = customerRepository.findByEmailAndIsDeletedFalse(user.getEmail()).orElse(null);
-            if (cust != null && cust.getAvatarUrl() != null && !cust.getAvatarUrl().isBlank()) {
-                userAvatar = cust.getAvatarUrl();
+            try {
+                Customer cust = customerRepository.findByEmailAndIsDeletedFalse(user.getEmail()).orElse(null);
+                if (cust != null && cust.getAvatarUrl() != null && !cust.getAvatarUrl().isBlank()) {
+                    userAvatar = cust.getAvatarUrl();
+                }
+            } catch (Exception e) {
+                log.warn("[AuthService] Could not lookup customer avatar fallback for email {}: {}", user.getEmail(), e.getMessage());
             }
         }
 

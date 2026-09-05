@@ -49,8 +49,7 @@ public class Customer extends BaseEntity {
     @Column(name = "total_spend")
     private Double totalSpend = 0.0; // Tổng chi tiêu
 
-    @Column(columnDefinition = "TEXT")
-    private String note; // Ghi chú CSKH
+    // Ghi chú được kế thừa từ BaseEntity (note)
 
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
@@ -58,6 +57,9 @@ public class Customer extends BaseEntity {
     @Column(name = "debt_limit")
     @Builder.Default
     private Double debtLimit = 0.0; // Hạn mức nợ cho phép
+
+    @Column(name = "is_credit_blocked", columnDefinition = "boolean default false")
+    private Boolean isCreditBlocked = false;
 
     @Column(name = "password", length = 255)
     private String password;

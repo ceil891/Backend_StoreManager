@@ -44,6 +44,10 @@ public class UpdateProductRequest {
 
     private BigDecimal maxStock;
 
+    private String dimensions;
+
+    private Boolean allowNegativeStock;
+
     private String galleryImages;
 
     private String variants;
@@ -53,4 +57,10 @@ public class UpdateProductRequest {
 
     @NotNull(message = "ID đơn vị tính cơ bản không được để trống")
     private Long baseUnitId;
+
+    private Boolean isSerialTracked;
+    private Integer warrantyPeriodMonths;
+    private String originCountry;
+    private java.util.List<org.example.storemanager.modules.catalog.dto.request.productunit.ProductUnitRequest> conversionUnits;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
 }

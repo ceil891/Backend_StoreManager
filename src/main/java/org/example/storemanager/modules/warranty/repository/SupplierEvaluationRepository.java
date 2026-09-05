@@ -19,11 +19,11 @@ public interface SupplierEvaluationRepository extends JpaRepository<SupplierEval
 
     @Query("SELECT se FROM SupplierEvaluation se WHERE " +
            "(:includeDeleted = true OR se.isDeleted = false) AND " +
-           "(:supplierId IS NULL OR se.supplier.id = :supplierId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(se.remarks) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(se.result) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(se.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:supplierId as long) IS NULL OR se.supplier.id = cast(:supplierId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(se.remarks) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(se.result) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(se.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<SupplierEvaluation> findAllEvaluations(
             @Param("search") String search,
             @Param("supplierId") Long supplierId,

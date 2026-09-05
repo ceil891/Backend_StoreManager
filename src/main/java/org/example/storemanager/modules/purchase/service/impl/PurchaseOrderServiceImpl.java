@@ -90,6 +90,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .status(request.getStatus() != null && !request.getStatus().isBlank() ? request.getStatus() : "DRAFT")
                 .paymentStatus(request.getPaymentStatus() != null && !request.getPaymentStatus().isBlank() ? request.getPaymentStatus() : "UNPAID")
                 .advanceAmount(request.getAdvanceAmount() != null ? request.getAdvanceAmount() : BigDecimal.ZERO)
+                .paymentTerms(request.getPaymentTerms())
+                .shippingFee(request.getShippingFee() != null ? request.getShippingFee() : BigDecimal.ZERO)
+                .vatRate(request.getVatRate())
+                .vatAmount(request.getVatAmount())
+                .discountAmount(request.getDiscountAmount())
                 .supplier(supplier)
                 .branch(branch)
                 .build();
@@ -187,6 +192,21 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
         if (request.getAdvanceAmount() != null) {
             po.setAdvanceAmount(request.getAdvanceAmount());
+        }
+        if (request.getPaymentTerms() != null) {
+            po.setPaymentTerms(request.getPaymentTerms());
+        }
+        if (request.getShippingFee() != null) {
+            po.setShippingFee(request.getShippingFee());
+        }
+        if (request.getVatRate() != null) {
+            po.setVatRate(request.getVatRate());
+        }
+        if (request.getVatAmount() != null) {
+            po.setVatAmount(request.getVatAmount());
+        }
+        if (request.getDiscountAmount() != null) {
+            po.setDiscountAmount(request.getDiscountAmount());
         }
         po.setSupplier(supplier);
         po.setBranch(branch);
@@ -597,6 +617,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .note(po.getNote())
                 .paymentStatus(computedPaymentStatus)
                 .advanceAmount(po.getAdvanceAmount() != null ? po.getAdvanceAmount() : BigDecimal.ZERO)
+                .paymentTerms(po.getPaymentTerms())
+                .shippingFee(po.getShippingFee())
+                .vatRate(po.getVatRate())
+                .vatAmount(po.getVatAmount())
+                .discountAmount(po.getDiscountAmount())
                 .createdAt(po.getCreatedAt())
                 .createdBy(po.getCreatedBy())
                 .details(detailsResponse)
@@ -626,31 +651,23 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 }
                 break;
             case "APPROVED":
+            case "SENT_TO_SUPPLIER":
+            case "CONFIRMED":
                 if ("SENT_TO_SUPPLIER".equals(targetStatus) || "CONFIRMED".equals(targetStatus) 
                         || "DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) 
-                        || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
-                    valid = true;
-                }
-                break;
-            case "SENT_TO_SUPPLIER":
-                if ("CONFIRMED".equals(targetStatus) || "DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) 
-                        || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
-                    valid = true;
-                }
-                break;
-            case "CONFIRMED":
-                if ("DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) || "DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                        || "DELIVERED".equals(targetStatus) || "RECEIVED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
                     valid = true;
                 }
                 break;
             case "DISPATCHED":
             case "IN_TRANSIT":
-                if ("DELIVERED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                if ("DELIVERED".equals(targetStatus) || "RECEIVED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
                     valid = true;
                 }
                 break;
             case "DELIVERED":
-                if ("COMPLETED".equals(targetStatus)) {
+            case "RECEIVED":
+                if ("RECEIVED".equals(targetStatus) || "COMPLETED".equals(targetStatus) || "PAID".equals(targetStatus)) {
                     valid = true;
                 }
                 break;

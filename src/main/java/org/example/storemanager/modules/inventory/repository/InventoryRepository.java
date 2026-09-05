@@ -22,15 +22,15 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
            "LEFT JOIN i.size s " +
            "LEFT JOIN i.color c " +
            "WHERE " +
-           "(:productId IS NULL OR i.product.id = :productId) AND " +
-           "(:branchId IS NULL OR i.branch.id = :branchId) AND " +
-           "(:departmentId IS NULL OR i.product.category.department.id = :departmentId) AND " +
-           "(:size IS NULL OR :size = '' OR LOWER(s.sizeCode) = LOWER(:size) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :size, '%'))) AND " +
-           "(:color IS NULL OR :color = '' OR LOWER(c.colorCode) = LOWER(:color) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', :color, '%'))) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(i.product.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(i.product.productCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(i.branch.branchName) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:productId as long) IS NULL OR i.product.id = :productId) AND " +
+           "(cast(:branchId as long) IS NULL OR i.branch.id = :branchId) AND " +
+           "(cast(:departmentId as long) IS NULL OR i.product.category.department.id = :departmentId) AND " +
+           "(cast(:size as string) IS NULL OR cast(:size as string) = '' OR LOWER(s.sizeCode) = LOWER(cast(:size as string)) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:size as string), '%'))) AND " +
+           "(cast(:color as string) IS NULL OR cast(:color as string) = '' OR LOWER(c.colorCode) = LOWER(cast(:color as string)) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:color as string), '%'))) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(i.product.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(i.product.productCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(i.branch.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Inventory> searchInventory(
             @Param("productId") Long productId,
             @Param("branchId") Long branchId,

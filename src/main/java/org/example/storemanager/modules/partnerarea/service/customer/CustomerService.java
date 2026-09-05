@@ -33,4 +33,7 @@ public interface CustomerService {
     // --- Quản lý Mật khẩu & Cấp lại ---
     void resetCustomerPassword(Long id, String newPassword);
     void changeCustomerPassword(Long id, String oldPassword, String newPassword);
+
+    // --- Quản lý Công nợ ---
+    CustomerDetailResponse toggleCreditBlock(Long id, Boolean blocked);
 }

@@ -25,22 +25,22 @@ public interface UnitRepository extends JpaRepository<Unit, Long> {
 
     // ==== Query CHỈ lấy chưa xóa (isDeleted = false) ====
     @Query("SELECT u FROM Unit u WHERE u.isDeleted = false AND " +
-           "(:isActive IS NULL OR u.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR u.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Unit> findAllUnits(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
             Pageable pageable);
 
     @Query("SELECT u FROM Unit u WHERE u.isDeleted = false AND " +
-           "(:isActive IS NULL OR u.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR u.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Unit> findAllUnitsList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive);
@@ -48,11 +48,11 @@ public interface UnitRepository extends JpaRepository<Unit, Long> {
     // ==== Query lấy TẤT CẢ kể cả đã xóa (includeDeleted = true) ====
     @Query("SELECT u FROM Unit u WHERE " +
            "(:includeDeleted = true OR u.isDeleted = false) AND " +
-           "(:isActive IS NULL OR u.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR u.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Unit> findAllUnitsIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -61,11 +61,11 @@ public interface UnitRepository extends JpaRepository<Unit, Long> {
 
     @Query("SELECT u FROM Unit u WHERE " +
            "(:includeDeleted = true OR u.isDeleted = false) AND " +
-           "(:isActive IS NULL OR u.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(u.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR u.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(u.unitName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.unitCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(u.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Unit> findAllUnitsListIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

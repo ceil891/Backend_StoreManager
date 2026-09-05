@@ -17,12 +17,12 @@ public interface PurchaseRequestRepository extends JpaRepository<PurchaseRequest
 
     @Query("SELECT pr FROM PurchaseRequest pr WHERE " +
            "(:includeDeleted = true OR pr.isDeleted = false) AND " +
-           "(:status IS NULL OR pr.status = :status) AND " +
-           "(:branchId IS NULL OR pr.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(pr.requestCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(pr.reason) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(pr.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR pr.status = cast(:status as string)) AND " +
+           "(cast(:branchId as long) IS NULL OR pr.branch.id = cast(:branchId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(pr.requestCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(pr.reason) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(pr.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<PurchaseRequest> findAllRequests(
             @Param("search") String search,
             @Param("status") String status,

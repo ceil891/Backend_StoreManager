@@ -26,33 +26,34 @@ public interface SizeRepository extends JpaRepository<Size, Long> {
     boolean existsBySizeCodeAndIdNotAndIsDeletedFalse(String sizeCode, Long id);
 
     @Query("SELECT s FROM CatalogSize s WHERE s.isDeleted = false AND " +
-           "(:isActive IS NULL OR s.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR s.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Size> findAllSizes(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
             Pageable pageable);
 
     @Query("SELECT s FROM CatalogSize s WHERE s.isDeleted = false AND " +
-           "(:isActive IS NULL OR s.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR s.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Size> findAllSizesList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive);
 
+    // ==== Query lấy TẤT CẢ kể cả đã xóa (includeDeleted = true) ====
     @Query("SELECT s FROM CatalogSize s WHERE " +
            "(:includeDeleted = true OR s.isDeleted = false) AND " +
-           "(:isActive IS NULL OR s.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR s.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Size> findAllSizesIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -61,11 +62,11 @@ public interface SizeRepository extends JpaRepository<Size, Long> {
 
     @Query("SELECT s FROM CatalogSize s WHERE " +
            "(:includeDeleted = true OR s.isDeleted = false) AND " +
-           "(:isActive IS NULL OR s.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR s.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.sizeCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Size> findAllSizesListIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

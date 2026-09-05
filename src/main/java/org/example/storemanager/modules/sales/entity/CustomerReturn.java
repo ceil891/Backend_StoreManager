@@ -44,8 +44,12 @@ public class CustomerReturn extends BaseEntity {
     private Customer customer;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "invoice_id", nullable = false)
-    private ExportInvoice invoice; // Phiếu trả phải tham chiếu từ hóa đơn đã mua
+    @JoinColumn(name = "invoice_id", nullable = true)
+    private ExportInvoice invoice; // Phiếu trả có thể tham chiếu từ hóa đơn hoặc đơn bán lẻ trực tiếp
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = true)
+    private SaleOrder order; // Phiếu trả tham chiếu trực tiếp đơn bán hàng POS
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)

@@ -71,7 +71,7 @@ public class UserController {
 
     // ========== RESET PASSWORD ==========
     @PutMapping("/{id}/reset-password")
-    @PreAuthorize("@securityEvaluator.hasPermission('system:user:reset-password')")
+    @PreAuthorize("@securityEvaluator.hasPermission('system:user:reset-password') or @securityEvaluator.hasPermission('system:user:update')")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
             @PathVariable Long id,
             @Valid @RequestBody ResetPasswordRequest request) {
