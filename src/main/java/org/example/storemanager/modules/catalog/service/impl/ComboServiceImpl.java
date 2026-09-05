@@ -52,6 +52,9 @@ public class ComboServiceImpl implements ComboService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ComboResponse> search(String search, Boolean isActive, Pageable pageable) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Page<Combo> page = comboRepository.search(search, isActive, pageable);
         List<ComboResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)

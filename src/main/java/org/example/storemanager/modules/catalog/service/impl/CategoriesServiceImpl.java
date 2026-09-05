@@ -39,12 +39,14 @@ public class CategoriesServiceImpl implements CategoriesService {
     private final CategoriesRepository categoriesRepository;
     private final DepartmentRepository departmentRepository;
     private final CloudinaryService cloudinaryService;
+    private final org.example.storemanager.modules.catalog.repository.ProductRepository productRepository;
 
     @Autowired
-    public CategoriesServiceImpl(CategoriesRepository categoriesRepository, DepartmentRepository departmentRepository, CloudinaryService cloudinaryService) {
+    public CategoriesServiceImpl(CategoriesRepository categoriesRepository, DepartmentRepository departmentRepository, CloudinaryService cloudinaryService, org.example.storemanager.modules.catalog.repository.ProductRepository productRepository) {
         this.categoriesRepository = categoriesRepository;
         this.departmentRepository = departmentRepository;
         this.cloudinaryService = cloudinaryService;
+        this.productRepository = productRepository;
     }
 
     @Override
@@ -76,6 +78,10 @@ public class CategoriesServiceImpl implements CategoriesService {
         category.setDepartment(department);
         category.setParent(parent);
         category.setImageUrl(request.getImageUrl());
+        category.setManager(request.getManager());
+        category.setInventoryGlCode(request.getInventoryGlCode());
+        category.setCogsGlCode(request.getCogsGlCode());
+        category.setTaxClass(request.getTaxClass());
         category.setCreatedBy(getCurrentUsername());
 
         ProductCategory saved = categoriesRepository.save(category);
@@ -125,6 +131,10 @@ public class CategoriesServiceImpl implements CategoriesService {
         category.setDepartment(department);
         category.setParent(parent);
         category.setImageUrl(request.getImageUrl());
+        category.setManager(request.getManager());
+        category.setInventoryGlCode(request.getInventoryGlCode());
+        category.setCogsGlCode(request.getCogsGlCode());
+        category.setTaxClass(request.getTaxClass());
         category.setUpdatedBy(getCurrentUsername());
 
         ProductCategory updated = categoriesRepository.save(category);
@@ -143,6 +153,20 @@ public class CategoriesServiceImpl implements CategoriesService {
                 HttpStatus.CONFLICT,
                 "Không thể xóa danh mục '" + category.getCategoryCode() + "' vì danh mục này vẫn đang hoạt động. " +
                 "Vui lòng tắt hoạt động trước, sau đó mới có thể xóa."
+            );
+        }
+
+        if (categoriesRepository.existsByParentIdAndIsDeletedFalse(id)) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Không thể xóa danh mục '" + category.getCategoryCode() + "' vì đang có danh mục con trực thuộc."
+            );
+        }
+
+        if (productRepository.existsByCategoryIdAndIsDeletedFalse(id)) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Không thể xóa danh mục '" + category.getCategoryCode() + "' vì vẫn còn sản phẩm trực thuộc."
             );
         }
 
@@ -210,9 +234,12 @@ public class CategoriesServiceImpl implements CategoriesService {
     @Override
     @Transactional(readOnly = true)
     public List<MapCategoriesResponse> getAllCategories(String search, Boolean isActive, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         List<ProductCategory> list;
-        if ((search == null || search.trim().isEmpty()) && !includeDeleted && (isActive == null || isActive)) {
+        if (search == null && !includeDeleted && (isActive == null || isActive)) {
             list = categoriesRepository.findAllForTree();
         } else {
             list = categoriesRepository.findAllCategoriesList(search, isActive, includeDeleted, sorting);
@@ -225,6 +252,9 @@ public class CategoriesServiceImpl implements CategoriesService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<MapCategoriesResponse> getCategoriesPaginated(String search, Boolean isActive, int page, int size, String sort, boolean includeDeleted) {
+        if (search != null && search.trim().isEmpty()) {
+            search = null;
+        }
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
         Page<ProductCategory> pageResult = categoriesRepository.findAllCategoriesIncludeDeleted(search, isActive, includeDeleted, pageable);
@@ -342,6 +372,10 @@ public class CategoriesServiceImpl implements CategoriesService {
             response.setParentId(entity.getParent().getId());
         }
         response.setImageUrl(entity.getImageUrl());
+        response.setManager(entity.getManager());
+        response.setInventoryGlCode(entity.getInventoryGlCode());
+        response.setCogsGlCode(entity.getCogsGlCode());
+        response.setTaxClass(entity.getTaxClass());
         response.setIsDeleted(entity.getIsDeleted());
         response.setCreatedAt(entity.getCreatedAt());
         response.setCreatedBy(entity.getCreatedBy());

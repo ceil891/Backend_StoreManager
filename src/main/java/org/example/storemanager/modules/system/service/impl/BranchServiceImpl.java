@@ -157,7 +157,20 @@ public class BranchServiceImpl implements BranchService {
     public List<MapBranchResponse> getAllBranches(String search, Boolean isActive, String sort, boolean includeDeleted) {
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(0, Integer.MAX_VALUE, sorting);
-        Page<Branch> page = branchRepository.findAllBranchesIncludeDeleted(search, isActive, includeDeleted, pageable);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || isActive != null
+                || includeDeleted;
+
+        Page<Branch> page;
+        if (!hasFilter) {
+            page = branchRepository.findByIsDeletedFalse(pageable);
+        } else {
+            page = branchRepository.findAllBranchesIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    isActive,
+                    includeDeleted,
+                    pageable);
+        }
         return page.getContent().stream()
                 .map(this::mapToResponseAll)
                 .collect(Collectors.toList());
@@ -175,13 +188,20 @@ public class BranchServiceImpl implements BranchService {
 
         Sort sorting = parseSort(sort);
         Pageable pageable = PageRequest.of(page, size, sorting);
+        boolean hasFilter = (search != null && !search.trim().isEmpty())
+                || isActive != null
+                || includeDeleted;
 
-        Page<Branch> pageResult =
-                branchRepository.findAllBranchesIncludeDeleted(
-                        search,
-                        isActive,
-                        includeDeleted,
-                        pageable);
+        Page<Branch> pageResult;
+        if (!hasFilter) {
+            pageResult = branchRepository.findByIsDeletedFalse(pageable);
+        } else {
+            pageResult = branchRepository.findAllBranchesIncludeDeleted(
+                    (search != null && !search.trim().isEmpty()) ? search.trim() : null,
+                    isActive,
+                    includeDeleted,
+                    pageable);
+        }
 
         List<MapBranchResponse> content = pageResult.getContent()
                 .stream()

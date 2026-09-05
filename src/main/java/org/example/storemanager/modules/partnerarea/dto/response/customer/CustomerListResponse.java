@@ -30,4 +30,5 @@ public class CustomerListResponse {
     private Long areaId;
     private String areaName;
     private String note;
+    private Boolean isCreditBlocked;
 }

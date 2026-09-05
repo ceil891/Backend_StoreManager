@@ -8,6 +8,9 @@ import java.util.Optional;
 
 @Repository
 public interface PosSessionRepository extends JpaRepository<PosSession, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user", "branch"})
     Optional<PosSession> findByIdAndIsDeletedFalse(Long id);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"user", "branch"})
     java.util.List<PosSession> findByIsDeletedFalse();
 }

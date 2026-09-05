@@ -34,7 +34,7 @@ public class OperatingCost extends BaseEntity {
     private String status;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "branch_id", nullable = false)
+    @JoinColumn(name = "branch_id", nullable = true)
     @JsonIgnore
     private Branch branch;
 
@@ -43,6 +43,22 @@ public class OperatingCost extends BaseEntity {
         return branch;
     }
 
+    @com.fasterxml.jackson.annotation.JsonProperty("branchId")
+    public Long getBranchId() {
+        return branch != null ? branch.getId() : null;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("branchName")
+    public String getBranchName() {
+        return branch != null ? branch.getBranchName() : null;
+    }
+
     @Column(name = "cost_center_id")
     private Long costCenterId; // Tham chiếu đến Trung tâm chi phí ở phân hệ Kế toán chuyên sâu
+
+    @Column(name = "cost_code", length = 50)
+    private String costCode;
+
+    @Column(name = "category", length = 100)
+    private String category;
 }

@@ -20,6 +20,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private SecurityEvaluator securityEvaluator;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -29,6 +32,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token) && jwtUtil.isTokenValid(token)) {
             String username = jwtUtil.extractUsername(token);
+
+            // Kiểm tra tài khoản có bị vô hiệu hóa hoặc xóa không
+            if (!securityEvaluator.isUserActive(username)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"success\":false,\"code\":401,\"errorCode\":\"ACCOUNT_DISABLED\",\"message\":\"Tài khoản của bạn đã bị vô hiệu hóa hoặc bị khóa phiên.\"}");
+                return;
+            }
+
             java.util.List<String> roles = jwtUtil.extractRoles(token);
             
             java.util.List<org.springframework.security.core.GrantedAuthority> authorities = new java.util.ArrayList<>();

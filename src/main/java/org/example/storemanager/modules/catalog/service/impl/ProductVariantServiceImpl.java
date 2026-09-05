@@ -647,7 +647,7 @@ public class ProductVariantServiceImpl implements ProductVariantService {
 
         List<ProductVariant> existing = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId());
         for (ProductVariant v : existing) {
-            if (v.getSku() != null && v.getSku().endsWith("-DEF")) {
+            if (v.getSku() != null && (v.getSku().endsWith("-DEF") || v.getSku().endsWith("-DEFAULT"))) {
                 return v;
             }
         }
@@ -657,7 +657,7 @@ public class ProductVariantServiceImpl implements ProductVariantService {
                     "Sản phẩm đã có biến thể riêng nhưng chưa cài đặt chiến lược ATTRIBUTE_BASED");
         }
 
-        String defaultSku = product.getProductCode() + "-DEF";
+        String defaultSku = product.getProductCode() + "-DEFAULT";
         String defaultBarcode = generateInternalEan13();
         String variantCode = "PV-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
 

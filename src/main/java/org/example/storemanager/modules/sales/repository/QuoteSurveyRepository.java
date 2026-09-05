@@ -19,14 +19,14 @@ public interface QuoteSurveyRepository extends JpaRepository<QuoteSurvey, Long> 
 
     @Query("SELECT s FROM QuoteSurvey s WHERE " +
            "(:includeDeleted = true OR s.isDeleted = false) AND " +
-           "(:status IS NULL OR s.status = :status) AND " +
-           "(:branchId IS NULL OR s.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(s.surveyCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.customer.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.contactPerson) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.contactPhone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(s.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR s.status = cast(:status as string)) AND " +
+           "(cast(:branchId as long) IS NULL OR s.branch.id = cast(:branchId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(s.surveyCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.customer.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.contactPerson) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.contactPhone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(s.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<QuoteSurvey> findAllSurveys(
             @Param("search") String search,
             @Param("status") String status,

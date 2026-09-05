@@ -204,6 +204,12 @@ public class ProductServiceImpl implements ProductService {
                 .variantStrategy(hasVariants ? org.example.storemanager.shared.enums.catalog.VariantStrategy.ATTRIBUTE_BASED : org.example.storemanager.shared.enums.catalog.VariantStrategy.NONE)
                 .category(category)
                 .baseUnit(baseUnit)
+                .isSerialTracked(Boolean.TRUE.equals(request.getIsSerialTracked()))
+                .warrantyPeriodMonths(request.getWarrantyPeriodMonths())
+                .originCountry(request.getOriginCountry())
+                .dimensions(request.getDimensions())
+                .allowNegativeStock(Boolean.TRUE.equals(request.getAllowNegativeStock()))
+                .taxClass(request.getTaxClass())
                 .build();
 
         product.setIsActive(request.getIsActive() != null ? request.getIsActive() : true);
@@ -269,10 +275,10 @@ public class ProductServiceImpl implements ProductService {
                 }
             }
         } else {
-            // Strategy NONE: check if initial stocks passed at top level
+            // Strategy NONE: Luôn đảm bảo có Default Variant và khởi tạo balances ở tất cả chi nhánh
+            ProductVariant defVariant = productVariantService.ensureDefaultVariant(savedProduct, username);
+            productVariantService.bulkInitializeBalances(List.of(defVariant), activeBranches, username);
             if (request.getInitialStocks() != null && !request.getInitialStocks().isEmpty()) {
-                ProductVariant defVariant = productVariantService.ensureDefaultVariant(savedProduct, username);
-                productVariantService.bulkInitializeBalances(List.of(defVariant), activeBranches, username);
                 applyInitialStockEntries(savedProduct, defVariant, request.getInitialStocks(), branchMap, username);
             }
         }
@@ -406,13 +412,49 @@ public class ProductServiceImpl implements ProductService {
         product.setVariants(request.getVariants());
         product.setCategory(category);
         product.setBaseUnit(baseUnit);
+        if (request.getIsSerialTracked() != null) {
+            product.setIsSerialTracked(request.getIsSerialTracked());
+        }
+        if (request.getWarrantyPeriodMonths() != null) {
+            product.setWarrantyPeriodMonths(request.getWarrantyPeriodMonths());
+        }
+        if (request.getOriginCountry() != null) {
+            product.setOriginCountry(request.getOriginCountry());
+        }
+        if (request.getDimensions() != null) {
+            product.setDimensions(request.getDimensions());
+        }
+        if (request.getAllowNegativeStock() != null) {
+            product.setAllowNegativeStock(request.getAllowNegativeStock());
+        }
 
         if (request.getIsActive() != null) {
             product.setIsActive(request.getIsActive());
         }
+        product.setTaxClass(request.getTaxClass());
         product.setUpdatedBy(getCurrentUsername());
 
         Product updatedProduct = productRepository.save(product);
+
+        // Đồng bộ thông tin sang ProductVariant mặc định (nếu có)
+        List<ProductVariant> existingVariants = productVariantRepository.findByProductIdAndIsDeletedFalse(id);
+        if (existingVariants.isEmpty() && updatedProduct.getVariantStrategy() != org.example.storemanager.shared.enums.catalog.VariantStrategy.ATTRIBUTE_BASED) {
+            ProductVariant defVariant = productVariantService.ensureDefaultVariant(updatedProduct, getCurrentUsername());
+            List<Branch> activeBranches = branchRepository.findByIsDeletedFalse();
+            productVariantService.bulkInitializeBalances(List.of(defVariant), activeBranches, getCurrentUsername());
+        } else {
+            for (ProductVariant v : existingVariants) {
+                if (v.getSku() != null && (v.getSku().endsWith("-DEF") || v.getSku().endsWith("-DEFAULT"))) {
+                    v.setPrice(updatedProduct.getBasePrice());
+                    if (updatedProduct.getBarcode() != null && !updatedProduct.getBarcode().isBlank()) {
+                        v.setBarcode(updatedProduct.getBarcode());
+                    }
+                    v.setImageUrl(updatedProduct.getMainImageUrl());
+                    v.setUpdatedBy(getCurrentUsername());
+                    productVariantRepository.save(v);
+                }
+            }
+        }
 
         productUnitService.syncBaseProductUnit(updatedProduct, getCurrentUsername());
 
@@ -453,6 +495,16 @@ public class ProductServiceImpl implements ProductService {
                 .map(SizeInventory::getQuantityPhysical)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        List<ProductVariant> variants = productVariantRepository.findByProductIdAndIsDeletedFalse(id);
+        for (ProductVariant v : variants) {
+            List<InventoryBalance> balances = inventoryBalanceRepository.findByProductVariantIdAndIsDeletedFalse(v.getId());
+            for (InventoryBalance b : balances) {
+                if (b.getAvailableQuantity() != null && b.getAvailableQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                    totalStock = totalStock.add(b.getAvailableQuantity());
+                }
+            }
+        }
+
         if (totalStock.compareTo(BigDecimal.ZERO) > 0) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
@@ -491,6 +543,15 @@ public class ProductServiceImpl implements ProductService {
             pu.setDeletedAt(LocalDateTime.now());
             pu.setDeletedBy(username);
             productUnitRepository.save(pu);
+        }
+
+        // Soft delete các variants liên quan
+        for (ProductVariant v : variants) {
+            v.setIsDeleted(true);
+            v.setIsActive(false);
+            v.setDeletedAt(LocalDateTime.now());
+            v.setDeletedBy(username);
+            productVariantRepository.save(v);
         }
 
         return DeleteProductResponse.builder()
@@ -661,6 +722,8 @@ public class ProductServiceImpl implements ProductService {
                 .reorderPoint(product.getReorderPoint())
                 .minStock(product.getMinStock())
                 .maxStock(product.getMaxStock())
+                .dimensions(product.getDimensions())
+                .allowNegativeStock(product.getAllowNegativeStock())
                 .galleryImages(product.getGalleryImages())
                 .variants(product.getVariants())
                 .createdAt(product.getCreatedAt())
@@ -676,6 +739,8 @@ public class ProductServiceImpl implements ProductService {
                 .units(units)
                 .variantList(variantList)
                 .onHand(onHand != null ? onHand : BigDecimal.ZERO)
+                .taxClass(product.getEffectiveTaxClass())
+                .vatRate(product.getEffectiveVatRate())
                 .build();
     }
 
@@ -701,6 +766,8 @@ public class ProductServiceImpl implements ProductService {
                 .baseUnitCode(product.getBaseUnit() != null ? product.getBaseUnit().getUnitCode() : null)
                 .baseUnitName(product.getBaseUnit() != null ? product.getBaseUnit().getUnitName() : null)
                 .onHand(onHand != null ? onHand : java.math.BigDecimal.ZERO)
+                .taxClass(product.getEffectiveTaxClass())
+                .vatRate(product.getEffectiveVatRate())
                 .build();
     }
 

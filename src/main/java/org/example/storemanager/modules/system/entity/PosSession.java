@@ -15,6 +15,12 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = true)
 public class PosSession extends BaseEntity {
 
+    @Column(name = "session_code", length = 50)
+    private String sessionCode;
+
+    @Column(name = "terminal_code", length = 50)
+    private String terminalCode;
+
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
 

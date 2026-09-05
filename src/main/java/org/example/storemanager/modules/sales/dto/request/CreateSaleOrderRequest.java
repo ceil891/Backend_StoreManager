@@ -17,7 +17,6 @@ public class CreateSaleOrderRequest {
 
     private LocalDateTime expectedDelivery;
 
-    @NotNull(message = "Khách hàng không được để trống")
     private Long customerId;
 
     @NotNull(message = "Chi nhánh không được để trống")
@@ -38,9 +37,17 @@ public class CreateSaleOrderRequest {
 
     private String note;
 
+    private String voucherCode;
+
+    private java.math.BigDecimal voucherDiscountAmount;
+
+    private Integer loyaltyPointsUsed;
+
     private Long paymentMethodId;
 
     private String paymentMethodCode;
+
+    private Long posSessionId;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
     private List<SaleOrderDetailRequest> details;

@@ -38,6 +38,8 @@ public class CrmController {
     private final PartnerGroupRepository partnerGroupRepository;
     private final MarketingCampaignRepository marketingCampaignRepository;
     private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
+    private final org.example.storemanager.modules.catalog.repository.SerialNumberRepository serialNumberRepository;
+    private final org.example.storemanager.modules.catalog.repository.ProductRepository productRepository;
 
     // --- LOYALTY CALCULATION & CUSTOMER HISTORY ---
     @PostMapping("/loyalty/calculate")
@@ -323,16 +325,33 @@ public class CrmController {
         String content = req.get("content") != null ? req.get("content").toString() : (req.get("comment") != null ? req.get("comment").toString() : "");
         Integer rating = req.get("rating") != null ? Integer.valueOf(req.get("rating").toString()) : 5;
         String status = req.get("status") != null ? req.get("status").toString() : "PENDING";
-        String customerName = req.get("customerName") != null ? req.get("customerName").toString() : "";
-        String customerPhone = req.get("customerPhone") != null ? req.get("customerPhone").toString() : "";
+        String customerName = req.get("customerName") != null ? req.get("customerName").toString().trim() : "";
+        String customerPhone = req.get("customerPhone") != null ? req.get("customerPhone").toString().trim() : "";
+        String customerEmail = req.get("customerEmail") != null ? req.get("customerEmail").toString().trim() : "";
 
         Customer customer = null;
         if (!customerPhone.isBlank()) {
-            customer = customerRepository.findByPhone(customerPhone).orElse(null);
+            customer = customerRepository.findByPhoneAndIsDeletedFalse(customerPhone).orElse(null);
+            if (customer == null) {
+                customer = customerRepository.findByPhone(customerPhone).orElse(null);
+            }
         }
-        if (customer == null) {
-            List<Customer> all = customerRepository.findAll();
-            if (!all.isEmpty()) customer = all.get(0);
+        if (customer == null && !customerName.isBlank()) {
+            customer = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(customerName).orElse(null);
+        }
+        if (customer == null && !customerName.isBlank()) {
+            Customer newCust = Customer.builder()
+                    .name(customerName)
+                    .phone(!customerPhone.isBlank() ? customerPhone : "090" + (System.currentTimeMillis() % 10000000))
+                    .email(!customerEmail.isBlank() ? customerEmail : "customer@store.vn")
+                    .customerCode("KH-FB-" + (System.currentTimeMillis() % 100000))
+                    .membershipRank("BRONZE")
+                    .points(0.0)
+                    .totalSpend(0.0)
+                    .isActive(true)
+                    .build();
+            newCust.setIsDeleted(false);
+            customer = customerRepository.save(newCust);
         }
 
         CustomerFeedback fb = CustomerFeedback.builder()
@@ -421,7 +440,8 @@ public class CrmController {
     @PostMapping({"/tickets", "/support-tickets"})
     @Transactional
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createTicket(@RequestBody java.util.Map<String, Object> req) {
-        String ticketCode = req.get("ticketCode") != null ? req.get("ticketCode").toString() : "ONLINE-" + (System.currentTimeMillis() % 100000);
+        String ticketCode = req.get("ticketCode") != null ? req.get("ticketCode").toString() :
+                (req.get("ticketNumber") != null ? req.get("ticketNumber").toString() : "ONLINE-" + (System.currentTimeMillis() % 100000));
         String customerName = req.get("customerName") != null ? req.get("customerName").toString() : "";
         String defaultTitle = !customerName.isBlank() ? "[Khách Web Online] " + customerName : "Yêu cầu hỗ trợ";
         String subject = req.get("subject") != null ? req.get("subject").toString() : (req.get("title") != null ? req.get("title").toString() : defaultTitle);
@@ -811,20 +831,178 @@ public class CrmController {
 
     // --- WARRANTIES ---
     @GetMapping("/warranties")
-    public ResponseEntity<ApiResponse<List<ProductWarranty>>> getAllWarranties() {
-        return ResponseEntity.ok(ApiResponse.ok(productWarrantyRepository.findByIsDeletedFalse()));
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAllWarranties() {
+        List<ProductWarranty> list = productWarrantyRepository.findByIsDeletedFalse();
+        list.sort((a, b) -> Long.compare(b.getId() != null ? b.getId() : 0L, a.getId() != null ? a.getId() : 0L));
+
+        List<java.util.Map<String, Object>> res = list.stream().map(w -> {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", w.getId().toString());
+            m.put("warrantyCode", w.getWarrantyCode());
+            m.put("serialNumber", w.getSerialNumber() != null ? w.getSerialNumber().getSerialNumber() : "");
+            m.put("serialOrIMEI", w.getSerialNumber() != null ? w.getSerialNumber().getSerialNumber() : "");
+            m.put("productName", (w.getSerialNumber() != null && w.getSerialNumber().getProduct() != null)
+                    ? w.getSerialNumber().getProduct().getName() : "Sản phẩm chính hãng");
+            if (w.getCustomer() != null) {
+                m.put("customerId", w.getCustomer().getId().toString());
+                m.put("customerName", w.getCustomer().getName());
+                m.put("customerPhone", w.getCustomer().getPhone());
+            } else {
+                m.put("customerName", "Khách hàng");
+                m.put("customerPhone", "");
+            }
+            m.put("purchaseDate", w.getPurchaseDate() != null ? w.getPurchaseDate().toString() : (w.getStartDate() != null ? w.getStartDate().toString() : ""));
+            m.put("startDate", w.getStartDate() != null ? w.getStartDate().toString() : "");
+            m.put("expiryDate", w.getEndDate() != null ? w.getEndDate().toString() : "");
+            m.put("endDate", w.getEndDate() != null ? w.getEndDate().toString() : "");
+            m.put("warrantyMonths", w.getWarrantyPeriod() != null ? w.getWarrantyPeriod() : 12);
+            m.put("terms", w.getTerms() != null ? w.getTerms() : "Bảo hành chính hãng");
+            m.put("status", w.getStatus() != null ? w.getStatus() : "ACTIVE");
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.ok(res));
     }
 
     @PostMapping("/warranties")
-    public ResponseEntity<ApiResponse<ProductWarranty>> createWarranty(@RequestBody ProductWarranty req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(productWarrantyRepository.save(req)));
+    @Transactional
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createWarranty(@RequestBody java.util.Map<String, Object> req) {
+        String serialStr = req.get("serialNumber") != null ? req.get("serialNumber").toString().trim() :
+                (req.get("serialOrIMEI") != null ? req.get("serialOrIMEI").toString().trim() : "");
+        String customerName = req.get("customerName") != null ? req.get("customerName").toString().trim() : "Khách hàng bảo hành";
+        String customerPhone = req.get("customerPhone") != null ? req.get("customerPhone").toString().trim() : "";
+        String productName = req.get("productName") != null ? req.get("productName").toString().trim() : "Sản phẩm bảo hành";
+        String terms = req.get("terms") != null ? req.get("terms").toString() : "Bảo hành chính hãng";
+        String status = req.get("status") != null ? req.get("status").toString() : "ACTIVE";
+        Integer warrantyMonths = 12;
+        if (req.get("warrantyMonths") != null) {
+            try { warrantyMonths = Integer.valueOf(req.get("warrantyMonths").toString()); } catch (Exception ignored) {}
+        } else if (req.get("warrantyPeriod") != null) {
+            try { warrantyMonths = Integer.valueOf(req.get("warrantyPeriod").toString()); } catch (Exception ignored) {}
+        }
+
+        // 1. Resolve Customer
+        Customer customer = null;
+        if (!customerPhone.isBlank()) {
+            customer = customerRepository.findByPhoneAndIsDeletedFalse(customerPhone).orElse(null);
+            if (customer == null) customer = customerRepository.findByPhone(customerPhone).orElse(null);
+        }
+        if (customer == null && !customerName.isBlank()) {
+            customer = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(customerName).orElse(null);
+        }
+        if (customer == null) {
+            Customer newC = Customer.builder()
+                    .name(customerName)
+                    .phone(!customerPhone.isBlank() ? customerPhone : "090" + (System.currentTimeMillis() % 10000000))
+                    .email("warranty." + System.currentTimeMillis() + "@store.vn")
+                    .customerCode("KH-WRT-" + (System.currentTimeMillis() % 100000))
+                    .membershipRank("BRONZE")
+                    .points(0.0)
+                    .totalSpend(0.0)
+                    .isActive(true)
+                    .build();
+            newC.setIsDeleted(false);
+            customer = customerRepository.save(newC);
+        }
+
+        // 2. Resolve SerialNumber
+        if (serialStr.isBlank()) {
+            serialStr = "SN-" + (System.currentTimeMillis() % 10000000);
+        }
+        String finalSerial = serialStr;
+        org.example.storemanager.modules.catalog.entity.SerialNumber serial =
+                serialNumberRepository.findBySerialNumberAndIsDeletedFalse(finalSerial).orElse(null);
+
+        if (serial == null) {
+            org.example.storemanager.modules.catalog.entity.Product prod =
+                    productRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+            if (prod == null) {
+                prod = org.example.storemanager.modules.catalog.entity.Product.builder()
+                        .name(productName)
+                        .productCode("PRD-WRT-" + (System.currentTimeMillis() % 10000))
+                        .barcode("BC" + (System.currentTimeMillis() % 100000000))
+                        .isActive(true)
+                        .build();
+                prod.setIsDeleted(false);
+                prod = productRepository.save(prod);
+            }
+            serial = org.example.storemanager.modules.catalog.entity.SerialNumber.builder()
+                    .serialNumber(finalSerial)
+                    .product(prod)
+                    .status("WARRANTY")
+                    .build();
+            serial.setIsDeleted(false);
+            serial = serialNumberRepository.save(serial);
+        }
+
+        // 3. Resolve Dates
+        java.time.LocalDate startDate = java.time.LocalDate.now();
+        if (req.get("purchaseDate") != null && !req.get("purchaseDate").toString().isBlank()) {
+            try { startDate = java.time.LocalDate.parse(req.get("purchaseDate").toString().split("T")[0]); } catch (Exception ignored) {}
+        } else if (req.get("startDate") != null && !req.get("startDate").toString().isBlank()) {
+            try { startDate = java.time.LocalDate.parse(req.get("startDate").toString().split("T")[0]); } catch (Exception ignored) {}
+        }
+        java.time.LocalDate endDate = startDate.plusMonths(warrantyMonths);
+        if (req.get("expiryDate") != null && !req.get("expiryDate").toString().isBlank()) {
+            try { endDate = java.time.LocalDate.parse(req.get("expiryDate").toString().split("T")[0]); } catch (Exception ignored) {}
+        } else if (req.get("endDate") != null && !req.get("endDate").toString().isBlank()) {
+            try { endDate = java.time.LocalDate.parse(req.get("endDate").toString().split("T")[0]); } catch (Exception ignored) {}
+        }
+
+        String warrantyCode = req.get("warrantyCode") != null ? req.get("warrantyCode").toString() : "WRT-" + (System.currentTimeMillis() % 1000000);
+
+        ProductWarranty pw = ProductWarranty.builder()
+                .warrantyCode(warrantyCode)
+                .customer(customer)
+                .serialNumber(serial)
+                .startDate(startDate)
+                .endDate(endDate)
+                .purchaseDate(startDate)
+                .activatedDate(startDate)
+                .warrantyPeriod(warrantyMonths)
+                .warrantyType("STANDARD")
+                .terms(terms)
+                .status(status)
+                .build();
+        pw.setIsDeleted(false);
+        ProductWarranty saved = productWarrantyRepository.save(pw);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", saved.getId().toString());
+        resp.put("warrantyCode", saved.getWarrantyCode());
+        resp.put("serialNumber", finalSerial);
+        resp.put("serialOrIMEI", finalSerial);
+        resp.put("productName", serial.getProduct() != null ? serial.getProduct().getName() : productName);
+        resp.put("customerName", customer.getName());
+        resp.put("customerPhone", customer.getPhone());
+        resp.put("startDate", saved.getStartDate().toString());
+        resp.put("endDate", saved.getEndDate().toString());
+        resp.put("purchaseDate", saved.getPurchaseDate() != null ? saved.getPurchaseDate().toString() : saved.getStartDate().toString());
+        resp.put("expiryDate", saved.getEndDate().toString());
+        resp.put("warrantyMonths", saved.getWarrantyPeriod());
+        resp.put("status", saved.getStatus());
+        resp.put("terms", saved.getTerms());
+
+        return ResponseEntity.status(201).body(ApiResponse.created(resp));
     }
 
     @PutMapping("/warranties/{id}")
-    public ResponseEntity<ApiResponse<ProductWarranty>> updateWarranty(@PathVariable Long id, @RequestBody ProductWarranty req) {
-        req.setId(id);
-        return ResponseEntity.ok(ApiResponse.ok(productWarrantyRepository.save(req)));
+    @Transactional
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> updateWarranty(@PathVariable Long id, @RequestBody java.util.Map<String, Object> req) {
+        ProductWarranty existing = productWarrantyRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductWarranty", "id", id));
+        if (req.get("status") != null) existing.setStatus(req.get("status").toString());
+        if (req.get("terms") != null) existing.setTerms(req.get("terms").toString());
+        if (req.get("warrantyMonths") != null) {
+            try { existing.setWarrantyPeriod(Integer.valueOf(req.get("warrantyMonths").toString())); } catch (Exception ignored) {}
+        }
+        productWarrantyRepository.save(existing);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", existing.getId().toString());
+        resp.put("warrantyCode", existing.getWarrantyCode());
+        return ResponseEntity.ok(ApiResponse.ok(resp));
     }
 
     @DeleteMapping("/warranties/{id}")
@@ -838,20 +1016,167 @@ public class CrmController {
 
     // --- WARRANTY CLAIMS ---
     @GetMapping("/warranty-claims")
-    public ResponseEntity<ApiResponse<List<WarrantyClaim>>> getAllWarrantyClaims() {
-        return ResponseEntity.ok(ApiResponse.ok(warrantyClaimRepository.findByIsDeletedFalse()));
+    @Transactional(readOnly = true)
+    public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAllWarrantyClaims() {
+        List<WarrantyClaim> list = warrantyClaimRepository.findByIsDeletedFalse();
+        list.sort((a, b) -> Long.compare(b.getId() != null ? b.getId() : 0L, a.getId() != null ? a.getId() : 0L));
+
+        List<java.util.Map<String, Object>> res = list.stream().map(wc -> {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", wc.getId().toString());
+            m.put("claimCode", wc.getClaimCode() != null ? wc.getClaimCode() : "CLM-" + wc.getId());
+            m.put("warrantyId", wc.getWarranty() != null ? wc.getWarranty().getId().toString() : "");
+            m.put("warrantyCode", wc.getWarranty() != null ? wc.getWarranty().getWarrantyCode() : "");
+            m.put("serialNumber", (wc.getWarranty() != null && wc.getWarranty().getSerialNumber() != null)
+                    ? wc.getWarranty().getSerialNumber().getSerialNumber() : "");
+            m.put("productName", (wc.getWarranty() != null && wc.getWarranty().getSerialNumber() != null && wc.getWarranty().getSerialNumber().getProduct() != null)
+                    ? wc.getWarranty().getSerialNumber().getProduct().getName() : "Thiết bị bảo hành");
+            if (wc.getWarranty() != null && wc.getWarranty().getCustomer() != null) {
+                m.put("customerName", wc.getWarranty().getCustomer().getName());
+                m.put("customerPhone", wc.getWarranty().getCustomer().getPhone());
+            } else {
+                m.put("customerName", "Khách bảo hành");
+                m.put("customerPhone", "");
+            }
+            m.put("issueDescription", wc.getIssueDescription() != null ? wc.getIssueDescription() : "");
+            m.put("description", wc.getIssueDescription() != null ? wc.getIssueDescription() : "");
+            m.put("resolution", wc.getResolution() != null ? wc.getResolution() : "PROCESSING");
+            m.put("resolutionNotes", wc.getResolution() != null ? wc.getResolution() : "");
+            m.put("status", wc.getStatus() != null ? wc.getStatus() : "RECEIVED");
+            m.put("conditionOnReceive", wc.getReceivedCondition() != null ? wc.getReceivedCondition() : "");
+            m.put("repairCost", wc.getRepairCost() != null ? wc.getRepairCost() : java.math.BigDecimal.ZERO);
+            m.put("costAmount", wc.getRepairCost() != null ? wc.getRepairCost() : java.math.BigDecimal.ZERO);
+            m.put("receivedDate", wc.getClaimDate() != null ? wc.getClaimDate().toLocalDate().toString() : java.time.LocalDate.now().toString());
+            m.put("claimDate", wc.getClaimDate() != null ? wc.getClaimDate().toString() : "");
+            m.put("estimatedReturnDate", wc.getExpectedReturnDate() != null ? wc.getExpectedReturnDate().toLocalDate().toString() : "");
+            m.put("actualReturnDate", wc.getActualReturnDate() != null ? wc.getActualReturnDate().toLocalDate().toString() : "");
+            return m;
+        }).collect(java.util.stream.Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.ok(res));
     }
 
     @PostMapping("/warranty-claims")
-    public ResponseEntity<ApiResponse<WarrantyClaim>> createWarrantyClaim(@RequestBody WarrantyClaim req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(warrantyClaimRepository.save(req)));
+    @Transactional
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createWarrantyClaim(@RequestBody java.util.Map<String, Object> req) {
+        String claimCode = req.get("claimCode") != null ? req.get("claimCode").toString() : "CLM-" + (System.currentTimeMillis() % 1000000);
+        String warrantyCode = req.get("warrantyCode") != null ? req.get("warrantyCode").toString().trim() : "";
+        String serialNumber = req.get("serialNumber") != null ? req.get("serialNumber").toString().trim() : "";
+        String issueDesc = req.get("issueDescription") != null ? req.get("issueDescription").toString() :
+                (req.get("description") != null ? req.get("description").toString() : "Yêu cầu bảo hành linh kiện");
+        String status = req.get("status") != null ? req.get("status").toString() : "RECEIVED";
+        String resolution = req.get("resolution") != null ? req.get("resolution").toString() :
+                (req.get("resolutionNotes") != null ? req.get("resolutionNotes").toString() : "Đang xử lý tiếp nhận");
+        String condition = req.get("conditionOnReceive") != null ? req.get("conditionOnReceive").toString() : "";
+        java.math.BigDecimal repairCost = java.math.BigDecimal.ZERO;
+        if (req.get("repairCost") != null) {
+            try { repairCost = new java.math.BigDecimal(req.get("repairCost").toString()); } catch (Exception ignored) {}
+        }
+
+        // 1. Resolve ProductWarranty
+        ProductWarranty warranty = null;
+        if (!warrantyCode.isBlank()) {
+            warranty = productWarrantyRepository.findByWarrantyCodeAndIsDeletedFalse(warrantyCode).orElse(null);
+            if (warranty == null && warrantyCode.matches("\\d+")) {
+                warranty = productWarrantyRepository.findByIdAndIsDeletedFalse(Long.parseLong(warrantyCode)).orElse(null);
+            }
+        }
+        if (warranty == null && !serialNumber.isBlank()) {
+            warranty = productWarrantyRepository.findBySerialNumber_SerialNumberAndIsDeletedFalse(serialNumber).orElse(null);
+        }
+        if (warranty == null) {
+            List<ProductWarranty> all = productWarrantyRepository.findByIsDeletedFalse();
+            if (!all.isEmpty()) {
+                warranty = all.get(0);
+            } else {
+                Customer fallbackCust = customerRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+                if (fallbackCust == null) {
+                    fallbackCust = Customer.builder().name("Khách hàng BH").phone("0901234567").customerCode("KH-01").isActive(true).build();
+                    fallbackCust.setIsDeleted(false);
+                    fallbackCust = customerRepository.save(fallbackCust);
+                }
+                org.example.storemanager.modules.catalog.entity.Product fallbackProd =
+                        productRepository.findByIsDeletedFalse().stream().findFirst().orElse(null);
+                if (fallbackProd == null) {
+                    fallbackProd = org.example.storemanager.modules.catalog.entity.Product.builder()
+                            .name("Sản phẩm chung").productCode("PRD-01").barcode("BC-01").isActive(true).build();
+                    fallbackProd.setIsDeleted(false);
+                    fallbackProd = productRepository.save(fallbackProd);
+                }
+                org.example.storemanager.modules.catalog.entity.SerialNumber fallbackSerial =
+                        org.example.storemanager.modules.catalog.entity.SerialNumber.builder()
+                                .serialNumber(!serialNumber.isBlank() ? serialNumber : "SN-" + System.currentTimeMillis())
+                                .product(fallbackProd)
+                                .status("WARRANTY")
+                                .build();
+                fallbackSerial.setIsDeleted(false);
+                fallbackSerial = serialNumberRepository.save(fallbackSerial);
+
+                warranty = ProductWarranty.builder()
+                        .warrantyCode(!warrantyCode.isBlank() ? warrantyCode : "WRT-" + (System.currentTimeMillis() % 100000))
+                        .customer(fallbackCust)
+                        .serialNumber(fallbackSerial)
+                        .startDate(java.time.LocalDate.now())
+                        .endDate(java.time.LocalDate.now().plusYears(1))
+                        .purchaseDate(java.time.LocalDate.now())
+                        .status("ACTIVE")
+                        .terms("Bảo hành tiêu chuẩn")
+                        .build();
+                warranty.setIsDeleted(false);
+                warranty = productWarrantyRepository.save(warranty);
+            }
+        }
+
+        WarrantyClaim wc = WarrantyClaim.builder()
+                .warranty(warranty)
+                .claimCode(claimCode)
+                .claimDate(java.time.LocalDateTime.now())
+                .issueDescription(issueDesc)
+                .resolution(resolution)
+                .receivedCondition(condition)
+                .repairCost(repairCost)
+                .status(status)
+                .build();
+        wc.setIsDeleted(false);
+        WarrantyClaim saved = warrantyClaimRepository.save(wc);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", saved.getId().toString());
+        resp.put("claimCode", saved.getClaimCode());
+        resp.put("warrantyCode", warranty.getWarrantyCode());
+        resp.put("serialNumber", warranty.getSerialNumber() != null ? warranty.getSerialNumber().getSerialNumber() : "");
+        resp.put("customerName", warranty.getCustomer() != null ? warranty.getCustomer().getName() : "");
+        resp.put("customerPhone", warranty.getCustomer() != null ? warranty.getCustomer().getPhone() : "");
+        resp.put("productName", (warranty.getSerialNumber() != null && warranty.getSerialNumber().getProduct() != null)
+                ? warranty.getSerialNumber().getProduct().getName() : "Thiết bị bảo hành");
+        resp.put("issueDescription", saved.getIssueDescription());
+        resp.put("status", saved.getStatus());
+        resp.put("resolution", saved.getResolution());
+        resp.put("repairCost", saved.getRepairCost());
+        resp.put("receivedDate", saved.getClaimDate().toLocalDate().toString());
+
+        return ResponseEntity.status(201).body(ApiResponse.created(resp));
     }
 
     @PutMapping("/warranty-claims/{id}")
-    public ResponseEntity<ApiResponse<WarrantyClaim>> updateWarrantyClaim(@PathVariable Long id, @RequestBody WarrantyClaim req) {
-        req.setId(id);
-        return ResponseEntity.ok(ApiResponse.ok(warrantyClaimRepository.save(req)));
+    @Transactional
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> updateWarrantyClaim(@PathVariable Long id, @RequestBody java.util.Map<String, Object> req) {
+        WarrantyClaim existing = warrantyClaimRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("WarrantyClaim", "id", id));
+        if (req.get("status") != null) existing.setStatus(req.get("status").toString());
+        if (req.get("issueDescription") != null) existing.setIssueDescription(req.get("issueDescription").toString());
+        if (req.get("description") != null) existing.setIssueDescription(req.get("description").toString());
+        if (req.get("resolution") != null) existing.setResolution(req.get("resolution").toString());
+        if (req.get("resolutionNotes") != null) existing.setResolution(req.get("resolutionNotes").toString());
+        if (req.get("repairCost") != null) {
+            try { existing.setRepairCost(new java.math.BigDecimal(req.get("repairCost").toString())); } catch (Exception ignored) {}
+        }
+        warrantyClaimRepository.save(existing);
+
+        java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
+        resp.put("id", existing.getId().toString());
+        resp.put("claimCode", existing.getClaimCode());
+        return ResponseEntity.ok(ApiResponse.ok(resp));
     }
 
     @DeleteMapping("/warranty-claims/{id}")

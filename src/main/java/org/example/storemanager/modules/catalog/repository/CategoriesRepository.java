@@ -24,14 +24,16 @@ public interface CategoriesRepository extends JpaRepository<ProductCategory, Lon
 
     List<ProductCategory> findByParentIdAndIsDeletedFalse(Long parentId);
 
+    boolean existsByParentIdAndIsDeletedFalse(Long parentId);
+
     // Danh sách có hỗ trợ tìm kiếm, lọc, phân trang, kể cả đã xóa
     @Query("SELECT c FROM ProductCategory c WHERE " +
            "(:includeDeleted = true OR c.isDeleted = false) AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.categoryName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.categoryCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.categoryName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.categoryCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<ProductCategory> findAllCategoriesIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -46,11 +48,11 @@ public interface CategoriesRepository extends JpaRepository<ProductCategory, Lon
 
     @Query("SELECT c FROM ProductCategory c WHERE " +
            "(:includeDeleted = true OR c.isDeleted = false) AND " +
-           "(:isActive IS NULL OR c.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(c.categoryName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.categoryCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(c.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR c.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(c.categoryName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.categoryCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(c.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<ProductCategory> findAllCategoriesList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

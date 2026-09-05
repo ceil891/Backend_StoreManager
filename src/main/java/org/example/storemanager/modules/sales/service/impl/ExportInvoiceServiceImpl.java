@@ -23,6 +23,8 @@ import org.example.storemanager.modules.system.repository.PosSessionRepository;
 import org.example.storemanager.modules.catalog.repository.ProductRepository;
 import org.example.storemanager.modules.inventory.repository.ProductBatchRepository;
 import org.example.storemanager.modules.sales.service.ExportInvoiceService;
+import org.example.storemanager.modules.finance.entity.OrderPayment;
+import org.example.storemanager.modules.finance.repository.OrderPaymentRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -52,6 +54,7 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
     private final PosSessionRepository posSessionRepository;
     private final ProductRepository productRepository;
     private final ProductBatchRepository productBatchRepository;
+    private final OrderPaymentRepository orderPaymentRepository;
 
     @Override
     public ExportInvoiceResponse createInvoice(CreateExportInvoiceRequest request) {
@@ -88,8 +91,14 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
         invoice.setIsDeleted(false);
         invoice.setCreatedBy(username);
         invoice.setNote(request.getNote());
+        invoice.setTaxId(request.getTaxId());
+        invoice.setCompanyName(request.getCompanyName());
+        invoice.setDueDate(request.getDueDate());
+        invoice.setPaymentTerms(request.getPaymentTerms());
+        invoice.setEinvoiceRef(request.getEinvoiceRef());
 
         BigDecimal subTotalSum = BigDecimal.ZERO;
+        BigDecimal detailTaxSum = BigDecimal.ZERO;
         List<ExportInvoiceDetail> details = new ArrayList<>();
 
         for (ExportInvoiceDetailRequest detailReq : request.getDetails()) {
@@ -111,7 +120,17 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
 
             BigDecimal discount = detailReq.getDiscount() != null ? detailReq.getDiscount() : BigDecimal.ZERO;
             BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPrice().subtract(discount));
+            if (subTotal.compareTo(BigDecimal.ZERO) < 0) subTotal = BigDecimal.ZERO;
             subTotalSum = subTotalSum.add(subTotal);
+
+            BigDecimal detailTaxRate = detailReq.getTaxRate() != null 
+                    ? detailReq.getTaxRate() 
+                    : getTaxRateForProduct(product);
+            BigDecimal detailTaxAmount = detailReq.getTaxAmount() != null
+                    ? detailReq.getTaxAmount()
+                    : subTotal.multiply(detailTaxRate).setScale(2, java.math.RoundingMode.HALF_UP);
+            BigDecimal detailTotal = subTotal.add(detailTaxAmount);
+            detailTaxSum = detailTaxSum.add(detailTaxAmount);
 
             ExportInvoiceDetail detail = ExportInvoiceDetail.builder()
                     .invoice(invoice)
@@ -121,7 +140,9 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
                     .unitPrice(detailReq.getUnitPrice())
                     .discount(discount)
                     .subTotal(subTotal)
-                    .taxRate(getTaxRateForProduct(product))
+                    .taxRate(detailTaxRate)
+                    .taxAmount(detailTaxAmount)
+                    .totalAmount(detailTotal)
                     .build();
 
             detail.setIsDeleted(false);
@@ -130,7 +151,9 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
         }
 
         BigDecimal masterDiscount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
-        BigDecimal masterTax = request.getTax() != null ? request.getTax() : BigDecimal.ZERO;
+        BigDecimal masterTax = request.getTax() != null && request.getTax().compareTo(BigDecimal.ZERO) > 0 
+                ? request.getTax() 
+                : detailTaxSum;
         BigDecimal totalAmount = subTotalSum.subtract(masterDiscount).add(masterTax);
 
         invoice.setSubTotal(subTotalSum);
@@ -185,6 +208,7 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
 
         // Add new details
         BigDecimal subTotalSum = BigDecimal.ZERO;
+        BigDecimal detailTaxSum = BigDecimal.ZERO;
         List<ExportInvoiceDetail> newDetails = new ArrayList<>();
 
         for (ExportInvoiceDetailRequest detailReq : request.getDetails()) {
@@ -199,7 +223,17 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
 
             BigDecimal discount = detailReq.getDiscount() != null ? detailReq.getDiscount() : BigDecimal.ZERO;
             BigDecimal subTotal = detailReq.getQuantity().multiply(detailReq.getUnitPrice().subtract(discount));
+            if (subTotal.compareTo(BigDecimal.ZERO) < 0) subTotal = BigDecimal.ZERO;
             subTotalSum = subTotalSum.add(subTotal);
+
+            BigDecimal detailTaxRate = detailReq.getTaxRate() != null 
+                    ? detailReq.getTaxRate() 
+                    : getTaxRateForProduct(product);
+            BigDecimal detailTaxAmount = detailReq.getTaxAmount() != null
+                    ? detailReq.getTaxAmount()
+                    : subTotal.multiply(detailTaxRate).setScale(2, java.math.RoundingMode.HALF_UP);
+            BigDecimal detailTotal = subTotal.add(detailTaxAmount);
+            detailTaxSum = detailTaxSum.add(detailTaxAmount);
 
             ExportInvoiceDetail detail = ExportInvoiceDetail.builder()
                     .invoice(invoice)
@@ -209,7 +243,9 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
                     .unitPrice(detailReq.getUnitPrice())
                     .discount(discount)
                     .subTotal(subTotal)
-                    .taxRate(getTaxRateForProduct(product))
+                    .taxRate(detailTaxRate)
+                    .taxAmount(detailTaxAmount)
+                    .totalAmount(detailTotal)
                     .build();
 
             detail.setIsDeleted(false);
@@ -218,7 +254,9 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
         }
 
         BigDecimal masterDiscount = request.getDiscount() != null ? request.getDiscount() : BigDecimal.ZERO;
-        BigDecimal masterTax = request.getTax() != null ? request.getTax() : BigDecimal.ZERO;
+        BigDecimal masterTax = request.getTax() != null && request.getTax().compareTo(BigDecimal.ZERO) > 0 
+                ? request.getTax() 
+                : detailTaxSum;
         BigDecimal totalAmount = subTotalSum.subtract(masterDiscount).add(masterTax);
 
         invoice.setSubTotal(subTotalSum);
@@ -347,8 +385,25 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
                         .unitPrice(d.getUnitPrice())
                         .discount(d.getDiscount())
                         .subTotal(d.getSubTotal())
+                        .taxRate(d.getTaxRate())
+                        .taxAmount(d.getTaxAmount())
+                        .totalAmount(d.getTotalAmount())
                         .build())
                 .collect(Collectors.toList());
+
+        List<OrderPayment> payments = i.getId() != null ? orderPaymentRepository.findByInvoiceIdAndIsDeletedFalse(i.getId()) : List.of();
+        BigDecimal sumPayments = payments.stream()
+                .map(p -> p.getAmountPaid() != null ? p.getAmountPaid() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalAmt = i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal paidAmount;
+        if ("PAID".equalsIgnoreCase(i.getStatus()) || "COMPLETED".equalsIgnoreCase(i.getStatus())) {
+            paidAmount = sumPayments.compareTo(BigDecimal.ZERO) > 0 ? sumPayments : totalAmt;
+        } else {
+            paidAmount = sumPayments;
+        }
+        BigDecimal remainingDebt = totalAmt.subtract(paidAmount).max(BigDecimal.ZERO);
 
         return ExportInvoiceResponse.builder()
                 .id(i.getId())
@@ -357,13 +412,20 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
                 .subTotal(i.getSubTotal())
                 .discount(i.getDiscount())
                 .tax(i.getTax())
-                .totalAmount(i.getTotalAmount())
+                .totalAmount(totalAmt)
+                .paidAmount(paidAmount)
+                .remainingDebt(remainingDebt)
                 .status(i.getStatus())
                 .customerId(i.getCustomer() != null ? i.getCustomer().getId() : null)
                 .customerName(i.getCustomer() != null ? i.getCustomer().getName() : null)
                 .branchId(i.getBranch().getId())
                 .branchName(i.getBranch().getBranchName())
                 .posSessionId(i.getPosSession() != null ? i.getPosSession().getId() : null)
+                .taxId(i.getTaxId())
+                .companyName(i.getCompanyName())
+                .dueDate(i.getDueDate())
+                .paymentTerms(i.getPaymentTerms())
+                .einvoiceRef(i.getEinvoiceRef())
                 .note(i.getNote())
                 .createdAt(i.getCreatedAt())
                 .createdBy(i.getCreatedBy())
@@ -372,14 +434,9 @@ public class ExportInvoiceServiceImpl implements ExportInvoiceService {
     }
 
     private BigDecimal getTaxRateForProduct(Product product) {
-        if (product.getCategory() != null && product.getCategory().getTaxClass() != null) {
-            switch (product.getCategory().getTaxClass()) {
-                case VAT_5: return BigDecimal.valueOf(0.05);
-                case VAT_8: return BigDecimal.valueOf(0.08);
-                case VAT_10: return BigDecimal.valueOf(0.10);
-                case EXEMPT: return BigDecimal.ZERO;
-            }
+        if (product == null) {
+            return BigDecimal.valueOf(0.08);
         }
-        return BigDecimal.valueOf(0.08); // fallback
+        return product.getEffectiveVatRate();
     }
 }

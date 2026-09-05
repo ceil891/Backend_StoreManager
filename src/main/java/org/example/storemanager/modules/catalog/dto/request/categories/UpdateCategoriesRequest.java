@@ -19,4 +19,8 @@ public class UpdateCategoriesRequest {
     private Boolean isActive;
     private Long departmentId;
     private String imageUrl;
+    private String manager;
+    private String inventoryGlCode;
+    private String cogsGlCode;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
 }

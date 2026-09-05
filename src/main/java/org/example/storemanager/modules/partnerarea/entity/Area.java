@@ -35,10 +35,9 @@ public class Area extends BaseEntity {
     @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY) // Tối ưu: chỉ load con khi cần
     private List<Area> children;
 
-    //Thêm trạng thái của khu vựcc
+    //Thêm trạng thái của khu vực
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 
-    @Builder.Default
-    private Boolean isDeleted = false;
+    // isDeleted is inherited from BaseEntity
 }

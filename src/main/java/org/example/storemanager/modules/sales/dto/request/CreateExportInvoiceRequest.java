@@ -26,6 +26,11 @@ public class CreateExportInvoiceRequest {
     private String status;
 
     private String note;
+    private String taxId;
+    private String companyName;
+    private LocalDateTime dueDate;
+    private String paymentTerms;
+    private String einvoiceRef;
 
     private java.math.BigDecimal discount;
     private java.math.BigDecimal tax;

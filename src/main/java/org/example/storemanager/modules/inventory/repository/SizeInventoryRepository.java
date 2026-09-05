@@ -41,18 +41,18 @@ public interface SizeInventoryRepository extends JpaRepository<SizeInventory, Lo
            "LEFT JOIN p.category cat " +
            "LEFT JOIN cat.department dept " +
            "WHERE si.isDeleted = false AND " +
-           "(:productId IS NULL OR si.product.id = :productId) AND " +
-           "(:categoryId IS NULL OR cat.id = :categoryId) AND " +
-           "(:departmentId IS NULL OR dept.id = :departmentId) AND " +
-           "(:branchId IS NULL OR b.id = :branchId) AND " +
-           "(:warehouseZoneId IS NULL OR wz.id = :warehouseZoneId) AND " +
-           "(:size IS NULL OR :size = '' OR LOWER(s.sizeCode) = LOWER(:size) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :size, '%'))) AND " +
-           "(:color IS NULL OR :color = '' OR LOWER(c.colorCode) = LOWER(:color) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', :color, '%'))) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(wz.zoneName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')))",
+           "(cast(:productId as long) IS NULL OR si.product.id = :productId) AND " +
+           "(cast(:categoryId as long) IS NULL OR cat.id = :categoryId) AND " +
+           "(cast(:departmentId as long) IS NULL OR dept.id = :departmentId) AND " +
+           "(cast(:branchId as long) IS NULL OR b.id = :branchId) AND " +
+           "(cast(:warehouseZoneId as long) IS NULL OR wz.id = :warehouseZoneId) AND " +
+           "(cast(:size as string) IS NULL OR cast(:size as string) = '' OR LOWER(s.sizeCode) = LOWER(cast(:size as string)) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:size as string), '%'))) AND " +
+           "(cast(:color as string) IS NULL OR cast(:color as string) = '' OR LOWER(c.colorCode) = LOWER(cast(:color as string)) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:color as string), '%'))) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(p.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(wz.zoneName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))",
            countQuery = "SELECT COUNT(si) FROM SizeInventory si " +
            "JOIN si.product p " +
            "JOIN si.warehouseZone wz " +
@@ -62,18 +62,18 @@ public interface SizeInventoryRepository extends JpaRepository<SizeInventory, Lo
            "LEFT JOIN p.category cat " +
            "LEFT JOIN cat.department dept " +
            "WHERE si.isDeleted = false AND " +
-           "(:productId IS NULL OR si.product.id = :productId) AND " +
-           "(:categoryId IS NULL OR cat.id = :categoryId) AND " +
-           "(:departmentId IS NULL OR dept.id = :departmentId) AND " +
-           "(:branchId IS NULL OR b.id = :branchId) AND " +
-           "(:warehouseZoneId IS NULL OR wz.id = :warehouseZoneId) AND " +
-           "(:size IS NULL OR :size = '' OR LOWER(s.sizeCode) = LOWER(:size) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', :size, '%'))) AND " +
-           "(:color IS NULL OR :color = '' OR LOWER(c.colorCode) = LOWER(:color) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', :color, '%'))) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(wz.zoneName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:productId as long) IS NULL OR si.product.id = :productId) AND " +
+           "(cast(:categoryId as long) IS NULL OR cat.id = :categoryId) AND " +
+           "(cast(:departmentId as long) IS NULL OR dept.id = :departmentId) AND " +
+           "(cast(:branchId as long) IS NULL OR b.id = :branchId) AND " +
+           "(cast(:warehouseZoneId as long) IS NULL OR wz.id = :warehouseZoneId) AND " +
+           "(cast(:size as string) IS NULL OR cast(:size as string) = '' OR LOWER(s.sizeCode) = LOWER(cast(:size as string)) OR LOWER(s.sizeName) LIKE LOWER(CONCAT('%', cast(:size as string), '%'))) AND " +
+           "(cast(:color as string) IS NULL OR cast(:color as string) = '' OR LOWER(c.colorCode) = LOWER(cast(:color as string)) OR LOWER(c.colorName) LIKE LOWER(CONCAT('%', cast(:color as string), '%'))) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(p.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(wz.zoneName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<InventorySummaryProjection> searchInventory(
             @Param("productId") Long productId,
             @Param("categoryId") Long categoryId,

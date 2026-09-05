@@ -19,12 +19,12 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
 
     @Query("SELECT po FROM PurchaseOrder po WHERE " +
            "(:includeDeleted = true OR po.isDeleted = false) AND " +
-           "(:status IS NULL OR po.status = :status) AND " +
-           "(:branchId IS NULL OR po.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(po.poCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(po.supplier.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(po.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR cast(:status as string) = '' OR po.status = :status) AND " +
+           "(cast(:branchId as long) IS NULL OR po.branch.id = :branchId) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(po.poCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(po.supplier.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(po.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<PurchaseOrder> findAllOrders(
             @Param("search") String search,
             @Param("status") String status,

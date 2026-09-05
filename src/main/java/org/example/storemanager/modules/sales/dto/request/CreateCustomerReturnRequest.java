@@ -25,8 +25,9 @@ public class CreateCustomerReturnRequest {
 
     private Long customerId;
 
-    @NotNull(message = "Hóa đơn tham chiếu không được để trống")
     private Long invoiceId;
+
+    private Long orderId;
 
     @NotNull(message = "Chi nhánh không được để trống")
     private Long branchId;

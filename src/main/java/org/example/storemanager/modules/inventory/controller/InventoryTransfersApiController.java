@@ -129,6 +129,14 @@ public class InventoryTransfersApiController {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.approveCancelIssue(id, req)));
     }
 
+    @PostMapping("/cancel-issues/{id}/reject")
+    public ResponseEntity<ApiResponse<CancelIssueDTO>> rejectCancelIssue(
+            @PathVariable Long id,
+            @RequestBody(required = false) CancelIssueRejectRequest request) {
+        CancelIssueRejectRequest req = request != null ? request : new CancelIssueRejectRequest();
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.rejectCancelIssue(id, req)));
+    }
+
     @PostMapping("/cancel-issues/{id}/complete")
     public ResponseEntity<ApiResponse<CancelIssueDTO>> completeCancelIssue(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.executeCancelIssue(id)));

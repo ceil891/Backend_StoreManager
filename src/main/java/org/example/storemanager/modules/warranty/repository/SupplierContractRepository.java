@@ -24,13 +24,13 @@ public interface SupplierContractRepository extends JpaRepository<SupplierContra
 
     @Query("SELECT sc FROM SupplierContract sc WHERE " +
            "(:includeDeleted = true OR sc.isDeleted = false) AND " +
-           "(:status IS NULL OR sc.status = :status) AND " +
-           "(:supplierId IS NULL OR sc.supplier.id = :supplierId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(sc.contractCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(sc.contractName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(sc.signedBy) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(sc.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR sc.status = cast(:status as string)) AND " +
+           "(cast(:supplierId as long) IS NULL OR sc.supplier.id = cast(:supplierId as long)) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(sc.contractCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(sc.contractName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(sc.signedBy) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(sc.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<SupplierContract> findAllContracts(
             @Param("search") String search,
             @Param("status") String status,

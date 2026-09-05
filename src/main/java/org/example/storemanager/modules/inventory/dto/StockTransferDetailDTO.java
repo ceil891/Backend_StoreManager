@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 public class StockTransferDetailDTO {
     private Long id;
     private Long productVariantId;
+    private Long productId;
     private String productCode;
     private String productName;
     private BigDecimal transferQuantity;

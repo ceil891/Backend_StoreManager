@@ -21,4 +21,6 @@ public class ExportInvoiceDetailRequest {
     private BigDecimal unitPrice;
 
     private BigDecimal discount;
+    private BigDecimal taxRate;
+    private BigDecimal taxAmount;
 }

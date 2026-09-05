@@ -24,13 +24,15 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     boolean existsByBranchCodeAndIdNotAndIsDeletedFalse(String branchCode, Long id);
 
+    Page<Branch> findByIsDeletedFalse(Pageable pageable);
+
     @Query("SELECT b FROM Branch b WHERE b.isDeleted = false AND " +
-           "(:isActive IS NULL OR b.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.address) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.phone) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR b.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.address) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.phone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Branch> findAllBranches(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -38,24 +40,24 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     @org.springframework.cache.annotation.Cacheable(value = "branches", key = "{#search, #isActive}")
     @Query("SELECT b FROM Branch b WHERE b.isDeleted = false AND " +
-           "(:isActive IS NULL OR b.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.address) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.phone) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR b.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.address) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.phone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Branch> findAllBranchesList(
             @Param("search") String search,
             @Param("isActive") Boolean isActive);
 
     @Query("SELECT b FROM Branch b WHERE " +
            "(:includeDeleted = true OR b.isDeleted = false) AND " +
-           "(:isActive IS NULL OR b.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.address) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.phone) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR b.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.address) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.phone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Branch> findAllBranchesIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,
@@ -64,12 +66,12 @@ public interface BranchRepository extends JpaRepository<Branch, Long> {
 
     @Query("SELECT b FROM Branch b WHERE " +
            "(:includeDeleted = true OR b.isDeleted = false) AND " +
-           "(:isActive IS NULL OR b.isActive = :isActive) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.address) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(b.phone) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR b.isActive = :isActive) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(b.branchName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.branchCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.address) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(b.phone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     List<Branch> findAllBranchesListIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

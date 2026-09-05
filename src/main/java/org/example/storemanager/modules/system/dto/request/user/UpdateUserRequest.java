@@ -17,7 +17,6 @@ public class UpdateUserRequest {
     @NotBlank(message = "Số điện thoại không được để trống")
     private String phone;
 
-    @NotNull(message = "Role ID không được để trống")
     private Long roleId;
 
     private Long branchId;

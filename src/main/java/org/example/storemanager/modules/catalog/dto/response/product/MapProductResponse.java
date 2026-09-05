@@ -37,4 +37,7 @@ public class MapProductResponse {
 
     /** Tổng tồn kho vật lý hiện tại (tổng từ size_inventory) */
     private BigDecimal onHand;
+
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
+    private BigDecimal vatRate;
 }

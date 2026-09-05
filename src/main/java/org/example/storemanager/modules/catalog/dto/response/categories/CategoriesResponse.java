@@ -23,6 +23,10 @@ public class CategoriesResponse {
     private DepartmentResponse department;
     private Long parentId;
     private String imageUrl;
+    private String manager;
+    private String inventoryGlCode;
+    private String cogsGlCode;
+    private org.example.storemanager.shared.enums.catalog.TaxClass taxClass;
     private Boolean isDeleted;
     private LocalDateTime createdAt;
     private String createdBy;

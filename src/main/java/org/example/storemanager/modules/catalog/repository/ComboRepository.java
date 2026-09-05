@@ -22,10 +22,10 @@ public interface ComboRepository extends JpaRepository<Combo, Long> {
     @Query("""
             SELECT c FROM Combo c
             WHERE c.isDeleted = false
-              AND (:isActive IS NULL OR c.isActive = :isActive)
-              AND (:search IS NULL OR :search = '' OR
-                   LOWER(c.comboCode) LIKE LOWER(CONCAT('%', :search, '%')) OR
-                   LOWER(c.comboName) LIKE LOWER(CONCAT('%', :search, '%')))
+              AND (cast(:isActive as boolean) IS NULL OR c.isActive = :isActive)
+              AND (cast(:search as string) IS NULL OR cast(:search as string) = '' OR
+                   LOWER(c.comboCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR
+                   LOWER(c.comboName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))
             """)
     Page<Combo> search(
             @Param("search") String search,

@@ -14,17 +14,26 @@ import java.util.Optional;
 public interface SaleOrderRepository extends JpaRepository<SaleOrder, Long> {
     Optional<SaleOrder> findByIdAndIsDeletedFalse(Long id);
     java.util.List<SaleOrder> findByIsDeletedFalse();
+    java.util.List<SaleOrder> findByCustomerIdAndIsDeletedFalseOrderByOrderDateDesc(Long customerId);
+    java.util.List<SaleOrder> findByCustomerIdAndPaymentStatusNotAndIsDeletedFalseOrderByOrderDateDesc(Long customerId, String paymentStatus);
+    java.util.List<SaleOrder> findByPosSessionIdAndIsDeletedFalse(Long posSessionId);
+
+    @Query("SELECT COALESCE(SUM(COALESCE(o.finalAmount, o.totalAmount, 0)), 0) FROM SaleOrder o " +
+           "WHERE o.posSessionId = :posSessionId " +
+           "AND (o.isDeleted = false OR o.isDeleted IS NULL) " +
+           "AND o.status <> 'CANCELLED'")
+    java.math.BigDecimal sumSalesAmountByPosSessionId(@Param("posSessionId") Long posSessionId);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"customer", "branch"})
     @Query("SELECT o FROM SaleOrder o WHERE " +
            "(:includeDeleted = true OR o.isDeleted = false) AND " +
-           "(:status IS NULL OR :status = '' OR o.status = :status) AND " +
-           "(:branchId IS NULL OR o.branch.id = :branchId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(o.orderCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(o.customerName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(o.note) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:status as string) IS NULL OR cast(:status as string) = '' OR o.status = :status) AND " +
+           "(cast(:branchId as long) IS NULL OR o.branch.id = :branchId) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(o.orderCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(o.customerName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(o.customerPhone) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(o.note) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<SaleOrder> findAllOrders(
             @Param("search") String search,
             @Param("status") String status,

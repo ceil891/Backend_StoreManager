@@ -25,6 +25,8 @@ public class CustomerReturnResponse {
     private String customerName;
     private Long invoiceId;
     private String invoiceCode;
+    private Long orderId;
+    private String orderCode;
     private Long branchId;
     private String branchName;
     private String note;
@@ -49,6 +51,8 @@ public class CustomerReturnResponse {
         private String customerName;
         private Long invoiceId;
         private String invoiceCode;
+        private Long orderId;
+        private String orderCode;
         private Long branchId;
         private String branchName;
         private String note;
@@ -68,6 +72,8 @@ public class CustomerReturnResponse {
         public CustomerReturnResponseBuilder customerName(String customerName) { this.customerName = customerName; return this; }
         public CustomerReturnResponseBuilder invoiceId(Long invoiceId) { this.invoiceId = invoiceId; return this; }
         public CustomerReturnResponseBuilder invoiceCode(String invoiceCode) { this.invoiceCode = invoiceCode; return this; }
+        public CustomerReturnResponseBuilder orderId(Long orderId) { this.orderId = orderId; return this; }
+        public CustomerReturnResponseBuilder orderCode(String orderCode) { this.orderCode = orderCode; return this; }
         public CustomerReturnResponseBuilder branchId(Long branchId) { this.branchId = branchId; return this; }
         public CustomerReturnResponseBuilder branchName(String branchName) { this.branchName = branchName; return this; }
         public CustomerReturnResponseBuilder note(String note) { this.note = note; return this; }
@@ -76,7 +82,7 @@ public class CustomerReturnResponse {
         public CustomerReturnResponseBuilder details(List<CustomerReturnDetailResponse> details) { this.details = details; return this; }
 
         public CustomerReturnResponse build() {
-            return new CustomerReturnResponse(id, returnCode, returnRequestId, returnRequestCode, returnDate, totalRefund, reason, status, customerId, customerName, invoiceId, invoiceCode, branchId, branchName, note, createdAt, createdBy, details);
+            return new CustomerReturnResponse(id, returnCode, returnRequestId, returnRequestCode, returnDate, totalRefund, reason, status, customerId, customerName, invoiceId, invoiceCode, orderId, orderCode, branchId, branchName, note, createdAt, createdBy, details);
         }
     }
 }

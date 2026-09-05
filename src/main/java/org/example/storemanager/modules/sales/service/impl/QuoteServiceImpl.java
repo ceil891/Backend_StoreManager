@@ -170,27 +170,31 @@ public class QuoteServiceImpl implements QuoteService {
             details.add(detail);
         }
 
-        quote.setSubTotal(calculatedSubTotal);
+        BigDecimal sumLineDiscounts = details.stream().map(QuoteDetail::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sumLineTaxes = details.stream().map(QuoteDetail::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal netLineTotal = calculatedSubTotal.subtract(sumLineDiscounts);
+
+        quote.setSubTotal(netLineTotal);
 
         // Header discount calculation
         BigDecimal headerDiscountAmount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
         if ("PERCENT".equalsIgnoreCase(request.getDiscountType()) && request.getDiscountValue() != null) {
-            headerDiscountAmount = calculatedSubTotal.multiply(request.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            headerDiscountAmount = netLineTotal.multiply(request.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         }
         quote.setDiscountAmount(headerDiscountAmount);
 
         // Header Tax calculation
         BigDecimal headerTaxAmount = request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO;
         if (request.getTaxRate() != null && request.getTaxRate().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal taxableAmount = calculatedSubTotal.subtract(headerDiscountAmount);
+            BigDecimal taxableAmount = netLineTotal.subtract(headerDiscountAmount);
             if (taxableAmount.compareTo(BigDecimal.ZERO) < 0) taxableAmount = BigDecimal.ZERO;
             headerTaxAmount = taxableAmount.multiply(request.getTaxRate()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         }
-        quote.setTaxAmount(headerTaxAmount);
+        quote.setTaxAmount(headerTaxAmount.add(sumLineTaxes));
 
-        // Formula: total = subTotal - discount + shippingFee + tax
+        // Formula: total = netLineTotal - headerDiscountAmount + shippingFee + headerTaxAmount + sumLineTaxes
         BigDecimal shippingFee = request.getShippingFee() != null ? request.getShippingFee() : BigDecimal.ZERO;
-        BigDecimal finalTotal = calculatedSubTotal.subtract(headerDiscountAmount).add(shippingFee).add(headerTaxAmount);
+        BigDecimal finalTotal = netLineTotal.subtract(headerDiscountAmount).add(shippingFee).add(headerTaxAmount).add(sumLineTaxes);
         if (finalTotal.compareTo(BigDecimal.ZERO) < 0) finalTotal = BigDecimal.ZERO;
         quote.setTotalAmount(finalTotal);
 
@@ -314,24 +318,28 @@ public class QuoteServiceImpl implements QuoteService {
             newDetails.add(detail);
         }
 
-        quote.setSubTotal(calculatedSubTotal);
+        BigDecimal sumLineDiscounts = newDetails.stream().map(QuoteDetail::getDiscountAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sumLineTaxes = newDetails.stream().map(QuoteDetail::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal netLineTotal = calculatedSubTotal.subtract(sumLineDiscounts);
+
+        quote.setSubTotal(netLineTotal);
 
         BigDecimal headerDiscountAmount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
         if ("PERCENT".equalsIgnoreCase(request.getDiscountType()) && request.getDiscountValue() != null) {
-            headerDiscountAmount = calculatedSubTotal.multiply(request.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            headerDiscountAmount = netLineTotal.multiply(request.getDiscountValue()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         }
         quote.setDiscountAmount(headerDiscountAmount);
 
         BigDecimal headerTaxAmount = request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO;
         if (request.getTaxRate() != null && request.getTaxRate().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal taxableAmount = calculatedSubTotal.subtract(headerDiscountAmount);
+            BigDecimal taxableAmount = netLineTotal.subtract(headerDiscountAmount);
             if (taxableAmount.compareTo(BigDecimal.ZERO) < 0) taxableAmount = BigDecimal.ZERO;
             headerTaxAmount = taxableAmount.multiply(request.getTaxRate()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         }
-        quote.setTaxAmount(headerTaxAmount);
+        quote.setTaxAmount(headerTaxAmount.add(sumLineTaxes));
 
         BigDecimal shippingFee = request.getShippingFee() != null ? request.getShippingFee() : BigDecimal.ZERO;
-        BigDecimal finalTotal = calculatedSubTotal.subtract(headerDiscountAmount).add(shippingFee).add(headerTaxAmount);
+        BigDecimal finalTotal = netLineTotal.subtract(headerDiscountAmount).add(shippingFee).add(headerTaxAmount).add(sumLineTaxes);
         if (finalTotal.compareTo(BigDecimal.ZERO) < 0) finalTotal = BigDecimal.ZERO;
         quote.setTotalAmount(finalTotal);
 
@@ -385,10 +393,15 @@ public class QuoteServiceImpl implements QuoteService {
         List<SaleOrderDetail> orderDetails = new ArrayList<>();
 
         for (QuoteDetail qd : quoteDetails) {
+            ProductVariant variant = qd.getProductVariant();
+            if (variant == null && qd.getProduct() != null) {
+                variant = productVariantRepository.findByProductIdAndIsDeletedFalse(qd.getProduct().getId())
+                        .stream().findFirst().orElse(null);
+            }
             SaleOrderDetail sod = SaleOrderDetail.builder()
                     .order(savedOrder)
-                    .productVariant(qd.getProductVariant())
-                    .productNameSnapshot(qd.getProduct() != null ? qd.getProduct().getName() : (qd.getProductVariant() != null ? qd.getProductVariant().getProduct().getName() : "Sản phẩm"))
+                    .productVariant(variant)
+                    .productNameSnapshot(qd.getProduct() != null ? qd.getProduct().getName() : (variant != null ? variant.getProduct().getName() : "Sản phẩm"))
                     .skuSnapshot(qd.getSku())
                     .barcodeSnapshot(qd.getBarcode())
                     .variantDescriptionSnapshot(qd.getDescription())

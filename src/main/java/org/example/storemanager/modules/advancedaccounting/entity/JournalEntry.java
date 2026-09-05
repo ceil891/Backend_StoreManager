@@ -27,4 +27,15 @@ public class JournalEntry extends BaseEntity {
 
     @Column(name = "total_amount", precision = 18, scale = 2, nullable = false)
     private BigDecimal totalAmount; // Tổng tiền của bút toán (Tổng Nợ = Tổng Có)
+
+    @Column(name = "status", length = 30)
+    private String status; // DRAFT, POSTED, CANCELLED
+
+    @com.fasterxml.jackson.annotation.JsonProperty("entryCode")
+    public String getEntryCode() {
+        return referenceCode;
+    }
+
+    @Transient
+    private java.util.List<java.util.Map<String, Object>> lines;
 }

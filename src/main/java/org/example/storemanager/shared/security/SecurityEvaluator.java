@@ -93,6 +93,42 @@ public class SecurityEvaluator {
         USER_INFO_CACHE.clear();
     }
 
+    /**
+     * Kiểm tra trạng thái User còn hoạt động hay không (có cache)
+     */
+    @Transactional(readOnly = true)
+    public boolean isUserActive(String principal) {
+        if (principal == null || principal.trim().isEmpty()) {
+            return false;
+        }
+        String userKey = principal.toLowerCase().trim();
+        CachedUserInfo cachedUser = USER_INFO_CACHE.get(userKey);
+
+        if (cachedUser == null || cachedUser.isExpired()) {
+            User user = userRepository.findByUsername(principal)
+                    .or(() -> userRepository.findByEmail(principal))
+                    .orElse(null);
+
+            if (user == null || Boolean.TRUE.equals(user.getIsDeleted()) || !"ACTIVE".equalsIgnoreCase(user.getStatus())) {
+                USER_INFO_CACHE.remove(userKey);
+                return false;
+            }
+
+            cachedUser = new CachedUserInfo(
+                    user.getId(),
+                    user.getStatus(),
+                    user.getIsDeleted(),
+                    user.getRole() != null ? user.getRole().getId() : null,
+                    user.getRole() != null ? user.getRole().getRoleName() : null
+            );
+            USER_INFO_CACHE.put(userKey, cachedUser);
+            if (user.getUsername() != null) USER_INFO_CACHE.put(user.getUsername().toLowerCase().trim(), cachedUser);
+            if (user.getEmail() != null) USER_INFO_CACHE.put(user.getEmail().toLowerCase().trim(), cachedUser);
+        }
+
+        return !Boolean.TRUE.equals(cachedUser.isDeleted) && "ACTIVE".equalsIgnoreCase(cachedUser.status);
+    }
+
     @Transactional(readOnly = true)
     public boolean hasPermission(String requiredPermission) {
         if (requiredPermission == null || requiredPermission.trim().isEmpty()) {
@@ -101,8 +137,8 @@ public class SecurityEvaluator {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
-            log.debug("SecurityEvaluator: Cho phép truy cập chế độ tự do (Anonymous/Dev)");
-            return true;
+            log.warn("SecurityEvaluator: Từ chối truy cập vì người dùng chưa đăng nhập hoặc token không hợp lệ");
+            return false;
         }
 
         String principal = auth.getName();

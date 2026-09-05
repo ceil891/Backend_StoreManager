@@ -81,6 +81,9 @@ public class ReceiptVoucher extends BaseEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "category", length = 100)
+    private String category;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reason_id", nullable = true)
     @com.fasterxml.jackson.annotation.JsonIgnore

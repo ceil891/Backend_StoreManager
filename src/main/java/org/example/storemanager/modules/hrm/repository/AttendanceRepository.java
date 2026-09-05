@@ -21,12 +21,12 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     @Query("SELECT a FROM Attendance a WHERE " +
            "(:includeDeleted = true OR a.isDeleted = false) AND " +
-           "(:isActive IS NULL OR (:isActive = true AND (a.isLocked IS NULL OR a.isLocked = false)) OR (:isActive = false AND a.isLocked = true)) AND " +
-           "(:userId IS NULL OR a.user.id = :userId) AND " +
-           "(:status IS NULL OR :status = '' OR a.status = :status) AND " +
-           "(:workDateFrom IS NULL OR a.workDate >= :workDateFrom) AND " +
-           "(:workDateTo IS NULL OR a.workDate <= :workDateTo) AND " +
-           "(:search IS NULL OR :search = '' OR LOWER(a.status) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(a.gpsLocation) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR (:isActive = true AND (a.isLocked IS NULL OR a.isLocked = false)) OR (:isActive = false AND a.isLocked = true)) AND " +
+           "(cast(:userId as long) IS NULL OR a.user.id = :userId) AND " +
+           "(cast(:status as string) IS NULL OR cast(:status as string) = '' OR a.status = :status) AND " +
+           "(cast(:workDateFrom as date) IS NULL OR a.workDate >= :workDateFrom) AND " +
+           "(cast(:workDateTo as date) IS NULL OR a.workDate <= :workDateTo) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR LOWER(a.status) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR LOWER(a.gpsLocation) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Attendance> findAllFiltered(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

@@ -38,4 +38,5 @@ public class CustomerDetailResponse {
     private Long areaId;
     private String areaName;
     private Double debtLimit;
+    private Boolean isCreditBlocked;
 }

@@ -10,4 +10,5 @@ import java.util.List;
 public interface OrderPaymentRepository extends JpaRepository<OrderPayment, Long> {
     Optional<OrderPayment> findByIdAndIsDeletedFalse(Long id);
     List<OrderPayment> findByIsDeletedFalse();
+    List<OrderPayment> findByInvoiceIdAndIsDeletedFalse(Long invoiceId);
 }

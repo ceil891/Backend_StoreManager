@@ -24,17 +24,19 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     boolean existsByBarcodeAndIdNotAndIsDeletedFalse(String barcode, Long id);
 
+    boolean existsByCategoryIdAndIsDeletedFalse(Long categoryId);
+
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"category", "baseUnit"})
     @Query("SELECT p FROM Product p WHERE " +
            "(:includeDeleted = true OR p.isDeleted = false) AND " +
-           "(:isActive IS NULL OR p.isActive = :isActive) AND " +
-           "(:categoryId IS NULL OR p.category.id = :categoryId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.barcode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.brand) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR p.isActive = :isActive) AND " +
+           "(cast(:categoryId as long) IS NULL OR p.category.id = :categoryId) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(p.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.barcode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.brand) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Product> findAllProductsIncludeDeleted(
             @Param("search") String search,
             @Param("categoryId") Long categoryId,
@@ -45,14 +47,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"category", "baseUnit"})
     @Query("SELECT p FROM Product p WHERE " +
            "(:includeDeleted = true OR p.isDeleted = false) AND " +
-           "(:isActive IS NULL OR p.isActive = :isActive) AND " +
-           "(:categoryId IS NULL OR p.category.id = :categoryId) AND " +
-           "(:search IS NULL OR :search = '' OR " +
-           "LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.barcode) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.brand) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-           "LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(cast(:isActive as boolean) IS NULL OR p.isActive = :isActive) AND " +
+           "(cast(:categoryId as long) IS NULL OR p.category.id = :categoryId) AND " +
+           "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+           "LOWER(p.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.productCode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.barcode) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.brand) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+           "LOWER(p.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     java.util.List<Product> findAllProductsList(
             @Param("search") String search,
             @Param("categoryId") Long categoryId,

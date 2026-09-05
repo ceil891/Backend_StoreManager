@@ -50,4 +50,19 @@ public class PurchaseOrder extends BaseEntity {
 
     @Column(name = "advance_amount", precision = 18, scale = 2)
     private java.math.BigDecimal advanceAmount;
+
+    @Column(name = "vat_rate", precision = 5, scale = 2)
+    private BigDecimal vatRate;
+
+    @Column(name = "vat_amount", precision = 18, scale = 2)
+    private BigDecimal vatAmount;
+
+    @Column(name = "discount_amount", precision = 18, scale = 2)
+    private BigDecimal discountAmount;
+
+    @Column(name = "shipping_fee", precision = 18, scale = 2)
+    private BigDecimal shippingFee;
+
+    @Column(name = "payment_terms", length = 50)
+    private String paymentTerms;
 }

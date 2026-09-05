@@ -43,7 +43,7 @@ public class BranchScopeAspect {
             resolveAndPopulateUserContext();
             return joinPoint.proceed();
         } finally {
-            // Context sẽ được dọn dẹp sau khi request kết thúc
+            UserContextHolder.clear();
         }
     }
 

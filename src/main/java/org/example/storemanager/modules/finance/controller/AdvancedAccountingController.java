@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/v1/accounting")
@@ -215,16 +216,251 @@ public class AdvancedAccountingController {
         return ResponseEntity.ok(ApiResponse.ok(depreciationHistoryRepository.findByIsDeletedFalse()));
     }
 
+    @PostMapping("/depreciation-history")
+    public ResponseEntity<ApiResponse<DepreciationHistory>> createDepreciationHistory(@RequestBody java.util.Map<String, Object> req) {
+        DepreciationHistory dh = new DepreciationHistory();
+        dh.setIsDeleted(false);
+        
+        Long assetId = req.get("assetId") != null ? Long.valueOf(req.get("assetId").toString().replaceAll("\\D+", "")) : null;
+        FixedAsset asset = null;
+        if (assetId != null) {
+            asset = fixedAssetRepository.findById(assetId).orElse(null);
+        }
+        if (asset == null) {
+            List<FixedAsset> assets = fixedAssetRepository.findByIsDeletedFalse();
+            if (!assets.isEmpty()) {
+                asset = assets.get(0);
+            }
+        }
+        dh.setAsset(asset);
+        
+        String dateStr = req.get("depreciationDate") != null ? req.get("depreciationDate").toString() : null;
+        if (dateStr != null && !dateStr.trim().isEmpty()) {
+            if (dateStr.contains("T")) dateStr = dateStr.split("T")[0];
+            try {
+                dh.setDepreciationDate(java.time.LocalDate.parse(dateStr));
+            } catch (Exception e) {
+                dh.setDepreciationDate(java.time.LocalDate.now());
+            }
+        } else {
+            dh.setDepreciationDate(java.time.LocalDate.now());
+        }
+        
+        BigDecimal amount = req.get("amount") != null ? new BigDecimal(req.get("amount").toString()) :
+                (req.get("monthlyAmount") != null ? new BigDecimal(req.get("monthlyAmount").toString()) : BigDecimal.ZERO);
+        dh.setAmount(amount);
+        
+        BigDecimal accumulated = req.get("accumulated") != null ? new BigDecimal(req.get("accumulated").toString()) : amount;
+        dh.setAccumulated(accumulated);
+        
+        BigDecimal netValue = req.get("netValue") != null ? new BigDecimal(req.get("netValue").toString()) :
+                (asset != null && asset.getPurchasePrice() != null ? asset.getPurchasePrice().subtract(accumulated) : BigDecimal.ZERO);
+        dh.setNetValue(netValue.compareTo(BigDecimal.ZERO) >= 0 ? netValue : BigDecimal.ZERO);
+        
+        return ResponseEntity.status(201).body(ApiResponse.created(depreciationHistoryRepository.save(dh)));
+    }
+
+    @PutMapping("/depreciation-history/{id}")
+    public ResponseEntity<ApiResponse<DepreciationHistory>> updateDepreciationHistory(@PathVariable Long id, @RequestBody java.util.Map<String, Object> req) {
+        DepreciationHistory existing = depreciationHistoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DepreciationHistory", "id", id));
+        if (req.get("amount") != null) {
+            existing.setAmount(new BigDecimal(req.get("amount").toString()));
+        }
+        if (req.get("accumulated") != null) {
+            existing.setAccumulated(new BigDecimal(req.get("accumulated").toString()));
+        }
+        if (req.get("netValue") != null) {
+            existing.setNetValue(new BigDecimal(req.get("netValue").toString()));
+        }
+        return ResponseEntity.ok(ApiResponse.ok(depreciationHistoryRepository.save(existing)));
+    }
+
+    @DeleteMapping("/depreciation-history/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteDepreciationHistory(@PathVariable Long id) {
+        DepreciationHistory existing = depreciationHistoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DepreciationHistory", "id", id));
+        existing.setIsDeleted(true);
+        depreciationHistoryRepository.save(existing);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     // --- JOURNAL ENTRIES ---
     @GetMapping("/journal-entries")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<List<JournalEntry>>> getAllJournalEntries() {
-        return ResponseEntity.ok(ApiResponse.ok(journalEntryRepository.findByIsDeletedFalse()));
+        List<JournalEntry> entries = journalEntryRepository.findByIsDeletedFalse();
+        for (JournalEntry entry : entries) {
+            List<JournalEntryLine> lines = journalEntryLineRepository.findByJournalEntryIdAndIsDeletedFalse(entry.getId());
+            List<java.util.Map<String, Object>> mappedLines = new java.util.ArrayList<>();
+            for (JournalEntryLine line : lines) {
+                java.util.Map<String, Object> m = new java.util.HashMap<>();
+                m.put("id", line.getId() != null ? line.getId().toString() : "");
+                m.put("accountCode", line.getAccount() != null ? line.getAccount().getAccountCode() : "111");
+                m.put("accountName", line.getAccount() != null ? line.getAccount().getAccountName() : "");
+                m.put("debit", line.getDebitAmount() != null ? line.getDebitAmount() : BigDecimal.ZERO);
+                m.put("credit", line.getCreditAmount() != null ? line.getCreditAmount() : BigDecimal.ZERO);
+                m.put("description", line.getDescription() != null ? line.getDescription() : "");
+                mappedLines.add(m);
+            }
+            entry.setLines(mappedLines);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(entries));
     }
 
     @PostMapping("/journal-entries")
-    public ResponseEntity<ApiResponse<JournalEntry>> createJournalEntry(@RequestBody JournalEntry req) {
-        req.setIsDeleted(false);
-        return ResponseEntity.status(201).body(ApiResponse.created(journalEntryRepository.save(req)));
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<ApiResponse<JournalEntry>> createJournalEntry(@RequestBody java.util.Map<String, Object> req) {
+        JournalEntry entry = new JournalEntry();
+        entry.setIsDeleted(false);
+        
+        String refCode = req.get("referenceCode") != null ? req.get("referenceCode").toString() :
+                (req.get("code") != null ? req.get("code").toString() :
+                (req.get("entryCode") != null ? req.get("entryCode").toString() : "JE-" + System.currentTimeMillis()));
+        entry.setReferenceCode(refCode);
+        
+        String desc = req.get("description") != null ? req.get("description").toString() : "";
+        entry.setDescription(desc);
+        
+        String status = req.get("status") != null ? req.get("status").toString() : "POSTED";
+        entry.setStatus(status);
+        
+        BigDecimal total = req.get("totalAmount") != null ? new BigDecimal(req.get("totalAmount").toString()) :
+                (req.get("amount") != null ? new BigDecimal(req.get("amount").toString()) : BigDecimal.ZERO);
+        entry.setTotalAmount(total);
+
+        Object dateObj = req.get("entryDate") != null ? req.get("entryDate") :
+                (req.get("date") != null ? req.get("date") : req.get("transactionDate"));
+        entry.setEntryDate(parseJournalDate(dateObj));
+        
+        JournalEntry savedEntry = journalEntryRepository.save(entry);
+        
+        if (req.get("lines") instanceof java.util.List) {
+            java.util.List<?> rawLines = (java.util.List<?>) req.get("lines");
+            if (!rawLines.isEmpty()) {
+                saveLinesForEntry(savedEntry, rawLines);
+            }
+        }
+        
+        return ResponseEntity.status(201).body(ApiResponse.created(savedEntry));
+    }
+
+    @PutMapping("/journal-entries/{id}")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<ApiResponse<JournalEntry>> updateJournalEntry(@PathVariable Long id, @RequestBody java.util.Map<String, Object> req) {
+        JournalEntry existing = journalEntryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("JournalEntry", "id", id));
+        if (req.get("referenceCode") != null) existing.setReferenceCode(req.get("referenceCode").toString());
+        else if (req.get("code") != null) existing.setReferenceCode(req.get("code").toString());
+        else if (req.get("entryCode") != null) existing.setReferenceCode(req.get("entryCode").toString());
+
+        if (req.get("description") != null) existing.setDescription(req.get("description").toString());
+        if (req.get("status") != null) existing.setStatus(req.get("status").toString());
+        if (req.get("totalAmount") != null) existing.setTotalAmount(new BigDecimal(req.get("totalAmount").toString()));
+
+        Object dateObj = req.get("entryDate") != null ? req.get("entryDate") :
+                (req.get("date") != null ? req.get("date") : req.get("transactionDate"));
+        if (dateObj != null) {
+            existing.setEntryDate(parseJournalDate(dateObj));
+        }
+        
+        JournalEntry savedEntry = journalEntryRepository.save(existing);
+        
+        if (req.get("lines") instanceof java.util.List) {
+            java.util.List<?> rawLines = (java.util.List<?>) req.get("lines");
+            if (!rawLines.isEmpty()) {
+                // Soft delete old lines only when new lines are explicitly provided
+                List<JournalEntryLine> oldLines = journalEntryLineRepository.findByJournalEntryIdAndIsDeletedFalse(id);
+                for (JournalEntryLine l : oldLines) {
+                    l.setIsDeleted(true);
+                    journalEntryLineRepository.save(l);
+                }
+                saveLinesForEntry(savedEntry, rawLines);
+            }
+        }
+        
+        return ResponseEntity.ok(ApiResponse.ok(savedEntry));
+    }
+
+    private LocalDateTime parseJournalDate(Object dateObj) {
+        if (dateObj == null) return LocalDateTime.now();
+        if (dateObj instanceof LocalDateTime) return (LocalDateTime) dateObj;
+        String str = dateObj.toString().trim();
+        if (str.isEmpty()) return LocalDateTime.now();
+        try {
+            if (str.length() == 10) {
+                return java.time.LocalDate.parse(str).atStartOfDay();
+            } else if (str.contains("T")) {
+                return LocalDateTime.parse(str.split("\\+")[0].split("Z")[0]);
+            } else if (str.contains(" ")) {
+                return LocalDateTime.parse(str.replace(" ", "T"));
+            } else {
+                return LocalDateTime.parse(str);
+            }
+        } catch (Exception e) {
+            return LocalDateTime.now();
+        }
+    }
+
+    private void saveLinesForEntry(JournalEntry savedEntry, java.util.List<?> rawLines) {
+        List<ChartOfAccount> allAccounts = chartOfAccountRepository.findByIsDeletedFalse();
+        ChartOfAccount defaultAccount = !allAccounts.isEmpty() ? allAccounts.get(0) : null;
+        BigDecimal calculatedTotal = BigDecimal.ZERO;
+        
+        for (Object item : rawLines) {
+            if (!(item instanceof java.util.Map)) continue;
+            java.util.Map<?, ?> lineMap = (java.util.Map<?, ?>) item;
+            String accCode = lineMap.get("accountCode") != null ? lineMap.get("accountCode").toString() : null;
+            ChartOfAccount acc = defaultAccount;
+            if (accCode != null) {
+                for (ChartOfAccount a : allAccounts) {
+                    if (accCode.equals(a.getAccountCode())) {
+                        acc = a;
+                        break;
+                    }
+                }
+            }
+            if (acc == null) continue;
+            
+            BigDecimal debit = lineMap.get("debit") != null ? new BigDecimal(lineMap.get("debit").toString()) :
+                    (lineMap.get("debitAmount") != null ? new BigDecimal(lineMap.get("debitAmount").toString()) : BigDecimal.ZERO);
+            BigDecimal credit = lineMap.get("credit") != null ? new BigDecimal(lineMap.get("credit").toString()) :
+                    (lineMap.get("creditAmount") != null ? new BigDecimal(lineMap.get("creditAmount").toString()) : BigDecimal.ZERO);
+            String lineDesc = lineMap.get("description") != null ? lineMap.get("description").toString() : "";
+            
+            JournalEntryLine line = new JournalEntryLine();
+            line.setJournalEntry(savedEntry);
+            line.setAccount(acc);
+            line.setDebitAmount(debit);
+            line.setCreditAmount(credit);
+            line.setDescription(lineDesc);
+            line.setIsDeleted(false);
+            journalEntryLineRepository.save(line);
+            
+            if (debit.compareTo(BigDecimal.ZERO) > 0) {
+                calculatedTotal = calculatedTotal.add(debit);
+            }
+        }
+        if (savedEntry.getTotalAmount() == null || savedEntry.getTotalAmount().compareTo(BigDecimal.ZERO) == 0) {
+            savedEntry.setTotalAmount(calculatedTotal);
+            journalEntryRepository.save(savedEntry);
+        }
+    }
+
+    @DeleteMapping("/journal-entries/{id}")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<ApiResponse<Void>> deleteJournalEntry(@PathVariable Long id) {
+        JournalEntry existing = journalEntryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("JournalEntry", "id", id));
+        existing.setIsDeleted(true);
+        journalEntryRepository.save(existing);
+        
+        List<JournalEntryLine> lines = journalEntryLineRepository.findByJournalEntryIdAndIsDeletedFalse(id);
+        for (JournalEntryLine line : lines) {
+            line.setIsDeleted(true);
+            journalEntryLineRepository.save(line);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     // --- ACCOUNT BALANCES ---

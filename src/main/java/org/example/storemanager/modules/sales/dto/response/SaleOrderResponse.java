@@ -17,7 +17,10 @@ public class SaleOrderResponse {
     private String orderCode;
     private LocalDateTime orderDate;
     private LocalDateTime expectedDelivery;
+    private BigDecimal subTotal;
+    private BigDecimal taxAmount;
     private BigDecimal totalAmount;
+    private BigDecimal finalAmount;
     private String status;
     private Long customerId;
     private String customerName;

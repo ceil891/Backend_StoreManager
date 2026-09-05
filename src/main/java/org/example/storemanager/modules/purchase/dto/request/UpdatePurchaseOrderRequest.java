@@ -27,6 +27,11 @@ public class UpdatePurchaseOrderRequest {
 
     private String paymentStatus;
     private java.math.BigDecimal advanceAmount;
+    private String paymentTerms;
+    private java.math.BigDecimal shippingFee;
+    private java.math.BigDecimal vatRate;
+    private java.math.BigDecimal vatAmount;
+    private java.math.BigDecimal discountAmount;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
     private List<PurchaseOrderDetailRequest> details;

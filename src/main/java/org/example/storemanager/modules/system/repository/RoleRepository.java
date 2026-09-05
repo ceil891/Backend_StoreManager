@@ -22,12 +22,14 @@ public interface RoleRepository extends JpaRepository<Role, Long> {
     // Xử lý check duplicate khi update tên Role
     boolean existsByRoleNameAndIdNotAndIsDeletedFalse(String roleName, Long id);
 
+    Page<Role> findByIsDeletedFalse(Pageable pageable);
+
     @Query("SELECT r FROM Role r WHERE " +
             "(:includeDeleted = true OR r.isDeleted = false OR r.isDeleted IS NULL) AND " +
-            "(:isActive IS NULL OR r.isActive = :isActive) AND " +
-            "(:search IS NULL OR :search = '' OR " +
-            "LOWER(r.roleName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
-            "LOWER(r.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(cast(:isActive as boolean) IS NULL OR r.isActive = :isActive) AND " +
+            "(cast(:search as string) IS NULL OR cast(:search as string) = '' OR " +
+            "LOWER(r.roleName) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR " +
+            "LOWER(r.description) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))")
     Page<Role> findAllRolesIncludeDeleted(
             @Param("search") String search,
             @Param("isActive") Boolean isActive,

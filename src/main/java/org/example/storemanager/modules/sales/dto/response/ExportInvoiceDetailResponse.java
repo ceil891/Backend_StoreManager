@@ -21,4 +21,7 @@ public class ExportInvoiceDetailResponse {
     private BigDecimal unitPrice;
     private BigDecimal discount;
     private BigDecimal subTotal;
+    private BigDecimal taxRate;
+    private BigDecimal taxAmount;
+    private BigDecimal totalAmount;
 }

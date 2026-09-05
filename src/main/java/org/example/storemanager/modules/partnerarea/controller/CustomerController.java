@@ -23,14 +23,30 @@ public class CustomerController {
                 .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
     }
 
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<?>> createCustomerJson(@Valid @RequestBody CreateCustomerRequest req) {
+        return ResponseEntity.status(201)
+                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
+    }
+
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @Valid @ModelAttribute UpdateCustomerRequest req) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<?>> updateCustomerJson(@PathVariable Long id, @Valid @RequestBody UpdateCustomerRequest req) {
         return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<?>> updateStatus(@PathVariable Long id, @RequestParam Boolean isActive) {
         return ResponseEntity.ok(ApiResponse.success(customerService.updateStatus(id, isActive), "Cập nhật trạng thái thành công"));
+    }
+
+    @PatchMapping("/{id}/credit-block")
+    public ResponseEntity<ApiResponse<?>> toggleCreditBlock(@PathVariable Long id, @RequestParam(required = false) Boolean blocked) {
+        return ResponseEntity.ok(ApiResponse.success(customerService.toggleCreditBlock(id, blocked), "Cập nhật trạng thái khóa công nợ thành công"));
     }
 
     @GetMapping

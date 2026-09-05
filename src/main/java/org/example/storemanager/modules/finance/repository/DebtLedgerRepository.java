@@ -10,4 +10,5 @@ import java.util.List;
 public interface DebtLedgerRepository extends JpaRepository<DebtLedger, Long> {
     Optional<DebtLedger> findByIdAndIsDeletedFalse(Long id);
     List<DebtLedger> findByIsDeletedFalse();
+    List<DebtLedger> findByPartnerIdAndEntityTypeAndIsDeletedFalseOrderByTransactionDateDesc(Long partnerId, String entityType);
 }
