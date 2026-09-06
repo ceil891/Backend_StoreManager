@@ -532,3 +532,54 @@ ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS opened_by_user_id BI
 ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS opened_by VARCHAR(150);
 
 ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS shift_name VARCHAR(50);
+
+-- 57. Purchase Invoice Items
+CREATE TABLE IF NOT EXISTS purchase_invoice_items (
+    id BIGSERIAL PRIMARY KEY,
+    purchase_invoice_id BIGINT NOT NULL,
+    product_id BIGINT,
+    product_variant_id BIGINT,
+    product_name VARCHAR(255),
+    sku VARCHAR(100),
+    unit_name VARCHAR(50),
+    quantity NUMERIC(18, 2),
+    unit_price NUMERIC(18, 2),
+    vat_rate NUMERIC(5, 2),
+    vat_amount NUMERIC(18, 2),
+    total_amount NUMERIC(18, 2),
+    note TEXT,
+    is_deleted BOOLEAN DEFAULT false,
+    is_locked BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(255),
+    deleted_at TIMESTAMP,
+    deleted_by VARCHAR(255),
+    tenant_id BIGINT,
+    trace_id VARCHAR(255),
+    version INTEGER DEFAULT 0
+);
+
+-- 58. Transfer Shipments
+CREATE TABLE IF NOT EXISTS transfer_shipments (
+    id BIGSERIAL PRIMARY KEY,
+    tracking_code VARCHAR(50) NOT NULL UNIQUE,
+    transfer_id BIGINT NOT NULL,
+    carrier_name VARCHAR(150),
+    carrier_type VARCHAR(20),
+    status VARCHAR(30) NOT NULL,
+    shipped_at TIMESTAMP,
+    note TEXT,
+    is_deleted BOOLEAN DEFAULT false,
+    is_locked BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(255),
+    deleted_at TIMESTAMP,
+    deleted_by VARCHAR(255),
+    tenant_id BIGINT,
+    trace_id VARCHAR(255),
+    version INTEGER DEFAULT 0
+);

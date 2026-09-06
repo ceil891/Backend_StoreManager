@@ -86,6 +86,19 @@ public class InventoryTransfersApiController {
         return ResponseEntity.ok(ApiResponse.ok(inventoryService.cancelStockTransfer(id, req)));
     }
 
+    // --- VẬN ĐƠN CHUYỂN KHO — TRANSFER SHIPMENTS ---
+    @GetMapping("/transfer-shipments")
+    public ResponseEntity<ApiResponse<List<org.example.storemanager.modules.inventory.dto.TransferShipmentDTO>>> getAllTransferShipments() {
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.getAllTransferShipments()));
+    }
+
+    @PutMapping("/transfer-shipments/{id}/status")
+    public ResponseEntity<ApiResponse<org.example.storemanager.modules.inventory.dto.TransferShipmentDTO>> updateTransferShipmentStatus(
+            @PathVariable Long id,
+            @RequestParam String status) {
+        return ResponseEntity.ok(ApiResponse.ok(inventoryService.updateTransferShipmentStatus(id, status)));
+    }
+
     // ==========================================
     // --- XUẤT HỦY — CANCEL ISSUE ---
     // ==========================================
