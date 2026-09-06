@@ -757,33 +757,89 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getReceiptLines() != null && !dto.getReceiptLines().isEmpty()) {
             for (ImportReceiptDetailDTO line : dto.getReceiptLines()) {
                 ProductVariant variant = null;
-                if (line.getProductVariantId() != null) {
-                    // 1. Tìm theo Variant ID
-                    variant = productVariantRepository.findById(line.getProductVariantId()).orElse(null);
-                    // 2. Nếu không tìm thấy, tìm Variant thuộc Product ID này
-                    if (variant == null) {
-                        variant = productVariantRepository.findByProductIdAndIsDeletedFalse(line.getProductVariantId())
-                                .stream().findFirst().orElse(null);
+                Product targetProduct = null;
+
+                // 1. Ưu tiên cao nhất: Khớp với chi tiết sản phẩm của Đơn mua hàng (PO)
+                if (purchaseOrder != null) {
+                    List<org.example.storemanager.modules.sales.entity.PurchaseOrderDetail> poDetails =
+                            purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(purchaseOrder.getId());
+                    for (org.example.storemanager.modules.sales.entity.PurchaseOrderDetail pod : poDetails) {
+                        if (pod.getProduct() == null) continue;
+                        boolean matches = false;
+                        if (line.getProductId() != null && pod.getProduct().getId().equals(line.getProductId())) {
+                            matches = true;
+                        } else if (line.getSku() != null && pod.getProduct().getProductCode() != null && line.getSku().equalsIgnoreCase(pod.getProduct().getProductCode())) {
+                            matches = true;
+                        } else if (line.getProductName() != null && pod.getProduct().getName() != null && line.getProductName().equalsIgnoreCase(pod.getProduct().getName())) {
+                            matches = true;
+                        } else if (line.getProductVariantId() != null && pod.getProduct().getId().equals(line.getProductVariantId())) {
+                            matches = true;
+                        }
+                        if (matches) {
+                            targetProduct = pod.getProduct();
+                            break;
+                        }
                     }
-                    // 3. Nếu Product tồn tại nhưng chưa có Variant nào, tạo mới Variant đúng cho Product này
-                    if (variant == null) {
-                        Product prod = productRepository.findByIdAndIsDeletedFalse(line.getProductVariantId()).orElse(null);
-                        if (prod != null) {
+                }
+
+                // 2. Nếu không khớp PO hoặc không có PO, tìm qua productId
+                if (targetProduct == null && line.getProductId() != null) {
+                    targetProduct = productRepository.findByIdAndIsDeletedFalse(line.getProductId()).orElse(null);
+                }
+
+                // 3. Nếu vẫn null, kiểm tra theo productVariantId
+                if (targetProduct == null && line.getProductVariantId() != null) {
+                    variant = productVariantRepository.findById(line.getProductVariantId()).orElse(null);
+                    if (variant != null && variant.getProduct() != null) {
+                        if (purchaseOrder == null || orderedQtys.containsKey(variant.getProduct().getId())) {
+                            targetProduct = variant.getProduct();
+                        } else {
+                            variant = null; // Tránh nhầm variant của sản phẩm ngoài PO
+                        }
+                    }
+                }
+
+                // 4. Nếu vẫn null, tìm theo SKU hoặc Tên sản phẩm
+                if (targetProduct == null && (line.getSku() != null || line.getProductName() != null)) {
+                    if (line.getSku() != null) {
+                        targetProduct = productRepository.findByProductCodeAndIsDeletedFalse(line.getSku()).orElse(null);
+                    }
+                    if (targetProduct == null && line.getProductName() != null) {
+                        targetProduct = productRepository.findAll().stream()
+                                .filter(p -> !Boolean.TRUE.equals(p.getIsDeleted()) && p.getName() != null && p.getName().equalsIgnoreCase(line.getProductName()))
+                                .findFirst().orElse(null);
+                    }
+                }
+
+                // Fallback nếu có PO mà chưa gán được targetProduct: lấy sản phẩm đầu tiên trong PO
+                if (targetProduct == null && purchaseOrder != null) {
+                    List<org.example.storemanager.modules.sales.entity.PurchaseOrderDetail> poDetails =
+                            purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(purchaseOrder.getId());
+                    if (!poDetails.isEmpty() && poDetails.get(0).getProduct() != null) {
+                        targetProduct = poDetails.get(0).getProduct();
+                    }
+                }
+
+                // Phục hồi hoặc tạo mới variant cho targetProduct
+                if (targetProduct != null) {
+                    if (variant == null || variant.getProduct() == null || !variant.getProduct().getId().equals(targetProduct.getId())) {
+                        variant = productVariantRepository.findByProductIdAndIsDeletedFalse(targetProduct.getId())
+                                .stream().findFirst().orElse(null);
+                        if (variant == null) {
                             ProductVariant newVar = ProductVariant.builder()
-                                    .product(prod)
-                                    .variantCode("VAR-" + prod.getProductCode() + "-" + System.currentTimeMillis() % 10000)
-                                    .sku(prod.getProductCode() + "-DEFAULT")
-                                    .price(prod.getBasePrice() != null ? prod.getBasePrice() : BigDecimal.ZERO)
+                                    .product(targetProduct)
+                                    .variantCode("VAR-" + targetProduct.getProductCode() + "-" + System.currentTimeMillis() % 10000)
+                                    .sku(targetProduct.getProductCode() + "-DEFAULT")
+                                    .price(targetProduct.getBasePrice() != null ? targetProduct.getBasePrice() : BigDecimal.ZERO)
                                     .build();
                             newVar.setIsDeleted(false);
                             variant = productVariantRepository.save(newVar);
                         }
                     }
-                }
-                // 4. Chỉ fallback khi hoàn toàn không có ID
-                if (variant == null) {
+                } else if (variant == null) {
                     variant = productVariantRepository.findAll().stream().findFirst().orElse(null);
                 }
+
                 if (variant == null) {
                     Product defaultProd = Product.builder()
                             .name("Sữa tươi Vinamilk 100% Không đường 1L")
@@ -1633,10 +1689,12 @@ public class InventoryServiceImpl implements InventoryService {
         Branch toB = branchRepository.findByIdAndIsDeletedFalse(dto.getToBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", dto.getToBranchId()));
 
+        String initialStatus = (dto.getStatus() != null && !dto.getStatus().isBlank()) ? dto.getStatus() : "READY_TO_SHIP";
+
         StockTransfer t = StockTransfer.builder()
                 .transferCode(dto.getTransferCode())
                 .transferDate(dto.getTransferDate() != null ? dto.getTransferDate() : LocalDateTime.now())
-                .status("PENDING_APPROVAL")
+                .status(initialStatus)
                 .fromBranch(fromB)
                 .toBranch(toB)
                 .logisticsPartner(dto.getLogisticsPartner())
@@ -1645,6 +1703,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .estArrivalDate(dto.getEstArrivalDate())
                 .build();
         t.setIsDeleted(false);
+        if (dto.getNote() != null) {
+            t.setNote(dto.getNote());
+        }
         StockTransfer saved = stockTransferRepository.save(t);
 
         List<StockTransferDetailDTO> savedLines = new ArrayList<>();
@@ -1688,10 +1749,72 @@ public class InventoryServiceImpl implements InventoryService {
         StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
 
-        t.setStatus(dto.getStatus());
-        t.setApprovedBy(dto.getApprovedBy());
+        if (dto.getStatus() != null) {
+            t.setStatus(dto.getStatus());
+        }
+        if (dto.getApprovedBy() != null) {
+            t.setApprovedBy(dto.getApprovedBy());
+        }
+        if (dto.getRequestedBy() != null) {
+            t.setRequestedBy(dto.getRequestedBy());
+        }
+        if (dto.getLogisticsPartner() != null) {
+            t.setLogisticsPartner(dto.getLogisticsPartner());
+        }
+        if (dto.getTrackingRef() != null) {
+            t.setTrackingRef(dto.getTrackingRef());
+        }
+        if (dto.getEstArrivalDate() != null) {
+            t.setEstArrivalDate(dto.getEstArrivalDate());
+        }
+        if (dto.getNote() != null) {
+            t.setNote(dto.getNote());
+        }
+        if (dto.getFromBranchId() != null) {
+            branchRepository.findByIdAndIsDeletedFalse(dto.getFromBranchId()).ifPresent(t::setFromBranch);
+        }
+        if (dto.getToBranchId() != null) {
+            branchRepository.findByIdAndIsDeletedFalse(dto.getToBranchId()).ifPresent(t::setToBranch);
+        }
         StockTransfer saved = stockTransferRepository.save(t);
-        return toStockTransferDTO(saved);
+
+        // Update transfer lines if provided
+        if (dto.getTransferLines() != null && !dto.getTransferLines().isEmpty()) {
+            List<StockTransferDetail> existingDetails = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
+            for (StockTransferDetail d : existingDetails) {
+                d.setIsDeleted(true);
+                stockTransferDetailRepository.save(d);
+            }
+            for (StockTransferDetailDTO line : dto.getTransferLines()) {
+                ProductVariant variant = null;
+                if (line.getProductVariantId() != null) {
+                    variant = productVariantRepository.findById(line.getProductVariantId()).orElse(null);
+                }
+                if (variant == null && line.getProductId() != null) {
+                    List<ProductVariant> pvs = productVariantRepository.findByProductIdAndIsDeletedFalse(line.getProductId());
+                    if (!pvs.isEmpty()) variant = pvs.get(0);
+                }
+                if (variant == null) {
+                    variant = productVariantRepository.findAll().stream().filter(v -> !Boolean.TRUE.equals(v.getIsDeleted())).findFirst().orElse(null);
+                }
+                if (variant != null) {
+                    StockTransferDetail detail = StockTransferDetail.builder()
+                            .transfer(saved)
+                            .product(variant.getProduct())
+                            .quantityShipped(line.getTransferQuantity())
+                            .quantityReceived(BigDecimal.ZERO)
+                            .build();
+                    detail.setIsDeleted(false);
+                    stockTransferDetailRepository.save(detail);
+                }
+            }
+        }
+
+        StockTransferDTO result = toStockTransferDTO(saved);
+        result.setTransferLines(stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(saved.getId()).stream()
+                .map(this::toStockTransferDetailDTO)
+                .collect(Collectors.toList()));
+        return result;
     }
 
     @Override

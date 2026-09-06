@@ -10,6 +10,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class ImportReceiptDetailDTO {
     private Long id;
+    private Long productId;
     private Long productVariantId;
     private String productName;
     private String sku;

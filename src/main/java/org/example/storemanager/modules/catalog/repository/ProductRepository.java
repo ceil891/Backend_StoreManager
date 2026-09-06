@@ -14,6 +14,7 @@ import java.util.Optional;
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findByIdAndIsDeletedFalse(Long id);
+    Optional<Product> findByProductCodeAndIsDeletedFalse(String productCode);
     java.util.List<Product> findByIsDeletedFalse();
 
     boolean existsByProductCodeAndIsDeletedFalse(String productCode);
