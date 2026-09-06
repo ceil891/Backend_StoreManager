@@ -45,9 +45,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import org.example.storemanager.modules.inventory.service.InventoryService;
+import org.springframework.context.annotation.Lazy;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -72,6 +74,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
     private final PurchaseInvoiceRepository purchaseInvoiceRepository;
     private final PlatformTransactionManager transactionManager;
+    @Lazy
+    private final InventoryService inventoryService;
 
     @Override
     public PurchaseOrderResponse createOrder(CreatePurchaseOrderRequest request) {
@@ -476,8 +480,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id));
 
-        if (!"APPROVED".equals(po.getStatus()) && !"CONFIRMED".equals(po.getStatus()) && !"SENT_TO_SUPPLIER".equals(po.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ tạo được phiếu nhập cho đơn mua hàng ở trạng thái APPROVED, SENT_TO_SUPPLIER hoặc CONFIRMED");
+        if (!"APPROVED".equals(po.getStatus()) && !"CONFIRMED".equals(po.getStatus()) 
+                && !"SENT_TO_SUPPLIER".equals(po.getStatus()) && !"DISPATCHED".equals(po.getStatus()) 
+                && !"IN_TRANSIT".equals(po.getStatus())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, 
+                    "Chỉ tạo được phiếu nhập cho đơn mua hàng ở trạng thái APPROVED, SENT_TO_SUPPLIER, CONFIRMED hoặc DISPATCHED/IN_TRANSIT");
         }
 
         String username = getCurrentUsername();
@@ -549,6 +556,18 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
 
         importReceiptDetailRepository.saveAll(receiptDetails);
+
+        // Tự động hoàn thành phiếu nhập kho và cộng tồn kho vật lý (SizeInventory & StockLedger)
+        try {
+            if (inventoryService != null) {
+                ImportReceiptDTO completedDto = inventoryService.completeImportReceipt(savedReceipt.getId());
+                po.setStatus("RECEIVED");
+                purchaseOrderRepository.save(po);
+                return completedDto;
+            }
+        } catch (Exception e) {
+            log.warn("[PurchaseOrder] Auto-complete import receipt failed, fallback to pending: {}", e.getMessage());
+        }
 
         // Cập nhật trạng thái đơn mua hàng sang RECEIVED
         po.setStatus("RECEIVED");
