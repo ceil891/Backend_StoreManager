@@ -8,7 +8,7 @@ public class BatchExpiredException extends RuntimeException {
     private final LocalDate expiryDate;
     
     public BatchExpiredException(Long batchId, LocalDate expiryDate) {
-        super(String.format("Batch %d expired on %s", batchId, expiryDate));
+        super(String.format("Lô hàng %d đã hết hạn vào ngày %s", batchId, expiryDate));
         this.batchId = batchId;
         this.expiryDate = expiryDate;
     }

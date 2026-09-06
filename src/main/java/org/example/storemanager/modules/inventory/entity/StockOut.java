@@ -51,6 +51,12 @@ public class StockOut extends BaseEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "order_ref_code", length = 100)
+    private String orderRefCode;
+
+    @Column(name = "destination_address", length = 255)
+    private String destinationAddress;
+
     @OneToMany(mappedBy = "stockOut", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<StockOutDetail> details = new ArrayList<>();

@@ -24,5 +24,7 @@ public class StockOutDTO {
     private String creator;
     private String status;
     private String notes;
+    private String orderRefCode;
+    private String destinationAddress;
     private List<StockOutDetailDTO> items;
 }

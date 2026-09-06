@@ -73,6 +73,10 @@ public class RackServiceImpl implements RackService {
                 .maxVolumeM3(request.getMaxVolumeM3())
                 .maxPallet(request.getMaxPallet())
                 .description(request.getDescription())
+                .province(request.getProvince())
+                .district(request.getDistrict())
+                .ward(request.getWard())
+                .addressDetail(request.getAddressDetail())
                 .isActive(Boolean.TRUE.equals(request.getIsActive()))
                 .area(area)
                 .build();
@@ -100,6 +104,10 @@ public class RackServiceImpl implements RackService {
         rack.setMaxVolumeM3(request.getMaxVolumeM3());
         rack.setMaxPallet(request.getMaxPallet());
         rack.setDescription(request.getDescription());
+        rack.setProvince(request.getProvince());
+        rack.setDistrict(request.getDistrict());
+        rack.setWard(request.getWard());
+        rack.setAddressDetail(request.getAddressDetail());
         if (request.getIsActive() != null) rack.setIsActive(request.getIsActive());
 
         return toResponse(rackRepository.save(rack));
@@ -124,6 +132,10 @@ public class RackServiceImpl implements RackService {
                 .maxVolumeM3(rack.getMaxVolumeM3())
                 .maxPallet(rack.getMaxPallet())
                 .description(rack.getDescription())
+                .province(rack.getProvince())
+                .district(rack.getDistrict())
+                .ward(rack.getWard())
+                .addressDetail(rack.getAddressDetail())
                 .isActive(rack.getIsActive())
                 .areaId(area != null ? area.getId() : null)
                 .areaCode(area != null ? area.getAreaCode() : null)

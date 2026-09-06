@@ -37,6 +37,12 @@ public class Area extends BaseEntity {
     @Column(name = "address_detail", length = 255)
     private String addressDetail;
 
+    @Column(name = "area_size_m2")
+    private Double areaSizeM2;
+
+    @Column(name = "storage_condition", length = 50)
+    private String storageCondition;
+
     @Column(name = "is_active", columnDefinition = "boolean default true")
     private Boolean isActive = true;
 

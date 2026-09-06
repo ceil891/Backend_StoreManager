@@ -9,7 +9,7 @@ public class DuplicateCheckException extends RuntimeException {
     
     public DuplicateCheckException(Long warehouseZoneId, LocalDate checkDate) {
         super(String.format(
-            "Inventory check already exists for warehouse zone %d on %s",
+            "Phiếu kiểm kho đã tồn tại cho khu vực kho %d vào ngày %s",
             warehouseZoneId, checkDate
         ));
         this.warehouseZoneId = warehouseZoneId;

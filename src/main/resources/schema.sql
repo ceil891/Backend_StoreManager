@@ -583,3 +583,7 @@ CREATE TABLE IF NOT EXISTS transfer_shipments (
     trace_id VARCHAR(255),
     version INTEGER DEFAULT 0
 );
+
+-- 59. Stock Out Order Ref and Destination Address
+ALTER TABLE IF EXISTS stock_outs ADD COLUMN IF NOT EXISTS order_ref_code VARCHAR(100);
+ALTER TABLE IF EXISTS stock_outs ADD COLUMN IF NOT EXISTS destination_address VARCHAR(255);

@@ -29,6 +29,10 @@ public class RackDTO {
         private BigDecimal maxVolumeM3;
         private Integer maxPallet;
         private String description;
+        private String province;
+        private String district;
+        private String ward;
+        private String addressDetail;
         private Boolean isActive = true;
 
         @NotNull(message = "Area ID không được trống")
@@ -47,6 +51,10 @@ public class RackDTO {
         private BigDecimal maxVolumeM3;
         private Integer maxPallet;
         private String description;
+        private String province;
+        private String district;
+        private String ward;
+        private String addressDetail;
         private Boolean isActive;
         // Area info
         private Long areaId;

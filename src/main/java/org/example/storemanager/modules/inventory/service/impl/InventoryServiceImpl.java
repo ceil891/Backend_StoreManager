@@ -51,6 +51,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -3166,12 +3167,140 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
 
+        try {
+            createStockOutForTransfer(saved, details);
+        } catch (Exception e) {
+            log.warn("Failed to auto-create StockOut for transfer {}: {}", saved.getTransferCode(), e.getMessage());
+        }
+
         return toStockTransferDTO(saved);
+    }
+
+    private StockOut createStockOutForTransfer(StockTransfer transfer, List<StockTransferDetail> details) {
+        if (transfer == null) return null;
+        String transferCode = transfer.getTransferCode();
+        if (transferCode == null || transferCode.isBlank()) {
+            transferCode = "STX-2026-" + transfer.getId();
+        }
+        String stockOutCode = "PXK-" + transferCode;
+
+        Optional<StockOut> existing = stockOutRepository.findAll().stream()
+                .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                .filter(s -> stockOutCode.equalsIgnoreCase(s.getStockOutCode())
+                        || (s.getOrderRefCode() != null && s.getOrderRefCode().equalsIgnoreCase(transfer.getTransferCode())))
+                .findFirst();
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        String fromBranchName = transfer.getFromBranch() != null ? transfer.getFromBranch().getBranchName() : "Chi nhánh xuất";
+        String toBranchName = transfer.getToBranch() != null ? transfer.getToBranch().getBranchName() : "Chi nhánh nhận";
+
+        int totalItems = 0;
+        BigDecimal totalValue = BigDecimal.ZERO;
+        List<StockOutDetail> outDetails = new ArrayList<>();
+
+        StockOut stockOut = StockOut.builder()
+                .stockOutCode(stockOutCode)
+                .outType("CHUYEN_KHO")
+                .warehouseName(fromBranchName)
+                .destinationAddress(toBranchName)
+                .orderRefCode(transferCode)
+                .issuedDate(transfer.getTransferDate() != null ? transfer.getTransferDate() : LocalDateTime.now())
+                .creator(transfer.getRequestedBy() != null && !transfer.getRequestedBy().isBlank()
+                        ? transfer.getRequestedBy()
+                        : (transfer.getCreatedBy() != null ? transfer.getCreatedBy() : "Thủ kho"))
+                .status("DA_XUAT")
+                .notes("Xuất kho luân chuyển theo Lệnh chuyển " + transferCode + " (" + fromBranchName + " ➔ " + toBranchName + ")")
+                .details(outDetails)
+                .build();
+        stockOut.setIsDeleted(false);
+
+        if (details != null && !details.isEmpty()) {
+            for (StockTransferDetail td : details) {
+                Product p = td.getProduct();
+                int qty = td.getQuantityShipped() != null && td.getQuantityShipped().intValue() > 0
+                        ? td.getQuantityShipped().intValue()
+                        : (td.getQuantityReceived() != null && td.getQuantityReceived().intValue() > 0 ? td.getQuantityReceived().intValue() : 1);
+                BigDecimal unitPrice = BigDecimal.valueOf(50000);
+                if (p != null) {
+                    if (p.getBasePrice() != null && p.getBasePrice().compareTo(BigDecimal.ZERO) > 0) {
+                        unitPrice = p.getBasePrice();
+                    } else if (p.getCostPrice() != null && p.getCostPrice().compareTo(BigDecimal.ZERO) > 0) {
+                        unitPrice = p.getCostPrice();
+                    }
+                }
+                BigDecimal amount = unitPrice.multiply(BigDecimal.valueOf(qty));
+                totalItems += qty;
+                totalValue = totalValue.add(amount);
+
+                StockOutDetail outDetail = StockOutDetail.builder()
+                        .stockOut(stockOut)
+                        .productName(p != null ? p.getName() : "Sản phẩm")
+                        .variant("Chuẩn")
+                        .sku(p != null ? p.getProductCode() : "")
+                        .barcode(p != null ? p.getBarcode() : "")
+                        .quantity(qty)
+                        .unitPrice(unitPrice)
+                        .amount(amount)
+                        .build();
+                outDetail.setIsDeleted(false);
+                outDetails.add(outDetail);
+            }
+        }
+
+        stockOut.setTotalVariants(outDetails.size() > 0 ? outDetails.size() : 1);
+        stockOut.setTotalItems(totalItems > 0 ? totalItems : 1);
+        stockOut.setTotalValue(totalValue);
+
+        return stockOutRepository.save(stockOut);
+    }
+
+    private void syncStockTransfersToStockOuts() {
+        try {
+            List<StockTransfer> shippedTransfers = stockTransferRepository.findAll().stream()
+                    .filter(t -> !Boolean.TRUE.equals(t.getIsDeleted()))
+                    .filter(t -> {
+                        String st = t.getStatus() != null ? t.getStatus().toUpperCase() : "";
+                        return st.equals("SHIPPED") || st.equals("IN_TRANSIT") || st.equals("RECEIVED") || st.equals("COMPLETED");
+                    })
+                    .collect(Collectors.toList());
+
+            if (shippedTransfers.isEmpty()) {
+                return;
+            }
+
+            Set<String> existingRefCodes = stockOutRepository.findAll().stream()
+                    .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
+                    .flatMap(s -> {
+                        List<String> codes = new ArrayList<>();
+                        if (s.getOrderRefCode() != null) codes.add(s.getOrderRefCode().toUpperCase());
+                        if (s.getStockOutCode() != null) codes.add(s.getStockOutCode().toUpperCase());
+                        return codes.stream();
+                    })
+                    .collect(Collectors.toSet());
+
+            for (StockTransfer transfer : shippedTransfers) {
+                String transferCode = transfer.getTransferCode();
+                if (transferCode == null || transferCode.isBlank()) continue;
+                String stockOutCode = "PXK-" + transferCode;
+
+                if (!existingRefCodes.contains(transferCode.toUpperCase()) && !existingRefCodes.contains(stockOutCode.toUpperCase())) {
+                    List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(transfer.getId());
+                    createStockOutForTransfer(transfer, details);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync stock transfers to stock outs: {}", e.getMessage());
+        }
     }
 
     // --- StockOut Methods ---
     @Override
+    @Transactional
     public List<StockOutDTO> getAllStockOuts() {
+        syncStockTransfersToStockOuts();
+
         return stockOutRepository.findAll().stream()
                 .filter(s -> !Boolean.TRUE.equals(s.getIsDeleted()))
                 .map(stockOutMapper::toDTO)
@@ -3198,8 +3327,9 @@ public class InventoryServiceImpl implements InventoryService {
         }
         StockOut saved = stockOutRepository.save(entity);
 
-        // Deduct inventory if status is DA_XUAT or COMPLETED
-        if ("DA_XUAT".equalsIgnoreCase(saved.getStatus()) || "COMPLETED".equalsIgnoreCase(saved.getStatus())) {
+        // Deduct inventory if status is DA_XUAT or COMPLETED (skip for CHUYEN_KHO which is already deducted during transfer shipment)
+        if (("DA_XUAT".equalsIgnoreCase(saved.getStatus()) || "COMPLETED".equalsIgnoreCase(saved.getStatus()))
+                && !"CHUYEN_KHO".equalsIgnoreCase(saved.getOutType())) {
             applyStockOutDeductions(saved);
         }
 
@@ -3216,6 +3346,8 @@ public class InventoryServiceImpl implements InventoryService {
         existing.setStockOutCode(dto.getStockOutCode());
         existing.setOutType(dto.getOutType());
         existing.setWarehouseName(dto.getWarehouseName());
+        existing.setOrderRefCode(dto.getOrderRefCode());
+        existing.setDestinationAddress(dto.getDestinationAddress());
         existing.setCreator(dto.getCreator());
         existing.setStatus(dto.getStatus());
         existing.setNotes(dto.getNotes());

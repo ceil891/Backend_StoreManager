@@ -32,6 +32,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.example.storemanager.shared.exception.inventory.InventoryNotFoundException;
+import org.example.storemanager.shared.exception.inventory.InsufficientStockException;
+import org.example.storemanager.shared.exception.inventory.InvalidStatusTransitionException;
+import org.example.storemanager.shared.exception.inventory.BatchExpiredException;
+import org.example.storemanager.shared.exception.inventory.DuplicateCheckException;
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -282,6 +288,53 @@ public class GlobalExceptionHandler {
 
         String message = String.format("Không tìm thấy endpoint: %s", request.getRequestURI());
         return buildResponse(ErrorCode.RESOURCE_NOT_FOUND, message, request);
+    }
+
+    // ==================== Inventory Exceptions ====================
+
+    @ExceptionHandler(InventoryNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInventoryNotFound(
+            InventoryNotFoundException ex, HttpServletRequest request) {
+
+        log.warn("InventoryNotFound: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        return buildResponse(ErrorCode.INVENTORY_NOT_FOUND, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInsufficientStock(
+            InsufficientStockException ex, HttpServletRequest request) {
+
+        log.warn("InsufficientStock: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        return buildResponse(ErrorCode.INSUFFICIENT_STOCK, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidStatusTransition(
+            InvalidStatusTransitionException ex, HttpServletRequest request) {
+
+        log.warn("InvalidStatusTransition: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        return buildResponse(ErrorCode.INVALID_STATUS_TRANSITION, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(BatchExpiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBatchExpired(
+            BatchExpiredException ex, HttpServletRequest request) {
+
+        log.warn("BatchExpired: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        return buildResponse(ErrorCode.BATCH_EXPIRED, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(DuplicateCheckException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCheck(
+            DuplicateCheckException ex, HttpServletRequest request) {
+
+        log.warn("DuplicateCheck: {} | Path: {}", ex.getMessage(), request.getRequestURI());
+
+        return buildResponse(ErrorCode.DUPLICATE_CHECK, ex.getMessage(), request);
     }
 
     // ==================== Illegal Argument & Illegal State ====================

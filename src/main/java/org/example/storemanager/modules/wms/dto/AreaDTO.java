@@ -30,6 +30,8 @@ public class AreaDTO {
         private String district;
         private String ward;
         private String addressDetail;
+        private Double areaSizeM2;
+        private String storageCondition;
 
         private Boolean isActive = true;
 
@@ -50,6 +52,8 @@ public class AreaDTO {
         private String district;
         private String ward;
         private String addressDetail;
+        private Double areaSizeM2;
+        private String storageCondition;
         private Boolean isActive;
         // Zone info
         private Long zoneId;

@@ -228,7 +228,6 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String input = request.getUsername() != null ? request.getUsername().trim() : "";
-        log.info("[AuthService] Step 1: Searching for user with input: [{}]", input);
         User user = userRepository.findByUsernameIgnoreCase(input)
                 .or(() -> userRepository.findByEmailIgnoreCase(input))
                 .or(() -> userRepository.findByPhone(input))
@@ -241,9 +240,6 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS,
                     "Tên đăng nhập hoặc mật khẩu không đúng");
         }
-
-        log.info("[AuthService] Step 2: Found user [id={}, username={}, email={}, status={}]", 
-                user.getId(), user.getUsername(), user.getEmail(), user.getStatus());
 
         // Kiểm tra trạng thái tài khoản User
         if ("LOCKED".equalsIgnoreCase(user.getStatus()) || "SUSPENDED".equalsIgnoreCase(user.getStatus()) || "TERMINATED".equalsIgnoreCase(user.getStatus())) {
@@ -263,7 +259,6 @@ public class AuthServiceImpl implements AuthService {
                     "Tên đăng nhập hoặc mật khẩu không đúng");
         }
 
-        log.info("[AuthService] Step 3: Password matched! Issuing token pair for user [{}]", input);
         return issueTokenPair(user);
     }
 

@@ -36,6 +36,18 @@ public class Rack extends BaseEntity {
     @Column(name = "max_pallet")
     private Integer maxPallet;
 
+    @Column(name = "province", length = 100)
+    private String province;
+
+    @Column(name = "district", length = 100)
+    private String district;
+
+    @Column(name = "ward", length = 100)
+    private String ward;
+
+    @Column(name = "address_detail", length = 255)
+    private String addressDetail;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

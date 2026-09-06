@@ -26,7 +26,7 @@ public class ApiResponse<T> {
 
     private String errorCode;
 
-    private String code;
+
 
     private LocalDateTime timestamp;
 
@@ -102,7 +102,6 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .errorCode(errorCode)
-                .code(errorCode)
                 .message(message)
                 .path(path)
                 .traceId(org.slf4j.MDC.get("traceId"))
@@ -115,7 +114,6 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(status)
                 .errorCode(errorCode)
-                .code(errorCode)
                 .message(message)
                 .path(path)
                 .errors(errors)
@@ -129,18 +127,35 @@ public class ApiResponse<T> {
                 .success(false)
                 .status(400)
                 .message(message)
-                .code("BAD_REQUEST")
+                .errorCode("BAD_REQUEST")
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
     }
 
     public static <T> ApiResponse<T> error(int status, String message) {
+        String mappedErrorCode;
+        try {
+            mappedErrorCode = org.springframework.http.HttpStatus.valueOf(status).name();
+        } catch (Exception e) {
+            mappedErrorCode = "INTERNAL_SERVER_ERROR";
+        }
         return ApiResponse.<T>builder()
                 .success(false)
                 .status(status)
                 .message(message)
-                .code("INTERNAL_SERVER_ERROR")
+                .errorCode(mappedErrorCode)
+                .traceId(org.slf4j.MDC.get("traceId"))
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> error(int status, String errorCode, String message) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .status(status)
+                .message(message)
+                .errorCode(errorCode)
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .timestamp(LocalDateTime.now())
                 .build();
