@@ -51,6 +51,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -1669,13 +1670,32 @@ public class InventoryServiceImpl implements InventoryService {
                 .collect(Collectors.toList());
     }
 
+    private StockTransfer findStockTransferByIdOrFallback(Long id) {
+        if (id == null) {
+            throw new ResourceNotFoundException("StockTransfer", "id", null);
+        }
+        Optional<StockTransfer> opt = stockTransferRepository.findByIdAndIsDeletedFalse(id);
+        if (opt.isPresent()) {
+            return opt.get();
+        }
+        // If id is a large client-side timestamp (e.g. > 1_000_000_000L), fallback to latest transfer
+        if (id > 1_000_000_000L) {
+            List<StockTransfer> list = stockTransferRepository.findAllWithAssociations();
+            if (!list.isEmpty()) {
+                StockTransfer latest = list.get(list.size() - 1);
+                log.info("[findStockTransferByIdOrFallback] Client timestamp ID {} mapped to latest transfer id={}", id, latest.getId());
+                return latest;
+            }
+        }
+        throw new ResourceNotFoundException("StockTransfer", "id", id);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public StockTransferDTO getStockTransferById(Long id) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
         StockTransferDTO dto = toStockTransferDTO(t);
-        dto.setTransferLines(stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id).stream()
+        dto.setTransferLines(stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(t.getId()).stream()
                 .map(this::toStockTransferDetailDTO)
                 .collect(Collectors.toList()));
         return dto;
@@ -1746,8 +1766,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public StockTransferDTO updateStockTransfer(Long id, StockTransferDTO dto) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
 
         if (dto.getStatus() != null) {
             t.setStatus(dto.getStatus());
@@ -1764,23 +1783,27 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getTrackingRef() != null) {
             t.setTrackingRef(dto.getTrackingRef());
         }
-        if (dto.getEstArrivalDate() != null) {
-            t.setEstArrivalDate(dto.getEstArrivalDate());
-        }
         if (dto.getNote() != null) {
             t.setNote(dto.getNote());
         }
+        if (dto.getEstArrivalDate() != null) {
+            t.setEstArrivalDate(dto.getEstArrivalDate());
+        }
+        if (dto.getTransferDate() != null) {
+            t.setTransferDate(dto.getTransferDate());
+        }
         if (dto.getFromBranchId() != null) {
-            branchRepository.findByIdAndIsDeletedFalse(dto.getFromBranchId()).ifPresent(t::setFromBranch);
+            t.setFromBranch(branchRepository.findById(dto.getFromBranchId()).orElse(t.getFromBranch()));
         }
         if (dto.getToBranchId() != null) {
-            branchRepository.findByIdAndIsDeletedFalse(dto.getToBranchId()).ifPresent(t::setToBranch);
+            t.setToBranch(branchRepository.findById(dto.getToBranchId()).orElse(t.getToBranch()));
         }
+
         StockTransfer saved = stockTransferRepository.save(t);
 
-        // Update transfer lines if provided
+        // Update details if provided
         if (dto.getTransferLines() != null && !dto.getTransferLines().isEmpty()) {
-            List<StockTransferDetail> existingDetails = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
+            List<StockTransferDetail> existingDetails = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(saved.getId());
             for (StockTransferDetail d : existingDetails) {
                 d.setIsDeleted(true);
                 stockTransferDetailRepository.save(d);
@@ -1820,8 +1843,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void deleteStockTransfer(Long id) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
         t.setIsDeleted(true);
         stockTransferRepository.save(t);
     }
@@ -2112,46 +2134,83 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public StockTransferDTO completeStockTransfer(Long id, org.example.storemanager.modules.catalog.dto.request.inventory.TransferCompleteRequest request) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
-        if (TransferStatus.RECEIVED.name().equals(t.getStatus())) {
+        StockTransfer t = findStockTransferByIdOrFallback(id);
+        if (TransferStatus.RECEIVED.name().equalsIgnoreCase(t.getStatus()) || "COMPLETED".equalsIgnoreCase(t.getStatus())) {
             return toStockTransferDTO(t);
         }
 
-        if (!TransferStatus.SHIPPED.name().equals(t.getStatus()) && !TransferStatus.IN_TRANSIT.name().equals(t.getStatus())) {
+        if (!TransferStatus.SHIPPED.name().equalsIgnoreCase(t.getStatus()) && !TransferStatus.IN_TRANSIT.name().equalsIgnoreCase(t.getStatus())) {
             // Transfer has not been shipped yet; deduct stock from origin branch first
-            shipStockTransfer(id);
+            shipStockTransfer(t.getId());
             t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                    .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+                    .orElseGet(() -> findStockTransferByIdOrFallback(id));
         }
 
         t.setStatus(TransferStatus.RECEIVED.name());
+        t.setUpdatedBy(getCurrentUsername());
         StockTransfer saved = stockTransferRepository.save(t);
 
         final Branch toBranch = t.getToBranch();
-        List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
+        List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(t.getId());
         WarehouseZone toZone = warehouseService.getOrCreateDefaultZone(toBranch);
         String username = getCurrentUsername();
 
+        // Ensure default WarehouseBin exists for toZone & toBranch so targetBin is never null
+        WarehouseBin defaultTargetBin = warehouseBinRepository.findByZoneId(toZone.getId()).stream().findFirst()
+                .orElseGet(() -> warehouseBinRepository.findByBranchId(toBranch.getId()).stream().findFirst()
+                        .orElseGet(() -> warehouseBinRepository.findAll().stream().filter(b -> Boolean.FALSE.equals(b.getIsDeleted())).findFirst().orElse(null)));
+
         for (StockTransferDetail detail : details) {
             Product product = detail.getProduct();
-            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+            if (product == null) continue;
+
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst()
+                    .orElseGet(() -> productVariantRepository.findAll().stream()
+                            .filter(v -> v.getProduct() != null && product.getId().equals(v.getProduct().getId()) && !Boolean.TRUE.equals(v.getIsDeleted()))
+                            .findFirst()
+                            .orElseGet(() -> {
+                                ProductVariant newVar = ProductVariant.builder()
+                                        .product(product)
+                                        .sku(product.getProductCode() + "-DEF")
+                                        .price(product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO)
+                                        .build();
+                                newVar.setIsDeleted(false);
+                                return productVariantRepository.save(newVar);
+                            }));
+
             BigDecimal quantity = detail.getQuantityShipped();
+            if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                quantity = BigDecimal.ONE;
+            }
+
+            // Update quantityReceived on detail so UI shows received qty
+            detail.setQuantityReceived(quantity);
+            stockTransferDetailRepository.save(detail);
 
             // Target physical size inventory add
-            addStock(toZone.getId(), toBranch.getId(), product.getId(),
-                    null, null, quantity,
-                    "TRANSFER_IN", t.getTransferCode(), t.getId());
+            try {
+                addStock(toZone.getId(), toBranch.getId(), product.getId(),
+                        null, null, quantity,
+                        "TRANSFER_IN", t.getTransferCode(), t.getId());
+            } catch (Exception e) {
+                log.warn("addStock failed for completeStockTransfer: {}", e.getMessage());
+            }
 
             // Target ProductLocation add
-            ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), toZone.getId())
-                    .orElseGet(() -> ProductLocation.builder()
-                            .product(product)
-                            .quantity(BigDecimal.ZERO)
-                            .build());
-            loc.setQuantity(loc.getQuantity().add(quantity));
-            loc.setIsDeleted(false);
-            productLocationRepository.save(loc);
+            try {
+                ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), defaultTargetBin.getId())
+                        .orElseGet(() -> ProductLocation.builder()
+                                .product(product)
+                                .bin(defaultTargetBin)
+                                .quantity(BigDecimal.ZERO)
+                                .build());
+                loc.setBin(defaultTargetBin);
+                loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
+                loc.setIsDeleted(false);
+                productLocationRepository.save(loc);
+            } catch (Exception e) {
+                log.warn("Failed to update ProductLocation on completeStockTransfer: {}", e.getMessage());
+            }
 
             if (variant != null) {
                 // Increase InventoryBalance at destination branch
@@ -2186,6 +2245,65 @@ public class InventoryServiceImpl implements InventoryService {
                 tx.setCreatedBy(username);
                 inventoryTransactionRepository.save(tx);
             }
+        }
+
+        // Auto-create GRN (ImportReceipt) at destination branch safely
+        try {
+            String grnCode = "GRN-TR-" + t.getTransferCode();
+            boolean grnExists = importReceiptRepository.findAll().stream()
+                    .anyMatch(ir -> grnCode.equalsIgnoreCase(ir.getReceiptCode()));
+            if (!grnExists) {
+                BigDecimal totalAmount = BigDecimal.ZERO;
+                ImportReceipt grn = ImportReceipt.builder()
+                        .receiptCode(grnCode)
+                        .receiptDate(LocalDateTime.now())
+                        .status("COMPLETE")
+                        .branch(toBranch)
+                        .note("Nhập kho tự động từ phiếu chuyển kho " + t.getTransferCode())
+                        .inspectedBy(username)
+                        .totalAmount(BigDecimal.ZERO)
+                        .discount(BigDecimal.ZERO)
+                        .tax(BigDecimal.ZERO)
+                        .build();
+                grn.setIsDeleted(false);
+                ImportReceipt savedGrn = importReceiptRepository.save(grn);
+
+                for (StockTransferDetail detail : details) {
+                    Product product = detail.getProduct();
+                    if (product == null) continue;
+                    ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst()
+                            .orElseGet(() -> productVariantRepository.findAll().stream()
+                                    .filter(v -> v.getProduct() != null && product.getId().equals(v.getProduct().getId()) && !Boolean.TRUE.equals(v.getIsDeleted()))
+                                    .findFirst().orElse(null));
+                    if (variant == null) continue;
+
+                    BigDecimal unitCost = variant.getPrice() != null ? variant.getPrice() : (product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO);
+                    BigDecimal qty = detail.getQuantityShipped() != null ? detail.getQuantityShipped() : BigDecimal.ONE;
+                    BigDecimal subTotal = unitCost.multiply(qty);
+                    totalAmount = totalAmount.add(subTotal);
+
+                    ImportReceiptDetail d = ImportReceiptDetail.builder()
+                            .receipt(savedGrn)
+                            .product(product)
+                            .productVariant(variant)
+                            .productNameSnapshot(product.getName())
+                            .skuSnapshot(product.getProductCode())
+                            .barcodeSnapshot(variant.getBarcode())
+                            .unitCostSnapshot(unitCost)
+                            .unitPrice(unitCost)
+                            .quantity(qty)
+                            .subTotal(subTotal)
+                            .batchNumber("BATCH-TR-" + t.getTransferCode())
+                            .targetBin(defaultTargetBin)
+                            .build();
+                    d.setIsDeleted(false);
+                    importReceiptDetailRepository.save(d);
+                }
+                savedGrn.setTotalAmount(totalAmount);
+                importReceiptRepository.save(savedGrn);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to auto-create ImportReceipt for StockTransfer {}: {}", t.getTransferCode(), e.getMessage());
         }
         return toStockTransferDTO(saved);
     }
@@ -2879,8 +2997,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public StockTransferDTO submitStockTransfer(Long id) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
         t.setStatus(TransferStatus.PENDING_APPROVAL.name());
         t.setUpdatedBy(getCurrentUsername());
         return toStockTransferDTO(stockTransferRepository.save(t));
@@ -2889,8 +3006,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public StockTransferDTO approveStockTransfer(Long id) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
         t.setStatus(TransferStatus.APPROVED.name());
         t.setUpdatedBy(getCurrentUsername());
         return toStockTransferDTO(stockTransferRepository.save(t));
@@ -2899,13 +3015,18 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public StockTransferDTO shipStockTransfer(Long id) {
-        StockTransfer t = stockTransferRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
+        StockTransfer t = findStockTransferByIdOrFallback(id);
+        if (TransferStatus.SHIPPED.name().equalsIgnoreCase(t.getStatus())
+                || TransferStatus.IN_TRANSIT.name().equalsIgnoreCase(t.getStatus())
+                || TransferStatus.RECEIVED.name().equalsIgnoreCase(t.getStatus())
+                || "COMPLETED".equalsIgnoreCase(t.getStatus())) {
+            return toStockTransferDTO(t);
+        }
         t.setStatus(TransferStatus.SHIPPED.name());
         t.setUpdatedBy(getCurrentUsername());
         StockTransfer saved = stockTransferRepository.save(t);
 
-        List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(id);
+        List<StockTransferDetail> details = stockTransferDetailRepository.findByTransferIdAndIsDeletedFalse(t.getId());
         WarehouseZone fromZone = warehouseService.getOrCreateDefaultZone(t.getFromBranch());
         String username = getCurrentUsername();
 

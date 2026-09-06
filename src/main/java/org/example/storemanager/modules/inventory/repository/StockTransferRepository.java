@@ -13,4 +13,6 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     List<StockTransfer> findAllWithAssociations();
 
     Optional<StockTransfer> findByIdAndIsDeletedFalse(Long id);
+
+    Optional<StockTransfer> findByTransferCodeAndIsDeletedFalse(String transferCode);
 }
