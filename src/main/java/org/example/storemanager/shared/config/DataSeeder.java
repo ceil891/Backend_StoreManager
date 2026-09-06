@@ -107,8 +107,61 @@ public class DataSeeder implements CommandLineRunner {
             seedSampleUsers(superAdminRole);
         }
         seedDepartmentsAndPositions();
+        seedMasterUnitsAndCategories();
         fixNullIsDeleted();
         log.info("[DataSeeder] Hoàn tất kiểm tra phân quyền và dữ liệu khởi tạo trong Database.");
+    }
+
+    private void seedMasterUnitsAndCategories() {
+        try {
+            String[][] units = {
+                {"UNT-LON", "Lon", "Đơn vị lon"},
+                {"UNT-CHAI", "Chai", "Đơn vị chai"},
+                {"UNT-GOI", "Gói", "Đơn vị gói"},
+                {"UNT-HOP", "Hộp", "Đơn vị hộp"},
+                {"UNT-LOC", "Lốc", "Đơn vị lốc"},
+                {"UNT-THUNG", "Thùng", "Đơn vị thùng carton"},
+                {"UNT-KET", "Két", "Đơn vị két"},
+                {"UNT-BICH", "Bịch", "Đơn vị bịch"},
+                {"UNT-BAO", "Bao", "Đơn vị bao"},
+                {"UNT-KG", "Kg", "Kilogam"},
+                {"UNT-GAM", "Gam", "Gam"},
+                {"UNT-LIT", "Lít", "Lít"},
+                {"UNT-ML", "Ml", "Mililit"},
+                {"UNT-VI", "Vỉ", "Vỉ"},
+                {"UNT-VIEN", "Viên", "Viên"}
+            };
+            for (String[] u : units) {
+                Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM units WHERE unit_name = ? OR unit_code = ?", Integer.class, u[1], u[0]);
+                if (count == null || count == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO units (unit_code, unit_name, description, is_active, is_deleted, created_at, created_by, precision_decimals) " +
+                        "VALUES (?, ?, ?, true, false, NOW(), 'system_seed', 0)", u[0], u[1], u[2]);
+                }
+            }
+
+            String[][] cats = {
+                {"CAT-NGK", "Nước giải khát", "Nước ngọt, nước khoáng"},
+                {"CAT-BK", "Bánh kẹo", "Bánh snack, kẹo các loại"},
+                {"CAT-MI", "Mì & Thực phẩm ăn liền", "Mì tôm, cháo gói"},
+                {"CAT-SUA", "Sữa & Sản phẩm từ sữa", "Sữa tươi, sữa chua"},
+                {"CAT-GV", "Gia vị & Nước chấm", "Nước mắm, dầu ăn"},
+                {"CAT-CF", "Cà phê & Trà", "Cà phê hòa tan, trà"},
+                {"CAT-TD", "Hàng tiêu dùng", "Hàng gia dụng"}
+            };
+            for (String[] c : cats) {
+                Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM product_categories WHERE category_name = ? OR category_code = ?", Integer.class, c[1], c[0]);
+                if (count == null || count == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO product_categories (category_code, category_name, description, is_active, is_deleted, created_at, created_by) " +
+                        "VALUES (?, ?, ?, true, false, NOW(), 'system_seed')", c[0], c[1], c[2]);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Seed units & categories gặp sự cố: {}", e.getMessage());
+        }
     }
 
     private static class RoleSeedDefinition {

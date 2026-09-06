@@ -610,14 +610,7 @@ public class ProductServiceImpl implements ProductService {
         List<Product> products = productRepository.findAllProductsList(search, categoryId, isActive, includeDeleted, sorting);
         
         List<Long> productIds = products.stream().map(Product::getId).collect(Collectors.toList());
-        List<Object[]> stockSummaries = productIds.isEmpty() ? java.util.Collections.emptyList() :
-                sizeInventoryRepository.sumOnHandByProductIds(productIds);
-        java.util.Map<Long, java.math.BigDecimal> stockMap = stockSummaries.stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],
-                        row -> (java.math.BigDecimal) row[1],
-                        (v1, v2) -> v1
-                ));
+        java.util.Map<Long, java.math.BigDecimal> stockMap = calculateProductStockMap(productIds);
 
         return products.stream()
                 .map(p -> mapToMapProductResponse(p, stockMap.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
@@ -633,14 +626,7 @@ public class ProductServiceImpl implements ProductService {
 
         List<Product> products = pageResult.getContent();
         List<Long> productIds = products.stream().map(Product::getId).collect(Collectors.toList());
-        List<Object[]> stockSummaries = productIds.isEmpty() ? java.util.Collections.emptyList() :
-                sizeInventoryRepository.sumOnHandByProductIds(productIds);
-        java.util.Map<Long, java.math.BigDecimal> stockMap = stockSummaries.stream()
-                .collect(Collectors.toMap(
-                        row -> (Long) row[0],
-                        row -> (java.math.BigDecimal) row[1],
-                        (v1, v2) -> v1
-                ));
+        java.util.Map<Long, java.math.BigDecimal> stockMap = calculateProductStockMap(productIds);
 
         List<MapProductResponse> content = products.stream()
                 .map(p -> mapToMapProductResponse(p, stockMap.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
@@ -698,8 +684,56 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
+    private java.util.Map<Long, java.math.BigDecimal> calculateProductStockMap(List<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        java.util.Map<Long, java.math.BigDecimal> stockMap = new java.util.HashMap<>();
+        try {
+            List<Object[]> balanceSummaries = inventoryBalanceRepository.sumAvailableQuantityByProductIds(productIds);
+            if (balanceSummaries != null) {
+                for (Object[] row : balanceSummaries) {
+                    if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                        stockMap.put((Long) row[0], (java.math.BigDecimal) row[1]);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            List<Object[]> legacySummaries = sizeInventoryRepository.sumOnHandByProductIds(productIds);
+            if (legacySummaries != null) {
+                for (Object[] row : legacySummaries) {
+                    if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                        Long pid = (Long) row[0];
+                        java.math.BigDecimal legacyQty = (java.math.BigDecimal) row[1];
+                        java.math.BigDecimal currentQty = stockMap.getOrDefault(pid, java.math.BigDecimal.ZERO);
+                        if (currentQty.compareTo(java.math.BigDecimal.ZERO) == 0 && legacyQty.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                            stockMap.put(pid, legacyQty);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return stockMap;
+    }
+
     private ProductResponse mapToProductResponse(Product product, List<ProductUnitResponse> units) {
-        BigDecimal onHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
+        BigDecimal onHand = null;
+        try {
+            onHand = inventoryBalanceRepository.sumAvailableQuantityByProductId(product.getId());
+        } catch (Exception ignored) {}
+
+        if (onHand == null || onHand.compareTo(BigDecimal.ZERO) == 0) {
+            try {
+                BigDecimal legacyOnHand = sizeInventoryRepository.sumOnHandByProductId(product.getId());
+                if (legacyOnHand != null && legacyOnHand.compareTo(BigDecimal.ZERO) > 0) {
+                    onHand = legacyOnHand;
+                }
+            } catch (Exception ignored) {}
+        }
+
         List<org.example.storemanager.modules.catalog.dto.response.variant.VariantResponse> variantList = java.util.Collections.emptyList();
         try {
             if (productVariantService != null) {
