@@ -611,6 +611,13 @@ public class AuthServiceImpl implements AuthService {
             org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
             found = true;
             log.info("[AuthService] Đặt lại mật khẩu thành công cho tài khoản User: [{}]", user.getUsername());
+            // Send password reset notification email
+            emailService.sendPasswordResetNotificationEmail(
+                    user.getEmail(),
+                    (user.getFullName() != null && !user.getFullName().isBlank()) ? user.getFullName() : user.getUsername(),
+                    user.getUsername(),
+                    request.getNewPassword()
+            );
         }
 
         // 2. Đồng bộ mật khẩu bảng Customer nếu có
