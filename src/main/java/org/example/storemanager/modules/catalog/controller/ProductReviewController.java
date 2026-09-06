@@ -5,7 +5,7 @@ import org.example.storemanager.modules.catalog.entity.Product;
 import org.example.storemanager.modules.catalog.entity.ProductReview;
 import org.example.storemanager.modules.catalog.repository.ProductRepository;
 import org.example.storemanager.modules.catalog.repository.ProductReviewRepository;
-import org.example.storemanager.shared.dto.response.ApiResponse;
+import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -95,7 +95,7 @@ public class ProductReviewController {
         checkAndSeedSampleReviews();
         List<ProductReview> reviews = reviewRepository.findByProductIdAndIsApprovedTrueOrderByCreatedAtDesc(productId);
         List<Map<String, Object>> result = reviews.stream().map(this::enrichReview).collect(Collectors.toList());
-        return ResponseEntity.ok(ApiResponse.success(result, "Lấy danh sách đánh giá sản phẩm thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Lấy danh sách đánh giá sản phẩm thành công", result));
     }
 
     // 2. POST /api/v1/products/{productId}/reviews - Khách hàng gửi đánh giá sản phẩm
@@ -110,7 +110,7 @@ public class ProductReviewController {
             review.setCustomerName("Khách hàng");
         }
         ProductReview saved = reviewRepository.save(review);
-        return ResponseEntity.status(201).body(ApiResponse.success(enrichReview(saved), "Đánh giá của bạn đã được ghi nhận!"));
+        return ResponseEntity.status(201).body(ApiResponse.ok("Đánh giá của bạn đã được ghi nhận!", enrichReview(saved)));
     }
 
     // 3. GET /api/v1/reviews/customer - Lấy tất cả đánh giá của 1 khách hàng (cho FE_WebOnline ProfilePage)
@@ -129,7 +129,7 @@ public class ProductReviewController {
         }).collect(Collectors.toList());
 
         List<Map<String, Object>> result = filtered.stream().map(this::enrichReview).collect(Collectors.toList());
-        return ResponseEntity.ok(ApiResponse.success(result, "Lấy lịch sử đánh giá của khách hàng thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Lấy lịch sử đánh giá của khách hàng thành công", result));
     }
 
     // 4. GET /api/v1/reviews - Lấy toàn bộ đánh giá sản phẩm trong hệ thống (cho Admin trên RetailHub)
@@ -138,7 +138,7 @@ public class ProductReviewController {
         checkAndSeedSampleReviews();
         List<ProductReview> reviews = reviewRepository.findAllByOrderByCreatedAtDesc();
         List<Map<String, Object>> result = reviews.stream().map(this::enrichReview).collect(Collectors.toList());
-        return ResponseEntity.ok(ApiResponse.success(result, "Lấy toàn bộ đánh giá sản phẩm thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Lấy toàn bộ đánh giá sản phẩm thành công", result));
     }
 
     // 5. PATCH /api/v1/reviews/{id}/approve - Admin duyệt / ẩn đánh giá
@@ -150,13 +150,13 @@ public class ProductReviewController {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy đánh giá ID: " + id));
         review.setIsApproved(isApproved);
         ProductReview saved = reviewRepository.save(review);
-        return ResponseEntity.ok(ApiResponse.success(enrichReview(saved), "Cập nhật trạng thái duyệt thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái duyệt thành công", enrichReview(saved)));
     }
 
     // 6. DELETE /api/v1/reviews/{id} - Admin xóa đánh giá
     @DeleteMapping("/reviews/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteReview(@PathVariable Long id) {
         reviewRepository.deleteById(id);
-        return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa đánh giá thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Đã xóa đánh giá thành công", null));
     }
 }

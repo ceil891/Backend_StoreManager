@@ -73,6 +73,8 @@ public class AreaServiceImpl implements AreaService {
                 .district(request.getDistrict())
                 .ward(request.getWard())
                 .addressDetail(request.getAddressDetail())
+                .areaSizeM2(request.getAreaSizeM2())
+                .storageCondition(request.getStorageCondition())
                 .isActive(Boolean.TRUE.equals(request.getIsActive()))
                 .zone(zone)
                 .build();
@@ -100,6 +102,8 @@ public class AreaServiceImpl implements AreaService {
         area.setDistrict(request.getDistrict());
         area.setWard(request.getWard());
         area.setAddressDetail(request.getAddressDetail());
+        if (request.getAreaSizeM2() != null) area.setAreaSizeM2(request.getAreaSizeM2());
+        if (request.getStorageCondition() != null) area.setStorageCondition(request.getStorageCondition());
         if (request.getIsActive() != null) area.setIsActive(request.getIsActive());
 
         return toResponse(areaRepository.save(area));
@@ -125,6 +129,8 @@ public class AreaServiceImpl implements AreaService {
                 .district(area.getDistrict())
                 .ward(area.getWard())
                 .addressDetail(area.getAddressDetail())
+                .areaSizeM2(area.getAreaSizeM2())
+                .storageCondition(area.getStorageCondition())
                 .isActive(area.getIsActive())
                 .zoneId(zone != null ? zone.getId() : null)
                 .zoneCode(zone != null ? zone.getZoneCode() : null)

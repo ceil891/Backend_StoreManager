@@ -37,7 +37,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (!securityEvaluator.isUserActive(username)) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write("{\"success\":false,\"code\":401,\"errorCode\":\"ACCOUNT_DISABLED\",\"message\":\"Tài khoản của bạn đã bị vô hiệu hóa hoặc bị khóa phiên.\"}");
+
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                org.example.storemanager.modules.common.dto.response.ApiResponse<Void> body =
+                        org.example.storemanager.modules.common.dto.response.ApiResponse.fail(
+                                401,
+                                "ACCOUNT_DISABLED",
+                                "Tài khoản của bạn đã bị vô hiệu hóa hoặc bị khóa phiên.",
+                                request.getRequestURI()
+                        );
+                mapper.writeValue(response.getOutputStream(), body);
                 return;
             }
 

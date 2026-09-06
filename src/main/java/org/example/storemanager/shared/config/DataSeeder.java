@@ -81,10 +81,35 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         try {
+            autoPatchSchema();
             fixNullIsDeleted();
             seedInitialData();
         } catch (Exception e) {
             log.warn("[DataSeeder] Quá trình seed dữ liệu khởi tạo gặp sự cố (ứng dụng vẫn tiếp tục khởi động): {}", e.getMessage());
+        }
+    }
+
+    private void autoPatchSchema() {
+        try {
+            // racks columns
+            jdbcTemplate.execute("ALTER TABLE racks ADD COLUMN IF NOT EXISTS province VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE racks ADD COLUMN IF NOT EXISTS district VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE racks ADD COLUMN IF NOT EXISTS ward VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE racks ADD COLUMN IF NOT EXISTS address_detail VARCHAR(255)");
+
+            // wms_areas columns
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS area_size_m2 DOUBLE PRECISION");
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS storage_condition VARCHAR(50)");
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS province VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS district VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS ward VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE wms_areas ADD COLUMN IF NOT EXISTS address_detail VARCHAR(255)");
+
+            // stock_outs columns
+            jdbcTemplate.execute("ALTER TABLE stock_outs ADD COLUMN IF NOT EXISTS order_ref_code VARCHAR(100)");
+            jdbcTemplate.execute("ALTER TABLE stock_outs ADD COLUMN IF NOT EXISTS destination_address VARCHAR(255)");
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Auto-patch schema: {}", e.getMessage());
         }
     }
 

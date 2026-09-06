@@ -6,7 +6,7 @@ public class InventoryNotFoundException extends RuntimeException {
     private final Long resourceId;
     
     public InventoryNotFoundException(String resourceType, Long resourceId) {
-        super(String.format("%s not found with ID: %d", resourceType, resourceId));
+        super(String.format("Không tìm thấy %s với ID: %d", resourceType, resourceId));
         this.resourceType = resourceType;
         this.resourceId = resourceId;
     }

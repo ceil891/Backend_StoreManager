@@ -43,6 +43,8 @@ public class StockOutMapper {
                 .creator(entity.getCreator())
                 .status(entity.getStatus())
                 .notes(entity.getNotes())
+                .orderRefCode(entity.getOrderRefCode())
+                .destinationAddress(entity.getDestinationAddress())
                 .items(itemDTOs)
                 .build();
     }
@@ -92,6 +94,8 @@ public class StockOutMapper {
                 .creator(dto.getCreator())
                 .status(dto.getStatus() != null ? dto.getStatus() : "CHO_XU_LY")
                 .notes(dto.getNotes())
+                .orderRefCode(dto.getOrderRefCode())
+                .destinationAddress(dto.getDestinationAddress())
                 .details(new ArrayList<>())
                 .build();
 

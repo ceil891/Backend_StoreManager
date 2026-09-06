@@ -7,7 +7,7 @@ public class InvalidStatusTransitionException extends RuntimeException {
     
     public InvalidStatusTransitionException(String currentStatus, String targetStatus) {
         super(String.format(
-            "Invalid status transition from '%s' to '%s'",
+            "Trạng thái chuyển đổi không hợp lệ từ '%s' sang '%s'",
             currentStatus, targetStatus
         ));
         this.currentStatus = currentStatus;

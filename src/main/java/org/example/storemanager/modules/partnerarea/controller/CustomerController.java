@@ -3,7 +3,7 @@ package org.example.storemanager.modules.partnerarea.controller;
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.modules.partnerarea.dto.request.customerdto.CreateCustomerRequest;
 import org.example.storemanager.modules.partnerarea.dto.request.customerdto.UpdateCustomerRequest;
-import org.example.storemanager.shared.dto.response.ApiResponse;
+import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.modules.partnerarea.service.customer.CustomerService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,33 +20,33 @@ public class CustomerController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<?>> createCustomer(@Valid @ModelAttribute CreateCustomerRequest req) {
         return ResponseEntity.status(201)
-                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
+                .body(ApiResponse.ok("Tạo mới thành công", customerService.createCustomer(req)));
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<?>> createCustomerJson(@Valid @RequestBody CreateCustomerRequest req) {
         return ResponseEntity.status(201)
-                .body(ApiResponse.success(customerService.createCustomer(req), "Tạo mới thành công"));
+                .body(ApiResponse.ok("Tạo mới thành công", customerService.createCustomer(req)));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<?>> updateCustomer(@PathVariable Long id, @Valid @ModelAttribute UpdateCustomerRequest req) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật thành công", customerService.updateCustomer(id, req)));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<?>> updateCustomerJson(@PathVariable Long id, @Valid @RequestBody UpdateCustomerRequest req) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.updateCustomer(id, req), "Cập nhật thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật thành công", customerService.updateCustomer(id, req)));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<?>> updateStatus(@PathVariable Long id, @RequestParam Boolean isActive) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.updateStatus(id, isActive), "Cập nhật trạng thái thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái thành công", customerService.updateStatus(id, isActive)));
     }
 
     @PatchMapping("/{id}/credit-block")
     public ResponseEntity<ApiResponse<?>> toggleCreditBlock(@PathVariable Long id, @RequestParam(required = false) Boolean blocked) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.toggleCreditBlock(id, blocked), "Cập nhật trạng thái khóa công nợ thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Cập nhật trạng thái khóa công nợ thành công", customerService.toggleCreditBlock(id, blocked)));
     }
 
     @GetMapping
@@ -58,19 +58,19 @@ public class CustomerController {
             @RequestParam(required = false) String search) {
 
         String query = (keyword != null && !keyword.isBlank()) ? keyword : search;
-        return ResponseEntity.ok(ApiResponse.success(
-                customerService.getAllCustomers(page, size, isActive, query),
-                "Lấy danh sách thành công"
+        return ResponseEntity.ok(ApiResponse.ok(
+                "Lấy danh sách thành công",
+                customerService.getAllCustomers(page, size, isActive, query)
         ));
     }
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> getCustomerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.getCustomerById(id), "Lấy chi tiết thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Lấy chi tiết thành công", customerService.getCustomerById(id)));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<?>> deleteCustomer(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(customerService.deleteCustomer(id), "Xóa thành công"));
+        return ResponseEntity.ok(ApiResponse.ok("Xóa thành công", customerService.deleteCustomer(id)));
     }
 
     @GetMapping("/{id}/debts")
@@ -88,7 +88,7 @@ public class CustomerController {
             @PathVariable Long id,
             @RequestParam(required = false) String newPassword) {
         customerService.resetCustomerPassword(id, newPassword);
-        return ResponseEntity.ok(ApiResponse.success(null, "Cấp lại mật khẩu khách hàng thành công! Khách hàng sẽ phải đổi mật khẩu ở lần đăng nhập tiếp theo."));
+        return ResponseEntity.ok(ApiResponse.ok("Cấp lại mật khẩu khách hàng thành công! Khách hàng sẽ phải đổi mật khẩu ở lần đăng nhập tiếp theo.", null));
     }
 
     @PutMapping("/{id}/change-password")
@@ -97,6 +97,6 @@ public class CustomerController {
             @RequestParam String oldPassword,
             @RequestParam String newPassword) {
         customerService.changeCustomerPassword(id, oldPassword, newPassword);
-        return ResponseEntity.ok(ApiResponse.success(null, "Đổi mật khẩu thành công!"));
+        return ResponseEntity.ok(ApiResponse.ok("Đổi mật khẩu thành công!", null));
     }
 }

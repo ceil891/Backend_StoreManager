@@ -2,7 +2,7 @@ package org.example.storemanager.modules.partnerarea.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.storemanager.modules.partnerarea.dto.request.area.CreateAreaRequest;
-import org.example.storemanager.shared.dto.response.ApiResponse;
+import org.example.storemanager.modules.common.dto.response.ApiResponse;
 import org.example.storemanager.modules.partnerarea.dto.response.area.AreaListResponse;
 import org.example.storemanager.modules.partnerarea.service.area.AreaService;
 import org.springframework.data.domain.Page;

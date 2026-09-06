@@ -10,7 +10,7 @@ public class InsufficientStockException extends RuntimeException {
     
     public InsufficientStockException(Long productId, BigDecimal requested, BigDecimal available) {
         super(String.format(
-            "Insufficient stock for product %d: requested %s, available %s",
+            "Sản phẩm #%d không đủ tồn kho: yêu cầu %s, hiện có %s",
             productId, requested, available
         ));
         this.productId = productId;
