@@ -46,6 +46,8 @@ public class CustomerServiceImpl implements CustomerService {
     private final AreaRepository areaRepository;
     private final org.example.storemanager.modules.sales.repository.SaleOrderRepository saleOrderRepository;
     private final org.example.storemanager.modules.finance.repository.DebtLedgerRepository debtLedgerRepository;
+    private final org.example.storemanager.shared.service.EmailService emailService;
+    private final org.example.storemanager.modules.system.repository.RefreshTokenRepository refreshTokenRepository;
 
     private String getCurrentUsername() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -493,6 +495,24 @@ public class CustomerServiceImpl implements CustomerService {
         c.setPassword(passwordEncoder.encode(pwd));
         c.setMustChangePassword(true);
         customerRepository.save(c);
+
+        if (c.getEmail() != null && !c.getEmail().isBlank()) {
+            String email = c.getEmail().trim();
+            userRepository.findByEmailIgnoreCase(email).ifPresent(u -> {
+                u.setPassword(passwordEncoder.encode(pwd));
+                userRepository.save(u);
+                refreshTokenRepository.revokeAllByUser(u);
+                org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(u.getUsername());
+                org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(u.getEmail());
+            });
+
+            emailService.sendPasswordResetNotificationEmail(
+                    email,
+                    c.getName(),
+                    c.getCustomerCode() != null ? c.getCustomerCode() : c.getName(),
+                    pwd
+            );
+        }
     }
 
     @Override

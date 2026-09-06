@@ -7,6 +7,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import org.springframework.beans.factory.annotation.Value;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -16,13 +17,18 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    @Value("${spring.mail.username:smartretail.contact@gmail.com}")
+    private String fromEmail;
+
     public void sendAccountInfoEmail(String toEmail, String fullName, String username, String password) {
+        if (toEmail == null || toEmail.isBlank()) return;
         CompletableFuture.runAsync(() -> {
             try {
                 MimeMessage message = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(toEmail);
+                helper.setFrom(fromEmail, "RetailHub Support");
+                helper.setTo(toEmail.trim());
                 helper.setSubject("Thông tin tài khoản đăng nhập hệ thống RetailHub");
 
                 String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;\">" +
@@ -50,12 +56,14 @@ public class EmailService {
     }
 
     public void sendManagerNotificationEmail(String managerEmail, String managerName, String employeeName, String employeeEmail, String employeeRole, String branchName) {
+        if (managerEmail == null || managerEmail.isBlank()) return;
         CompletableFuture.runAsync(() -> {
             try {
                 MimeMessage message = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(managerEmail);
+                helper.setFrom(fromEmail, "RetailHub Support");
+                helper.setTo(managerEmail.trim());
                 helper.setSubject("Thông báo nhân sự mới được thêm vào hệ thống RetailHub");
 
                 String branchText = branchName != null ? branchName : "Toàn hệ thống";
@@ -84,12 +92,14 @@ public class EmailService {
     }
 
     public void sendWelcomeCustomerEmail(String toEmail, String fullName, String username, String voucherCode) {
+        if (toEmail == null || toEmail.isBlank()) return;
         CompletableFuture.runAsync(() -> {
             try {
                 MimeMessage message = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(toEmail);
+                helper.setFrom(fromEmail, "RetailHub Support");
+                helper.setTo(toEmail.trim());
                 helper.setSubject("Chào mừng bạn gia nhập RetailHub - Nhận ngay Voucher ưu đãi!");
 
                 String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;\">" +
@@ -119,12 +129,14 @@ public class EmailService {
     }
 
     public void sendForgotPasswordOtpEmail(String toEmail, String fullName, String otpCode) {
+        if (toEmail == null || toEmail.isBlank()) return;
         CompletableFuture.runAsync(() -> {
             try {
                 MimeMessage message = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-                helper.setTo(toEmail);
+                helper.setFrom(fromEmail, "RetailHub Support");
+                helper.setTo(toEmail.trim());
                 helper.setSubject("Mã xác thực OTP đặt lại mật khẩu - RetailHub");
 
                 String displayName = (fullName != null && !fullName.isBlank()) ? fullName : "Quý khách";
@@ -140,7 +152,7 @@ public class EmailService {
                         "  <p style=\"color: #dc2626; font-size: 13px;\"><em>* Tuyệt đối không chia sẻ mã OTP này cho bất kỳ ai để đảm bảo an toàn cho tài khoản của bạn.</em></p>" +
                         "  <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc liên hệ với bộ phận Quản trị hệ thống.</p>" +
                         "  <hr style=\"border: none; border-top: 1px solid #eee; margin: 20px 0;\" />" +
-                        "  <p style=\"font-size: 12px; color: #888; text-align: center;\">Đây là email tự động từ hệ thống RetailHub.</p>" +
+                        "  <p style=\"font-size: 12px; color: #888; text-align: center;\">Đây là email tự động từ hệ thống RetailHub. Vui lòng không phản hồi email này.</p>" +
                         "</div>";
 
                 helper.setText(htmlContent, true);
@@ -148,6 +160,42 @@ public class EmailService {
                 log.info("Đã gửi email mã OTP đặt lại mật khẩu thành công đến [{}]", toEmail);
             } catch (Exception e) {
                 log.error("Lỗi khi gửi email OTP đến [{}]: {}", toEmail, e.getMessage(), e);
+            }
+        });
+    }
+
+    public void sendPasswordResetNotificationEmail(String toEmail, String fullName, String username, String newPassword) {
+        if (toEmail == null || toEmail.isBlank()) return;
+        CompletableFuture.runAsync(() -> {
+            try {
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+                helper.setFrom(fromEmail, "RetailHub Support");
+                helper.setTo(toEmail.trim());
+                helper.setSubject("Thông báo cấp lại mật khẩu tài khoản RetailHub");
+
+                String displayName = (fullName != null && !fullName.isBlank()) ? fullName : username;
+                String htmlContent = "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;\">" +
+                        "  <h2 style=\"color: #d97706; text-align: center;\">Cấp Lại Mật Khẩu Thành Công</h2>" +
+                        "  <p>Xin chào <strong>" + displayName + "</strong>,</p>" +
+                        "  <p>Mật khẩu đăng nhập cho tài khoản <strong>" + username + "</strong> của bạn trên hệ thống <strong>RetailHub</strong> vừa được quản trị viên cấp lại thành công.</p>" +
+                        "  <div style=\"background-color: #fffbeb; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #d97706;\">" +
+                        "    <p style=\"margin: 5px 0;\"><strong>Tài khoản đăng nhập:</strong> " + username + "</p>" +
+                        "    <p style=\"margin: 5px 0;\"><strong>Email nhận thông báo:</strong> " + toEmail + "</p>" +
+                        "    <p style=\"margin: 5px 0;\"><strong>Mật khẩu mới:</strong> <span style=\"font-family: monospace; font-size: 16px; color: #b45309; font-weight: bold;\">" + newPassword + "</span></p>" +
+                        "  </div>" +
+                        "  <p style=\"color: #dc2626; font-size: 13px;\"><em>* Lưu ý: Toàn bộ phiên đăng nhập cũ trên các thiết bị khác đã được tự động đăng xuất để đảm bảo an toàn. Vui lòng đăng nhập và đổi mật khẩu mới nếu cần.</em></p>" +
+                        "  <p>Nếu bạn không yêu cầu hành động này, vui lòng liên hệ ngay với Quản trị viên hệ thống để được hỗ trợ.</p>" +
+                        "  <hr style=\"border: none; border-top: 1px solid #eee; margin: 20px 0;\" />" +
+                        "  <p style=\"font-size: 12px; color: #888; text-align: center;\">Đây là email tự động từ hệ thống RetailHub. Vui lòng không phản hồi email này.</p>" +
+                        "</div>";
+
+                helper.setText(htmlContent, true);
+                mailSender.send(message);
+                log.info("[EmailService] Đã gửi email thông báo cấp lại mật khẩu thành công đến [{}]", toEmail);
+            } catch (Exception e) {
+                log.error("[EmailService] Lỗi khi gửi email thông báo cấp lại mật khẩu đến [{}]: {}", toEmail, e.getMessage(), e);
             }
         });
     }

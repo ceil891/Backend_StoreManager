@@ -540,14 +540,36 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void sendForgotPasswordOtp(ForgotPasswordRequest request) {
         String email = request.getEmail().trim().toLowerCase();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email));
+        
+        // Tìm tài khoản User (không phân biệt hoa/thường)
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email)
+                .or(() -> userRepository.findByEmailAndIsDeletedFalse(email));
+
+        String recipientEmail;
+        String recipientName;
+
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            recipientEmail = user.getEmail();
+            recipientName = user.getFullName();
+        } else {
+            // Fallback tìm tài khoản Khách hàng
+            var customerOpt = customerRepository.findByEmailAndIsDeletedFalse(email)
+                    .or(() -> customerRepository.findByEmail(email));
+            if (customerOpt.isPresent()) {
+                var customer = customerOpt.get();
+                recipientEmail = customer.getEmail();
+                recipientName = customer.getName();
+            } else {
+                throw new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email);
+            }
+        }
 
         // Sinh mã OTP 6 chữ số ngẫu nhiên
         String otp = String.format("%06d", new java.util.Random().nextInt(1000000));
         otpCache.put(email, new OtpEntry(otp, LocalDateTime.now().plusMinutes(10)));
 
-        emailService.sendForgotPasswordOtpEmail(user.getEmail(), user.getFullName(), otp);
+        emailService.sendForgotPasswordOtpEmail(recipientEmail, recipientName, otp);
         log.info("[AuthService] Đã gửi mã OTP đặt lại mật khẩu đến email: [{}]", email);
     }
 
@@ -575,17 +597,39 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Mã xác thực OTP không chính xác.");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email));
+        boolean found = false;
 
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        userRepository.save(user);
+        // 1. Cập nhật tài khoản User nếu tồn tại
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email)
+                .or(() -> userRepository.findByEmailAndIsDeletedFalse(email));
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            userRepository.save(user);
+            refreshTokenRepository.revokeAllByUser(user);
+            org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getUsername());
+            org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
+            found = true;
+            log.info("[AuthService] Đặt lại mật khẩu thành công cho tài khoản User: [{}]", user.getUsername());
+        }
 
-        // Thu hồi toàn bộ refresh token cũ
-        refreshTokenRepository.revokeAllByUser(user);
+        // 2. Đồng bộ mật khẩu bảng Customer nếu có
+        var customerOpt = customerRepository.findByEmailAndIsDeletedFalse(email)
+                .or(() -> customerRepository.findByEmail(email));
+        if (customerOpt.isPresent()) {
+            var customer = customerOpt.get();
+            customer.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            customer.setMustChangePassword(false);
+            customerRepository.save(customer);
+            found = true;
+            log.info("[AuthService] Đồng bộ mật khẩu thành công cho Khách hàng: [{}]", customer.getCustomerCode());
+        }
+
+        if (!found) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy tài khoản nào liên kết với email " + email);
+        }
 
         // Xóa OTP khỏi cache sau khi đổi mật khẩu thành công
         otpCache.remove(email);
-        log.info("[AuthService] Đặt lại mật khẩu thành công cho tài khoản: [{}]", user.getUsername());
     }
 }

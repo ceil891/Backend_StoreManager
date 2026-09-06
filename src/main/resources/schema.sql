@@ -525,3 +525,9 @@ ALTER TABLE IF EXISTS export_invoice_details ADD COLUMN IF NOT EXISTS tax_amount
 ALTER TABLE IF EXISTS export_invoice_details ADD COLUMN IF NOT EXISTS total_amount NUMERIC(18, 2) DEFAULT 0;
 ALTER TABLE IF EXISTS sale_orders ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(18, 2) DEFAULT 0;
 ALTER TABLE IF EXISTS sale_orders ADD COLUMN IF NOT EXISTS sub_total NUMERIC(18, 2) DEFAULT 0;
+
+-- 56. POS Sessions Overnight & Impersonation Support
+ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS business_date DATE;
+ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS opened_by_user_id BIGINT;
+ALTER TABLE IF EXISTS pos_sessions ADD COLUMN IF NOT EXISTS opened_by VARCHAR(150);
+

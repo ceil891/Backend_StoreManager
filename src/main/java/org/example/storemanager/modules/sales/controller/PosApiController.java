@@ -73,27 +73,66 @@ public class PosApiController {
             branch = branchRepository.findAll().stream().filter(b -> !Boolean.TRUE.equals(b.getIsDeleted())).findFirst().orElse(null);
         }
 
+        String terminal = req.getTerminalCode() != null && !req.getTerminalCode().isBlank() ? req.getTerminalCode() : "POS-001";
+        if (branch != null && posSessionRepository.existsByTerminalCodeAndBranchIdAndStatusAndIsDeletedFalse(terminal, branch.getId(), "OPEN")) {
+            return ResponseEntity.status(409).body(ApiResponse.error(
+                    409,
+                    String.format("Quầy thu ngân %s tại %s hiện đang có ca làm việc mở chưa được kết ca! Mỗi quầy chỉ được phép mở 1 ca duy nhất.",
+                            terminal, branch.getBranchName() != null ? branch.getBranchName() : branch.getBranchCode())
+            ));
+        }
+
         String shiftName = req.getShiftName();
         if (shiftName == null || shiftName.isBlank()) {
             int hour = LocalDateTime.now().getHour();
-            if (hour < 12) shiftName = "CA_SANG";
-            else if (hour < 18) shiftName = "CA_CHIEU";
-            else shiftName = "CA_TOI";
+            if (hour >= 6 && hour < 12) shiftName = "CA_SANG";
+            else if (hour >= 12 && hour < 18) shiftName = "CA_CHIEU";
+            else if (hour >= 18 && hour < 23) shiftName = "CA_TOI";
+            else shiftName = "CA_DEM";
         }
+
+        // Xử lý ca xuyên đêm (Overnight Shift): Nếu mở ca từ 00:00 - 05:59 sáng thuộc CA_DEM thì tính ngày kinh doanh là ngày hôm trước
+        java.time.LocalDate bDate = req.getBusinessDate();
+        if (bDate == null) {
+            LocalDateTime now = LocalDateTime.now();
+            if (now.getHour() < 6 && "CA_DEM".equalsIgnoreCase(shiftName)) {
+                bDate = now.toLocalDate().minusDays(1);
+            } else {
+                bDate = now.toLocalDate();
+            }
+        }
+
+        // Xử lý Quản lý mở ca hộ cho Thu ngân
+        org.example.storemanager.modules.system.entity.User openedByUser = null;
+        if (req.getOpenedByUserId() != null) {
+            openedByUser = userRepository.findById(req.getOpenedByUserId()).orElse(null);
+        }
+        if (openedByUser == null && username != null && !"anonymousUser".equals(username)) {
+            openedByUser = userRepository.findByUsername(username).or(() -> userRepository.findByEmail(username)).orElse(null);
+        }
+        if (openedByUser == null) {
+            openedByUser = user;
+        }
+        String openedByName = req.getOpenedBy() != null && !req.getOpenedBy().isBlank()
+                ? req.getOpenedBy()
+                : (openedByUser != null ? (openedByUser.getFullName() != null ? openedByUser.getFullName() : openedByUser.getUsername()) : username);
 
         PosSession session = PosSession.builder()
                 .sessionCode(req.getSessionCode() != null ? req.getSessionCode() : "POS-SES-" + System.currentTimeMillis())
-                .terminalCode(req.getTerminalCode() != null ? req.getTerminalCode() : "POS-001")
+                .terminalCode(terminal)
+                .businessDate(bDate)
                 .startTime(LocalDateTime.now())
                 .openingCash(req.getOpeningCash() != null ? req.getOpeningCash() : java.math.BigDecimal.ZERO)
                 .expectedClosingCash(req.getOpeningCash() != null ? req.getOpeningCash() : java.math.BigDecimal.ZERO)
                 .shiftName(shiftName)
                 .status("OPEN")
                 .user(user)
+                .openedByUser(openedByUser)
+                .openedBy(openedByName)
                 .branch(branch)
                 .build();
         session.setIsDeleted(false);
-        session.setCreatedBy(username != null ? username : "SYSTEM");
+        session.setCreatedBy(openedByName != null ? openedByName : (username != null ? username : "SYSTEM"));
 
         PosSession saved = posSessionRepository.save(session);
         return ResponseEntity.status(201).body(ApiResponse.created(mapToSessionResponse(saved)));
@@ -332,10 +371,18 @@ public class PosApiController {
             expected = opening.add(cashRevenue);
         }
 
+        boolean isDelegated = session.getOpenedByUser() != null && session.getUser() != null
+                && !session.getOpenedByUser().getId().equals(session.getUser().getId());
+        String openedByName = session.getOpenedBy();
+        if (openedByName == null && session.getOpenedByUser() != null) {
+            openedByName = session.getOpenedByUser().getFullName() != null ? session.getOpenedByUser().getFullName() : session.getOpenedByUser().getUsername();
+        }
+
         return org.example.storemanager.modules.sales.dto.response.PosSessionResponse.builder()
                 .id(session.getId())
                 .sessionCode(session.getSessionCode())
                 .terminalCode(session.getTerminalCode())
+                .businessDate(session.getBusinessDate())
                 .startTime(session.getStartTime())
                 .endTime(session.getEndTime())
                 .openingCash(session.getOpeningCash())
@@ -344,7 +391,10 @@ public class PosApiController {
                 .status(session.getStatus())
                 .shiftName(session.getShiftName())
                 .userId(session.getUser() != null ? session.getUser().getId() : null)
-                .cashierName(session.getUser() != null ? session.getUser().getFullName() : "Thu ngân")
+                .cashierName(session.getUser() != null ? (session.getUser().getFullName() != null ? session.getUser().getFullName() : session.getUser().getUsername()) : "Thu ngân")
+                .openedByUserId(session.getOpenedByUser() != null ? session.getOpenedByUser().getId() : null)
+                .openedByName(openedByName)
+                .isDelegated(isDelegated)
                 .branchId(session.getBranch() != null ? session.getBranch().getId() : null)
                 .branchName(session.getBranch() != null ? session.getBranch().getBranchName() : "Chi nhánh")
                 .totalOrders(orderCount)

@@ -12,6 +12,7 @@ public class PosSessionResponse {
     private Long id;
     private String sessionCode;
     private String terminalCode;
+    private java.time.LocalDate businessDate;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private BigDecimal openingCash;
@@ -21,6 +22,9 @@ public class PosSessionResponse {
     private String shiftName;
     private Long userId;
     private String cashierName;
+    private Long openedByUserId;
+    private String openedByName;
+    private Boolean isDelegated;
     private Long branchId;
     private String branchName;
     private Integer totalOrders;

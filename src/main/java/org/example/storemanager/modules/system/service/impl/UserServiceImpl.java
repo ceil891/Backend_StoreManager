@@ -249,6 +249,15 @@ public class UserServiceImpl implements UserService {
         refreshTokenRepository.revokeAllByUser(user);
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getUsername());
         org.example.storemanager.shared.security.SecurityEvaluator.evictUserCache(user.getEmail());
+
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            emailService.sendPasswordResetNotificationEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    user.getUsername(),
+                    request.getNewPassword()
+            );
+        }
     }
 
     @Override

@@ -37,7 +37,10 @@ public class PosSession extends BaseEntity {
     private BigDecimal actualClosingCash;
 
     @Column(name = "shift_name", length = 50)
-    private String shiftName; // CA_SANG, CA_CHIEU, CA_TOI, CA_NGAY
+    private String shiftName; // CA_SANG, CA_CHIEU, CA_TOI, CA_DEM, CA_NGAY
+
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
 
     @Column(nullable = false, length = 30)
     private String status; // OPEN, CLOSED...
@@ -45,6 +48,13 @@ public class PosSession extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "opened_by_user_id")
+    private User openedByUser;
+
+    @Column(name = "opened_by", length = 150)
+    private String openedBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)
