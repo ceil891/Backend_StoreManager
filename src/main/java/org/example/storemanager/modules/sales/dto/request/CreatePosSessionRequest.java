@@ -10,5 +10,6 @@ public class CreatePosSessionRequest {
     private Long branchId;
     private Long userId;
     private BigDecimal openingCash;
+    private String shiftName;
     private String note;
 }

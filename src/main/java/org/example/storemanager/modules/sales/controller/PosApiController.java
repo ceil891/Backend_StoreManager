@@ -73,12 +73,21 @@ public class PosApiController {
             branch = branchRepository.findAll().stream().filter(b -> !Boolean.TRUE.equals(b.getIsDeleted())).findFirst().orElse(null);
         }
 
+        String shiftName = req.getShiftName();
+        if (shiftName == null || shiftName.isBlank()) {
+            int hour = LocalDateTime.now().getHour();
+            if (hour < 12) shiftName = "CA_SANG";
+            else if (hour < 18) shiftName = "CA_CHIEU";
+            else shiftName = "CA_TOI";
+        }
+
         PosSession session = PosSession.builder()
                 .sessionCode(req.getSessionCode() != null ? req.getSessionCode() : "POS-SES-" + System.currentTimeMillis())
                 .terminalCode(req.getTerminalCode() != null ? req.getTerminalCode() : "POS-001")
                 .startTime(LocalDateTime.now())
                 .openingCash(req.getOpeningCash() != null ? req.getOpeningCash() : java.math.BigDecimal.ZERO)
                 .expectedClosingCash(req.getOpeningCash() != null ? req.getOpeningCash() : java.math.BigDecimal.ZERO)
+                .shiftName(shiftName)
                 .status("OPEN")
                 .user(user)
                 .branch(branch)
@@ -138,6 +147,10 @@ public class PosApiController {
                 Long bid = Long.parseLong(String.valueOf(req.get("branchId")));
                 branchRepository.findById(bid).ifPresent(existing::setBranch);
             } catch (Exception ignored) {}
+        }
+
+        if (req.containsKey("shiftName") && req.get("shiftName") != null) {
+            existing.setShiftName(String.valueOf(req.get("shiftName")));
         }
 
         PosSession saved = posSessionRepository.save(existing);
@@ -329,6 +342,7 @@ public class PosApiController {
                 .expectedClosingCash(expected)
                 .actualClosingCash(session.getActualClosingCash())
                 .status(session.getStatus())
+                .shiftName(session.getShiftName())
                 .userId(session.getUser() != null ? session.getUser().getId() : null)
                 .cashierName(session.getUser() != null ? session.getUser().getFullName() : "Thu ngân")
                 .branchId(session.getBranch() != null ? session.getBranch().getId() : null)

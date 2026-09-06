@@ -18,6 +18,7 @@ public class PosSessionResponse {
     private BigDecimal expectedClosingCash;
     private BigDecimal actualClosingCash;
     private String status;
+    private String shiftName;
     private Long userId;
     private String cashierName;
     private Long branchId;
