@@ -45,6 +45,7 @@ public class FinanceController {
     private final JournalEntryRepository journalEntryRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
     private final org.example.storemanager.modules.sales.repository.PurchaseOrderRepository purchaseOrderRepository;
+    private final org.example.storemanager.modules.purchase.repository.PurchaseInvoiceRepository purchaseInvoiceRepository;
     private final ChartOfAccountRepository chartOfAccountRepository;
     private final org.example.storemanager.modules.system.repository.BranchRepository branchRepository;
 
@@ -405,14 +406,69 @@ public class FinanceController {
     private void syncPurchaseOrderPaymentStatus(PaymentVoucher pv) {
         if (pv.getInvoiceCode() == null || pv.getInvoiceCode().trim().isEmpty()) return;
         String invCode = pv.getInvoiceCode().trim();
-        org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
-        if (invCode.startsWith("INV-MH-")) {
+
+        // 1. Sync PurchaseInvoice if matching
+        org.example.storemanager.modules.purchase.entity.PurchaseInvoice invoice = purchaseInvoiceRepository.findByInvoiceCodeAndIsDeletedFalse(invCode).orElse(null);
+        if (invoice == null) {
             try {
-                Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
-                po = purchaseOrderRepository.findById(idVal).orElse(null);
-            } catch (Exception e) {}
-        } else {
-            po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
+                String cleanId = invCode.replaceAll("[^0-9]", "");
+                if (!cleanId.isEmpty()) {
+                    invoice = purchaseInvoiceRepository.findByIdAndIsDeletedFalse(Long.parseLong(cleanId)).orElse(null);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (invoice == null) {
+            invoice = purchaseInvoiceRepository.findByIsDeletedFalseOrderByCreatedAtDesc().stream()
+                .filter(i -> i.getInvoiceCode() != null && i.getInvoiceCode().equalsIgnoreCase(invCode))
+                .findFirst().orElse(null);
+        }
+
+        if (invoice != null) {
+            final String targetInvCode = invoice.getInvoiceCode();
+            final Long targetInvId = invoice.getId();
+            List<PaymentVoucher> invVouchers = paymentVoucherRepository.findAll().stream()
+                .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()) && v.getInvoiceCode() != null)
+                .filter(v -> {
+                    String code = v.getInvoiceCode().trim();
+                    return code.equalsIgnoreCase(targetInvCode)
+                        || code.equalsIgnoreCase("INV-MH-" + targetInvId)
+                        || code.equalsIgnoreCase(String.valueOf(targetInvId));
+                })
+                .filter(v -> "COMPLETED".equalsIgnoreCase(v.getStatus()) || "APPROVED".equalsIgnoreCase(v.getStatus()) || "DA_THANH_TOAN".equalsIgnoreCase(v.getStatus()))
+                .toList();
+
+            BigDecimal totalPaidInv = invVouchers.stream()
+                .map(v -> v.getAmount() != null ? v.getAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal invTotal = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+            if (invTotal.compareTo(BigDecimal.ZERO) > 0 && totalPaidInv.compareTo(invTotal) >= 0) {
+                invoice.setStatus("DA_THANH_TOAN");
+            } else if (totalPaidInv.compareTo(BigDecimal.ZERO) > 0) {
+                invoice.setStatus("PARTIAL_PAID");
+            } else {
+                invoice.setStatus("CHO_THANH_TOAN");
+            }
+            purchaseInvoiceRepository.save(invoice);
+        }
+
+        // 2. Sync PurchaseOrder
+        org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+        if (invoice != null && invoice.getPoId() != null) {
+            po = purchaseOrderRepository.findById(invoice.getPoId()).orElse(null);
+        }
+        if (po == null && invoice != null && invoice.getPoCode() != null) {
+            po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invoice.getPoCode()).orElse(null);
+        }
+        if (po == null) {
+            if (invCode.startsWith("INV-MH-")) {
+                try {
+                    Long idVal = Long.parseLong(invCode.replace("INV-MH-", ""));
+                    po = purchaseOrderRepository.findById(idVal).orElse(null);
+                } catch (Exception e) {}
+            } else {
+                po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
+            }
         }
         if (po == null) {
             final String searchCode = invCode.toLowerCase();
@@ -423,13 +479,16 @@ public class FinanceController {
         }
         if (po != null) {
             final org.example.storemanager.modules.sales.entity.PurchaseOrder targetPo = po;
+            final org.example.storemanager.modules.purchase.entity.PurchaseInvoice targetInvoice = invoice;
             List<PaymentVoucher> poVouchers = paymentVoucherRepository.findAll().stream()
                 .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()) && v.getInvoiceCode() != null)
                 .filter(v -> {
                     String code = v.getInvoiceCode().trim();
-                    return (targetPo.getPoCode() != null && (code.equalsIgnoreCase(targetPo.getPoCode()) || code.toLowerCase().contains(targetPo.getPoCode().toLowerCase())))
+                    boolean matchPo = (targetPo.getPoCode() != null && (code.equalsIgnoreCase(targetPo.getPoCode()) || code.toLowerCase().contains(targetPo.getPoCode().toLowerCase())))
                         || code.equalsIgnoreCase("INV-MH-" + targetPo.getId())
                         || code.equalsIgnoreCase(String.valueOf(targetPo.getId()));
+                    boolean matchInv = (targetInvoice != null && (code.equalsIgnoreCase(targetInvoice.getInvoiceCode()) || code.equalsIgnoreCase("INV-MH-" + targetInvoice.getId())));
+                    return matchPo || matchInv;
                 })
                 .filter(v -> "COMPLETED".equalsIgnoreCase(v.getStatus()) || "APPROVED".equalsIgnoreCase(v.getStatus()) || "DA_THANH_TOAN".equalsIgnoreCase(v.getStatus()))
                 .toList();
@@ -483,7 +542,58 @@ public class FinanceController {
     private void revertPurchaseOrderPaymentStatus(PaymentVoucher pv) {
         if (pv.getInvoiceCode() == null || pv.getInvoiceCode().trim().isEmpty()) return;
         String invCode = pv.getInvoiceCode().trim();
-        org.example.storemanager.modules.sales.entity.PurchaseOrder po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
+
+        // 1. Revert PurchaseInvoice if matching
+        org.example.storemanager.modules.purchase.entity.PurchaseInvoice invoice = purchaseInvoiceRepository.findByInvoiceCodeAndIsDeletedFalse(invCode).orElse(null);
+        if (invoice == null) {
+            try {
+                String cleanId = invCode.replaceAll("[^0-9]", "");
+                if (!cleanId.isEmpty()) {
+                    invoice = purchaseInvoiceRepository.findByIdAndIsDeletedFalse(Long.parseLong(cleanId)).orElse(null);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (invoice != null) {
+            final String targetInvCode = invoice.getInvoiceCode();
+            final Long targetInvId = invoice.getId();
+            List<PaymentVoucher> invVouchers = paymentVoucherRepository.findAll().stream()
+                .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()) && v.getInvoiceCode() != null)
+                .filter(v -> !v.getId().equals(pv.getId()))
+                .filter(v -> {
+                    String code = v.getInvoiceCode().trim();
+                    return code.equalsIgnoreCase(targetInvCode)
+                        || code.equalsIgnoreCase("INV-MH-" + targetInvId)
+                        || code.equalsIgnoreCase(String.valueOf(targetInvId));
+                })
+                .filter(v -> "COMPLETED".equalsIgnoreCase(v.getStatus()) || "APPROVED".equalsIgnoreCase(v.getStatus()) || "DA_THANH_TOAN".equalsIgnoreCase(v.getStatus()))
+                .toList();
+
+            BigDecimal totalPaidInv = invVouchers.stream()
+                .map(v -> v.getAmount() != null ? v.getAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal invTotal = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+            if (invTotal.compareTo(BigDecimal.ZERO) > 0 && totalPaidInv.compareTo(invTotal) >= 0) {
+                invoice.setStatus("DA_THANH_TOAN");
+            } else if (totalPaidInv.compareTo(BigDecimal.ZERO) > 0) {
+                invoice.setStatus("PARTIAL_PAID");
+            } else {
+                invoice.setStatus("CHO_THANH_TOAN");
+            }
+            purchaseInvoiceRepository.save(invoice);
+        }
+
+        // 2. Revert PurchaseOrder
+        org.example.storemanager.modules.sales.entity.PurchaseOrder po = null;
+        if (invoice != null && invoice.getPoId() != null) {
+            po = purchaseOrderRepository.findById(invoice.getPoId()).orElse(null);
+        }
+        if (po == null && invoice != null && invoice.getPoCode() != null) {
+            po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invoice.getPoCode()).orElse(null);
+        }
+        if (po == null) {
+            po = purchaseOrderRepository.findByPoCodeAndIsDeletedFalse(invCode).orElse(null);
+        }
         if (po == null) {
             final String searchCode = invCode.toLowerCase();
             po = purchaseOrderRepository.findAll().stream()
@@ -493,14 +603,17 @@ public class FinanceController {
         }
         if (po != null) {
             final org.example.storemanager.modules.sales.entity.PurchaseOrder targetPo = po;
+            final org.example.storemanager.modules.purchase.entity.PurchaseInvoice targetInvoice = invoice;
             List<PaymentVoucher> poVouchers = paymentVoucherRepository.findAll().stream()
                 .filter(v -> !Boolean.TRUE.equals(v.getIsDeleted()) && v.getInvoiceCode() != null)
                 .filter(v -> !v.getId().equals(pv.getId()))
                 .filter(v -> {
                     String code = v.getInvoiceCode().trim();
-                    return (targetPo.getPoCode() != null && (code.equalsIgnoreCase(targetPo.getPoCode()) || code.toLowerCase().contains(targetPo.getPoCode().toLowerCase())))
+                    boolean matchPo = (targetPo.getPoCode() != null && (code.equalsIgnoreCase(targetPo.getPoCode()) || code.toLowerCase().contains(targetPo.getPoCode().toLowerCase())))
                         || code.equalsIgnoreCase("INV-MH-" + targetPo.getId())
                         || code.equalsIgnoreCase(String.valueOf(targetPo.getId()));
+                    boolean matchInv = (targetInvoice != null && (code.equalsIgnoreCase(targetInvoice.getInvoiceCode()) || code.equalsIgnoreCase("INV-MH-" + targetInvoice.getId())));
+                    return matchPo || matchInv;
                 })
                 .filter(v -> "COMPLETED".equalsIgnoreCase(v.getStatus()) || "APPROVED".equalsIgnoreCase(v.getStatus()) || "DA_THANH_TOAN".equalsIgnoreCase(v.getStatus()))
                 .toList();

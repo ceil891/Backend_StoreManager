@@ -3,6 +3,7 @@ package org.example.storemanager.modules.partnerarea.dto.request.customerdto;
 import lombok.Builder;
 import lombok.Data;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 
 @Data
@@ -20,6 +21,7 @@ public class UpdateCustomerRequest {
     private MultipartFile avatar;
     private String avatarUrl;
     
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate dob;
     private String gender;
     private String membershipRank;

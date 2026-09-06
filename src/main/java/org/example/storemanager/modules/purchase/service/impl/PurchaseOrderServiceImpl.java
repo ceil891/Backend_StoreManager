@@ -1,6 +1,7 @@
 package org.example.storemanager.modules.purchase.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import org.example.storemanager.modules.purchase.dto.request.CreatePurchaseOrderRequest;
@@ -21,6 +22,9 @@ import org.example.storemanager.modules.partnerarea.entity.Supplier;
 import org.example.storemanager.modules.system.entity.Branch;
 import org.example.storemanager.modules.catalog.entity.Product;
 import org.example.storemanager.modules.catalog.entity.ProductVariant;
+import org.example.storemanager.modules.purchase.entity.PurchaseInvoice;
+import org.example.storemanager.modules.purchase.entity.PurchaseInvoiceItem;
+import org.example.storemanager.modules.purchase.repository.PurchaseInvoiceRepository;
 import org.example.storemanager.shared.exception.ResourceNotFoundException;
 import org.example.storemanager.modules.sales.repository.PurchaseOrderRepository;
 import org.example.storemanager.modules.sales.repository.PurchaseOrderDetailRepository;
@@ -51,6 +55,7 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @RequiredArgsConstructor
+@Slf4j
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
@@ -62,6 +67,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
+    private final PurchaseInvoiceRepository purchaseInvoiceRepository;
 
     @Override
     public PurchaseOrderResponse createOrder(CreatePurchaseOrderRequest request) {
@@ -71,7 +77,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (request.getPoDate().toLocalDate().isBefore(LocalDate.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày lập đơn không được nhỏ hơn ngày hiện tại");
         }
-        if (request.getExpectedDate() != null && request.getExpectedDate().isBefore(request.getPoDate())) {
+        if (request.getExpectedDate() != null && request.getExpectedDate().toLocalDate().isBefore(request.getPoDate().toLocalDate())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày nhận hàng dự kiến không được nhỏ hơn Ngày lập đơn");
         }
 
@@ -162,7 +168,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (request.getPoDate() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày đặt hàng không được để trống");
         }
-        if (request.getExpectedDate() != null && request.getExpectedDate().isBefore(request.getPoDate())) {
+        if (request.getExpectedDate() != null && request.getExpectedDate().toLocalDate().isBefore(request.getPoDate().toLocalDate())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày nhận hàng dự kiến không được nhỏ hơn Ngày lập đơn");
         }
 
@@ -346,7 +352,72 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     @Override
     public PurchaseOrderResponse approveOrder(Long id) {
-        return updateStatus(id, "APPROVED");
+        PurchaseOrderResponse res = updateStatus(id, "APPROVED");
+
+        // Ticket 38: Tự động sinh Hóa đơn mua hàng (Purchase Invoice - nguồn vào) khi PO được phê duyệt
+        try {
+            PurchaseOrder po = purchaseOrderRepository.findByIdAndIsDeletedFalse(id).orElse(null);
+            if (po != null && purchaseInvoiceRepository != null) {
+                boolean invoiceExists = purchaseInvoiceRepository.findByIsDeletedFalseOrderByCreatedAtDesc()
+                        .stream()
+                        .anyMatch(inv -> (inv.getPoId() != null && inv.getPoId().equals(po.getId()))
+                                || (inv.getPoCode() != null && inv.getPoCode().equalsIgnoreCase(po.getPoCode())));
+
+                if (!invoiceExists) {
+                    List<PurchaseOrderDetail> poDetails = purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(po.getId());
+                    BigDecimal subTotal = po.getTotalAmount() != null ? po.getTotalAmount() : BigDecimal.ZERO;
+                    BigDecimal vatAmount = po.getVatAmount() != null ? po.getVatAmount() : BigDecimal.ZERO;
+                    BigDecimal discountAmount = po.getDiscountAmount() != null ? po.getDiscountAmount() : BigDecimal.ZERO;
+
+                    PurchaseInvoice inv = PurchaseInvoice.builder()
+                            .invoiceCode("INV-" + po.getPoCode())
+                            .poCode(po.getPoCode())
+                            .poId(po.getId())
+                            .supplier(po.getSupplier())
+                            .branch(po.getBranch())
+                            .invoiceDate(LocalDateTime.now())
+                            .dueDate(po.getExpectedDate() != null ? po.getExpectedDate() : LocalDateTime.now().plusDays(30))
+                            .subTotal(subTotal)
+                            .vatAmount(vatAmount)
+                            .discountAmount(discountAmount)
+                            .totalAmount(subTotal.add(vatAmount).subtract(discountAmount))
+                            .status("CHO_THANH_TOAN")
+                            .paymentTerms(po.getPaymentTerms() != null ? po.getPaymentTerms() : "Net 30")
+                            .build();
+                    inv.setIsDeleted(false);
+                    inv.setCreatedBy(getCurrentUsername());
+                    inv.setNote("Tự động sinh từ đơn mua hàng " + po.getPoCode());
+
+                    for (PurchaseOrderDetail pod : poDetails) {
+                        String prodName = pod.getProduct() != null ? pod.getProduct().getName() : "Sản phẩm";
+                        String sku = pod.getProduct() != null ? (pod.getProduct().getProductCode() != null ? pod.getProduct().getProductCode() : pod.getProduct().getBarcode()) : "";
+                        String unitName = (pod.getProduct() != null && pod.getProduct().getBaseUnit() != null) ? pod.getProduct().getBaseUnit().getUnitName() : "Cái";
+
+                        PurchaseInvoiceItem item = PurchaseInvoiceItem.builder()
+                                .purchaseInvoice(inv)
+                                .productId(pod.getProduct() != null ? pod.getProduct().getId() : null)
+                                .productName(prodName)
+                                .sku(sku != null ? sku : "")
+                                .unitName(unitName != null ? unitName : "Cái")
+                                .quantity(pod.getQuantity() != null ? pod.getQuantity() : BigDecimal.ONE)
+                                .unitPrice(pod.getUnitPrice() != null ? pod.getUnitPrice() : BigDecimal.ZERO)
+                                .vatRate(BigDecimal.ZERO)
+                                .vatAmount(BigDecimal.ZERO)
+                                .totalAmount(pod.getSubTotal() != null ? pod.getSubTotal() : BigDecimal.ZERO)
+                                .build();
+                        item.setIsDeleted(false);
+                        item.setCreatedBy(getCurrentUsername());
+                        inv.getItems().add(item);
+                    }
+                    purchaseInvoiceRepository.save(inv);
+                    log.info("[PurchaseOrder] Auto-generated PurchaseInvoice {} for approved PO {}", inv.getInvoiceCode(), po.getPoCode());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[PurchaseOrder] Failed to auto-generate PurchaseInvoice on PO approve: {}", e.getMessage());
+        }
+
+        return res;
     }
 
     @Override

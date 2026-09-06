@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 
 @Data
@@ -30,6 +31,7 @@ public class CreateCustomerRequest {
     private Boolean isActive;
     private String avatarUrl;
     
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate dob;
     private String gender;
     private String membershipRank;
