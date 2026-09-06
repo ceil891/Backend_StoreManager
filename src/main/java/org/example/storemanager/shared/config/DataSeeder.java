@@ -108,6 +108,7 @@ public class DataSeeder implements CommandLineRunner {
         }
         seedDepartmentsAndPositions();
         seedMasterUnitsAndCategories();
+        seedLoyaltyTiers();
         fixNullIsDeleted();
         log.info("[DataSeeder] Hoàn tất kiểm tra phân quyền và dữ liệu khởi tạo trong Database.");
     }
@@ -658,6 +659,98 @@ public class DataSeeder implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.warn("[DataSeeder] Lỗi khi seed phòng ban/chức danh (non-fatal): {}", e.getMessage());
+        }
+    }
+
+    private void seedLoyaltyTiers() {
+        try {
+            if (loyaltyTierRepository.count() == 0) {
+                var tiers = List.of(
+                    org.example.storemanager.modules.crm.entity.LoyaltyTier.builder()
+                        .tierCode("BRONZE")
+                        .tierName("Thành viên Đồng")
+                        .minPoints(0)
+                        .maxPoints(499)
+                        .minSpend(java.math.BigDecimal.ZERO)
+                        .maxSpend(new java.math.BigDecimal("2999999"))
+                        .discountPercent(java.math.BigDecimal.ZERO)
+                        .pointMultiplier(java.math.BigDecimal.ONE)
+                        .description("Hạng thành viên khởi đầu cho tất cả khách hàng mới")
+                        .benefits("Tích điểm 1đ cho mỗi 1.000đ chi tiêu")
+                        .isDefault(true)
+                        .isActive(true)
+                        .displayOrder(1)
+                        .build(),
+                    org.example.storemanager.modules.crm.entity.LoyaltyTier.builder()
+                        .tierCode("SILVER")
+                        .tierName("Thành viên Bạc")
+                        .minPoints(500)
+                        .maxPoints(1499)
+                        .minSpend(new java.math.BigDecimal("3000000"))
+                        .maxSpend(new java.math.BigDecimal("9999999"))
+                        .discountPercent(new java.math.BigDecimal("2.0"))
+                        .pointMultiplier(new java.math.BigDecimal("1.2"))
+                        .description("Khách hàng thân thiết đạt mốc 500 điểm hoặc chi tiêu từ 3.000.000đ")
+                        .benefits("Hệ số tích điểm x1.2, ưu đãi sinh nhật")
+                        .isDefault(false)
+                        .isActive(true)
+                        .displayOrder(2)
+                        .build(),
+                    org.example.storemanager.modules.crm.entity.LoyaltyTier.builder()
+                        .tierCode("GOLD")
+                        .tierName("Thành viên Vàng")
+                        .minPoints(1500)
+                        .maxPoints(2999)
+                        .minSpend(new java.math.BigDecimal("10000000"))
+                        .maxSpend(new java.math.BigDecimal("24999999"))
+                        .discountPercent(new java.math.BigDecimal("5.0"))
+                        .pointMultiplier(new java.math.BigDecimal("1.5"))
+                        .description("Khách hàng VIP đạt mốc 1.500 điểm hoặc chi tiêu từ 10.000.000đ")
+                        .benefits("Hệ số tích điểm x1.5, giảm giá trực tiếp 5%")
+                        .isDefault(false)
+                        .isActive(true)
+                        .displayOrder(3)
+                        .build(),
+                    org.example.storemanager.modules.crm.entity.LoyaltyTier.builder()
+                        .tierCode("ELITE_CLUB")
+                        .tierName("Thành viên Bạch Kim")
+                        .minPoints(3000)
+                        .maxPoints(5999)
+                        .minSpend(new java.math.BigDecimal("25000000"))
+                        .maxSpend(new java.math.BigDecimal("49999999"))
+                        .discountPercent(new java.math.BigDecimal("8.0"))
+                        .pointMultiplier(new java.math.BigDecimal("1.8"))
+                        .description("Khách hàng VVIP đạt mốc 3.000 điểm hoặc chi tiêu từ 25.000.000đ")
+                        .benefits("Hệ số tích điểm x1.8, quà tặng tri ân đặc biệt")
+                        .isDefault(false)
+                        .isActive(true)
+                        .displayOrder(4)
+                        .build(),
+                    org.example.storemanager.modules.crm.entity.LoyaltyTier.builder()
+                        .tierCode("DIAMOND")
+                        .tierName("Thành viên Kim Cương")
+                        .minPoints(6000)
+                        .maxPoints(999999)
+                        .minSpend(new java.math.BigDecimal("50000000"))
+                        .maxSpend(new java.math.BigDecimal("999999999"))
+                        .discountPercent(new java.math.BigDecimal("10.0"))
+                        .pointMultiplier(new java.math.BigDecimal("2.0"))
+                        .description("Khách hàng thượng hạng đạt mốc 6.000 điểm hoặc chi tiêu từ 50.000.000đ")
+                        .benefits("Hệ số tích điểm x2.0, chiết khấu độc quyền 10%, phục vụ riêng biệt")
+                        .isDefault(false)
+                        .isActive(true)
+                        .displayOrder(5)
+                        .build()
+                );
+
+                for (var t : tiers) {
+                    t.setIsDeleted(false);
+                }
+                loyaltyTierRepository.saveAll(tiers);
+                log.info("[DataSeeder] Đã khởi tạo thành công 5 Hạng thành viên Loyalty chuẩn (Đồng, Bạc, Vàng, Bạch Kim, Kim Cương).");
+            }
+        } catch (Exception e) {
+            log.warn("[DataSeeder] Lỗi khi khởi tạo hạng thành viên Loyalty: {}", e.getMessage());
         }
     }
 }

@@ -59,7 +59,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
-        Customer customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId()).orElse(null);
+        Customer customer = null;
+        if (request.getCustomerId() != null && request.getCustomerId() > 0) {
+            customer = customerRepository.findByIdAndIsDeletedFalse(request.getCustomerId()).orElse(null);
+        }
         if (customer == null && request.getCustomerPhone() != null && !request.getCustomerPhone().trim().isEmpty()) {
             String ph = request.getCustomerPhone().trim().replace(" ", "");
             customer = customerRepository.findAll().stream()
@@ -228,11 +231,42 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         BigDecimal voucherDiscount = request.getVoucherDiscountAmount() != null ? request.getVoucherDiscountAmount() : BigDecimal.ZERO;
         BigDecimal pointsDiscount = BigDecimal.ZERO;
         if (request.getLoyaltyPointsUsed() != null && request.getLoyaltyPointsUsed() > 0) {
-            pointsDiscount = BigDecimal.valueOf(request.getLoyaltyPointsUsed() * 1000L);
+            pointsDiscount = BigDecimal.valueOf(request.getLoyaltyPointsUsed() * 100L);
         }
         BigDecimal finalAmount = totalAmount.subtract(voucherDiscount).subtract(pointsDiscount);
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
             finalAmount = BigDecimal.ZERO;
+        }
+
+        // Kiểm tra hạn mức nợ (Debt Limit) khi khách hàng mua nợ
+        if (customer != null) {
+            String paymentSt = request.getPaymentStatus();
+            String pmCode = request.getPaymentMethodCode();
+            boolean isUnpaid = paymentSt == null || !"PAID".equalsIgnoreCase(paymentSt);
+            boolean isCreditMethod = pmCode != null && (pmCode.toUpperCase().contains("DEBT") || pmCode.toUpperCase().contains("CONG_NO") || pmCode.toUpperCase().contains("CREDIT"));
+
+            if ((isUnpaid || isCreditMethod) && customer.getDebtLimit() != null && customer.getDebtLimit() > 0) {
+                double maxDebt = customer.getDebtLimit();
+                List<SaleOrder> unpaidOrders = saleOrderRepository
+                        .findByCustomerIdAndPaymentStatusNotAndIsDeletedFalseOrderByOrderDateDesc(customer.getId(), "PAID")
+                        .stream()
+                        .filter(o -> !"CANCELLED".equalsIgnoreCase(o.getStatus()))
+                        .toList();
+                BigDecimal currentDebt = unpaidOrders.stream()
+                        .map(o -> o.getFinalAmount() != null ? o.getFinalAmount() : (o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO))
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal newOrderDebt = finalAmount.compareTo(BigDecimal.ZERO) > 0 ? finalAmount : totalAmount;
+                BigDecimal projectedDebt = currentDebt.add(newOrderDebt);
+
+                if (projectedDebt.compareTo(BigDecimal.valueOf(maxDebt)) > 0) {
+                    throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                        String.format("Đơn hàng vượt quá hạn mức nợ cho phép của khách hàng '%s' (Hạn mức tối đa: %,.0f đ, Đang nợ: %,.0f đ, Đơn phát sinh: %,.0f đ).",
+                                customer.getName(), maxDebt, currentDebt.doubleValue(), newOrderDebt.doubleValue())
+                    );
+                }
+            }
         }
 
         order.setSubTotal(subTotalSum);
@@ -267,19 +301,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             }
         }
 
-        // Tự động tích điểm cho khách hàng khi đặt hàng thành công
+        // Tự động xử lý trừ điểm (REDEEM) & tích điểm (EARN) cho khách hàng
         if (customer != null) {
-            try {
-                loyaltyService.processOrderLoyaltyEarn(
-                        customer.getId(),
-                        savedOrder.getOrderCode(),
-                        savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : savedOrder.getTotalAmount(),
-                        savedOrder
-                );
-            } catch (Exception e) {
-                System.err.println("Cảnh báo khi tích điểm tự động: " + e.getMessage());
-            }
-
+            // 1. Tiêu điểm trước
             if (request.getLoyaltyPointsUsed() != null && request.getLoyaltyPointsUsed() > 0) {
                 try {
                     loyaltyService.processOrderRedeem(
@@ -289,8 +313,21 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                             savedOrder
                     );
                 } catch (Exception e) {
-                    System.err.println("Cảnh báo khi trừ điểm thưởng loyalty: " + e.getMessage());
+                    log.warn("Cảnh báo khi trừ điểm thưởng loyalty: {}", e.getMessage());
                 }
+            }
+
+            // 2. Tích điểm trên số tiền thực trả
+            try {
+                BigDecimal earnBase = savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount() : savedOrder.getTotalAmount();
+                loyaltyService.processOrderLoyaltyEarn(
+                        customer.getId(),
+                        savedOrder.getOrderCode(),
+                        earnBase,
+                        savedOrder
+                );
+            } catch (Exception e) {
+                log.warn("Cảnh báo khi tích điểm tự động: {}", e.getMessage());
             }
         }
 

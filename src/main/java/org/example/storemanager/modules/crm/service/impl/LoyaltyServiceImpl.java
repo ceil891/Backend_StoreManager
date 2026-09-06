@@ -32,7 +32,7 @@ public class LoyaltyServiceImpl implements LoyaltyService {
     private final LoyaltyTierRepository loyaltyTierRepository;
     private final LoyaltyPointHistoryRepository loyaltyPointHistoryRepository;
 
-    private static final BigDecimal DEFAULT_AMOUNT_PER_POINT = new BigDecimal("10000");
+    private static final BigDecimal DEFAULT_AMOUNT_PER_POINT = new BigDecimal("1000");
 
     @Override
     @Transactional(readOnly = true)
@@ -58,20 +58,20 @@ public class LoyaltyServiceImpl implements LoyaltyService {
         LoyaltyTier tier = resolveCustomerTier(customer);
         BigDecimal multiplier = tier != null && tier.getPointMultiplier() != null ? tier.getPointMultiplier() : BigDecimal.ONE;
 
-        int expectedPoints = calculateEarnedPoints(request.getNetPaidAmount(), DEFAULT_AMOUNT_PER_POINT, multiplier);
         int currentPoints = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
+        int pointsEarned = calculateEarnedPoints(request.getNetPaidAmount(), DEFAULT_AMOUNT_PER_POINT, multiplier);
 
         return LoyaltyCalculateResponse.builder()
                 .customerId(customer.getId())
                 .customerName(customer.getName())
                 .netPaidAmount(request.getNetPaidAmount())
                 .amountPerPoint(DEFAULT_AMOUNT_PER_POINT)
-                .tierCode(tier != null ? tier.getTierCode() : "MEMBER")
-                .tierName(tier != null ? tier.getTierName() : "Thành viên Chuẩn")
+                .tierCode(tier != null ? tier.getTierCode() : (customer.getMembershipRank() != null ? customer.getMembershipRank() : "BRONZE"))
+                .tierName(tier != null ? tier.getTierName() : (customer.getMembershipRank() != null ? customer.getMembershipRank() : "Thành viên Đồng"))
                 .tierMultiplier(multiplier)
-                .expectedPointsEarned(expectedPoints)
+                .expectedPointsEarned(pointsEarned)
                 .currentPoints(currentPoints)
-                .expectedBalanceAfter(currentPoints + expectedPoints)
+                .expectedBalanceAfter(currentPoints + pointsEarned)
                 .build();
     }
 
@@ -96,25 +96,26 @@ public class LoyaltyServiceImpl implements LoyaltyService {
 
         // 4. Tính điểm nhận
         int pointsEarned = calculateEarnedPoints(netPaidAmount, DEFAULT_AMOUNT_PER_POINT, multiplier);
-        if (pointsEarned <= 0) return null;
 
         // 5. Cập nhật số dư điểm & tự động nâng hạng
         int balanceBefore = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
         int balanceAfter = balanceBefore + pointsEarned;
 
         customer.setPoints((double) balanceAfter);
-        if (customer.getTotalSpend() != null && netPaidAmount != null) {
-            customer.setTotalSpend(customer.getTotalSpend() + netPaidAmount.doubleValue());
-        }
+        double currentSpend = customer.getTotalSpend() != null ? customer.getTotalSpend() : 0.0;
+        double addedSpend = netPaidAmount != null ? netPaidAmount.doubleValue() : 0.0;
+        double newTotalSpend = currentSpend + addedSpend;
+        customer.setTotalSpend(newTotalSpend);
 
-        // Auto Upgrade Tier nếu đạt mốc mới (chỉ nâng hạng, không hạ hạng khi tiêu điểm)
-        LoyaltyTier currentTier = resolveCustomerTier(customer);
-        LoyaltyTier newTier = resolveTierByPoints(balanceAfter);
-        if (newTier != null && (currentTier == null || (newTier.getMinPoints() != null && currentTier.getMinPoints() != null && newTier.getMinPoints() > currentTier.getMinPoints()))) {
-            customer.setMembershipRank(newTier.getTierName());
+        // Auto Upgrade Tier nếu đạt mốc mới
+        String newRank = resolveMembershipRank(balanceAfter, newTotalSpend);
+        if (newRank != null && !newRank.isBlank()) {
+            customer.setMembershipRank(newRank);
         }
 
         customerRepository.save(customer);
+
+        if (pointsEarned <= 0) return null;
 
         // 6. Ghi Sổ cái Lịch sử
         LoyaltyPointHistory history = LoyaltyPointHistory.builder()
@@ -128,7 +129,7 @@ public class LoyaltyServiceImpl implements LoyaltyService {
                 .build();
         history.setIsDeleted(false);
 
-        log.info("[Loyalty] Earned {} points for orderCode={}. Customer new balance={}", pointsEarned, orderCode, balanceAfter);
+        log.info("[Loyalty] Earned {} points for orderCode={}. Customer new balance={}, newRank={}", pointsEarned, orderCode, balanceAfter, newRank);
         return loyaltyPointHistoryRepository.save(history);
     }
 
@@ -148,27 +149,30 @@ public class LoyaltyServiceImpl implements LoyaltyService {
         if (customer == null) return null;
 
         int currentPoints = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
-        if (currentPoints < pointsToRedeem) {
-            throw new IllegalStateException("Số dư điểm không đủ để sử dụng. Số dư: " + currentPoints + ", cần: " + pointsToRedeem);
+        if (currentPoints <= 0) {
+            log.warn("[Loyalty] Khách hàng {} không có điểm để tiêu.", customerId);
+            return null;
         }
 
+        int actualRedeem = Math.min(currentPoints, pointsToRedeem);
+
         // 3. Trừ điểm & ghi sổ cái
-        int balanceAfter = currentPoints - pointsToRedeem;
+        int balanceAfter = Math.max(0, currentPoints - actualRedeem);
         customer.setPoints((double) balanceAfter);
         customerRepository.save(customer);
 
         LoyaltyPointHistory history = LoyaltyPointHistory.builder()
                 .customer(customer)
                 .order(order)
-                .pointsChange(-pointsToRedeem)
+                .pointsChange(-actualRedeem)
                 .currentPoints(balanceAfter)
                 .transactionType("REDEEM")
                 .refCode(orderCode)
-                .description("Sử dụng điểm cho đơn hàng " + orderCode + " (-" + pointsToRedeem + " pt)")
+                .description("Sử dụng điểm cho đơn hàng " + orderCode + " (-" + actualRedeem + " pt)")
                 .build();
         history.setIsDeleted(false);
 
-        log.info("[Loyalty] Redeemed {} points for orderCode={}. Customer new balance={}", pointsToRedeem, orderCode, balanceAfter);
+        log.info("[Loyalty] Redeemed {} points for orderCode={}. Customer new balance={}", actualRedeem, orderCode, balanceAfter);
         return loyaltyPointHistoryRepository.save(history);
     }
 
@@ -244,6 +248,27 @@ public class LoyaltyServiceImpl implements LoyaltyService {
         BigDecimal basePoints = netPaidAmount.divide(amountPerPoint, 4, RoundingMode.FLOOR);
         BigDecimal multiplier = tierMultiplier != null ? tierMultiplier : BigDecimal.ONE;
         return basePoints.multiply(multiplier).setScale(0, RoundingMode.FLOOR).intValue();
+    }
+
+    public String resolveMembershipRank(double points, double totalSpend) {
+        List<LoyaltyTier> tiers = loyaltyTierRepository.findByIsDeletedFalse();
+        if (!tiers.isEmpty()) {
+            LoyaltyTier matched = tiers.stream()
+                    .filter(t -> Boolean.TRUE.equals(t.getIsActive()))
+                    .filter(t -> (t.getMinPoints() != null && points >= t.getMinPoints()) ||
+                            (t.getMinSpend() != null && BigDecimal.valueOf(totalSpend).compareTo(t.getMinSpend()) >= 0))
+                    .max(Comparator.comparingInt(t -> t.getMinPoints() != null ? t.getMinPoints() : 0))
+                    .orElse(null);
+            if (matched != null) {
+                return matched.getTierName();
+            }
+        }
+        // Chuẩn fallback thống nhất toàn hệ thống
+        if (points >= 6000 || totalSpend >= 50000000.0) return "DIAMOND";
+        if (points >= 3000 || totalSpend >= 25000000.0) return "ELITE_CLUB";
+        if (points >= 1500 || totalSpend >= 10000000.0) return "GOLD";
+        if (points >= 500 || totalSpend >= 3000000.0) return "SILVER";
+        return "BRONZE";
     }
 
     private LoyaltyTier resolveCustomerTier(Customer customer) {
