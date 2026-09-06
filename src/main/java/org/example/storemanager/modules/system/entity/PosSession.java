@@ -36,6 +36,9 @@ public class PosSession extends BaseEntity {
     @Column(name = "actual_closing_cash", precision = 18, scale = 2)
     private BigDecimal actualClosingCash;
 
+    @Column(name = "shift_name", length = 50)
+    private String shiftName; // CA_SANG, CA_CHIEU, CA_TOI, CA_NGAY
+
     @Column(nullable = false, length = 30)
     private String status; // OPEN, CLOSED...
 
