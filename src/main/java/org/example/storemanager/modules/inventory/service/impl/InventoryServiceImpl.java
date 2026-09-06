@@ -2147,6 +2147,7 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         t.setStatus(TransferStatus.RECEIVED.name());
+        t.setUpdatedBy(getCurrentUsername());
         StockTransfer saved = stockTransferRepository.save(t);
 
         final Branch toBranch = t.getToBranch();
@@ -2154,14 +2155,37 @@ public class InventoryServiceImpl implements InventoryService {
         WarehouseZone toZone = warehouseService.getOrCreateDefaultZone(toBranch);
         String username = getCurrentUsername();
 
+        // Ensure default WarehouseBin exists for toZone & toBranch so targetBin is never null
+        WarehouseBin defaultTargetBin = warehouseBinRepository.findByZoneId(toZone.getId()).stream().findFirst()
+                .orElseGet(() -> warehouseBinRepository.findByBranchId(toBranch.getId()).stream().findFirst()
+                        .orElseGet(() -> warehouseBinRepository.findAll().stream().filter(b -> Boolean.FALSE.equals(b.getIsDeleted())).findFirst().orElse(null)));
+
         for (StockTransferDetail detail : details) {
             Product product = detail.getProduct();
             if (product == null) continue;
-            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
+
+            ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst()
+                    .orElseGet(() -> productVariantRepository.findAll().stream()
+                            .filter(v -> v.getProduct() != null && product.getId().equals(v.getProduct().getId()) && !Boolean.TRUE.equals(v.getIsDeleted()))
+                            .findFirst()
+                            .orElseGet(() -> {
+                                ProductVariant newVar = ProductVariant.builder()
+                                        .product(product)
+                                        .sku(product.getProductCode() + "-DEF")
+                                        .price(product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO)
+                                        .build();
+                                newVar.setIsDeleted(false);
+                                return productVariantRepository.save(newVar);
+                            }));
+
             BigDecimal quantity = detail.getQuantityShipped();
             if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
                 quantity = BigDecimal.ONE;
             }
+
+            // Update quantityReceived on detail so UI shows received qty
+            detail.setQuantityReceived(quantity);
+            stockTransferDetailRepository.save(detail);
 
             // Target physical size inventory add
             try {
@@ -2174,21 +2198,16 @@ public class InventoryServiceImpl implements InventoryService {
 
             // Target ProductLocation add
             try {
-                WarehouseBin targetBin = warehouseBinRepository.findByZoneId(toZone.getId()).stream().findFirst()
-                        .orElseGet(() -> warehouseBinRepository.findByBranchId(toBranch.getId()).stream().findFirst()
-                                .orElseGet(() -> warehouseBinRepository.findAll().stream().findFirst().orElse(null)));
-                if (targetBin != null) {
-                    ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), targetBin.getId())
-                            .orElseGet(() -> ProductLocation.builder()
-                                    .product(product)
-                                    .bin(targetBin)
-                                    .quantity(BigDecimal.ZERO)
-                                    .build());
-                    loc.setBin(targetBin);
-                    loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
-                    loc.setIsDeleted(false);
-                    productLocationRepository.save(loc);
-                }
+                ProductLocation loc = productLocationRepository.findByProductIdAndBinIdAndIsDeletedFalse(product.getId(), defaultTargetBin.getId())
+                        .orElseGet(() -> ProductLocation.builder()
+                                .product(product)
+                                .bin(defaultTargetBin)
+                                .quantity(BigDecimal.ZERO)
+                                .build());
+                loc.setBin(defaultTargetBin);
+                loc.setQuantity((loc.getQuantity() != null ? loc.getQuantity() : BigDecimal.ZERO).add(quantity));
+                loc.setIsDeleted(false);
+                productLocationRepository.save(loc);
             } catch (Exception e) {
                 log.warn("Failed to update ProductLocation on completeStockTransfer: {}", e.getMessage());
             }
@@ -2228,11 +2247,11 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
 
-        // Auto-create GRN (ImportReceipt) at destination branch
+        // Auto-create GRN (ImportReceipt) at destination branch safely
         try {
             String grnCode = "GRN-TR-" + t.getTransferCode();
             boolean grnExists = importReceiptRepository.findAll().stream()
-                    .anyMatch(ir -> !Boolean.TRUE.equals(ir.getIsDeleted()) && grnCode.equalsIgnoreCase(ir.getReceiptCode()));
+                    .anyMatch(ir -> grnCode.equalsIgnoreCase(ir.getReceiptCode()));
             if (!grnExists) {
                 BigDecimal totalAmount = BigDecimal.ZERO;
                 ImportReceipt grn = ImportReceipt.builder()
@@ -2249,14 +2268,16 @@ public class InventoryServiceImpl implements InventoryService {
                 grn.setIsDeleted(false);
                 ImportReceipt savedGrn = importReceiptRepository.save(grn);
 
-                WarehouseBin targetBinForGrn = warehouseBinRepository.findByBranchId(toBranch.getId()).stream().findFirst()
-                        .orElseGet(() -> warehouseBinRepository.findAll().stream().findFirst().orElse(null));
-
                 for (StockTransferDetail detail : details) {
                     Product product = detail.getProduct();
                     if (product == null) continue;
-                    ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst().orElse(null);
-                    BigDecimal unitCost = (variant != null && variant.getPrice() != null) ? variant.getPrice() : (product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO);
+                    ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId()).stream().findFirst()
+                            .orElseGet(() -> productVariantRepository.findAll().stream()
+                                    .filter(v -> v.getProduct() != null && product.getId().equals(v.getProduct().getId()) && !Boolean.TRUE.equals(v.getIsDeleted()))
+                                    .findFirst().orElse(null));
+                    if (variant == null) continue;
+
+                    BigDecimal unitCost = variant.getPrice() != null ? variant.getPrice() : (product.getBasePrice() != null ? product.getBasePrice() : BigDecimal.ZERO);
                     BigDecimal qty = detail.getQuantityShipped() != null ? detail.getQuantityShipped() : BigDecimal.ONE;
                     BigDecimal subTotal = unitCost.multiply(qty);
                     totalAmount = totalAmount.add(subTotal);
@@ -2267,13 +2288,13 @@ public class InventoryServiceImpl implements InventoryService {
                             .productVariant(variant)
                             .productNameSnapshot(product.getName())
                             .skuSnapshot(product.getProductCode())
-                            .barcodeSnapshot(variant != null ? variant.getBarcode() : null)
+                            .barcodeSnapshot(variant.getBarcode())
                             .unitCostSnapshot(unitCost)
                             .unitPrice(unitCost)
                             .quantity(qty)
                             .subTotal(subTotal)
                             .batchNumber("BATCH-TR-" + t.getTransferCode())
-                            .targetBin(targetBinForGrn)
+                            .targetBin(defaultTargetBin)
                             .build();
                     d.setIsDeleted(false);
                     importReceiptDetailRepository.save(d);
