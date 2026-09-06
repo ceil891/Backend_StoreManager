@@ -78,9 +78,6 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         if (request.getPoDate() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày đặt hàng không được để trống");
         }
-        if (request.getPoDate().toLocalDate().isBefore(LocalDate.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày lập đơn không được nhỏ hơn ngày hiện tại");
-        }
         if (request.getExpectedDate() != null && request.getExpectedDate().toLocalDate().isBefore(request.getPoDate().toLocalDate())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngày nhận hàng dự kiến không được nhỏ hơn Ngày lập đơn");
         }
@@ -510,8 +507,30 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             ProductVariant variant = productVariantRepository.findByProductIdAndIsDeletedFalse(product.getId())
                     .stream()
                     .findFirst()
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                            "Sản phẩm " + product.getName() + " chưa có phiên bản (variant) nào để nhập kho."));
+                    .orElseGet(() -> {
+                        String sku = (product.getProductCode() != null && !product.getProductCode().isBlank()) 
+                                ? product.getProductCode() 
+                                : ("SKU-" + product.getId());
+                        if (productVariantRepository.findBySkuAndIsDeletedFalse(sku).isPresent()) {
+                            sku = sku + "-" + (System.currentTimeMillis() % 10000);
+                        }
+                        String varCode = "VAR-" + (product.getProductCode() != null ? product.getProductCode() : ("P" + product.getId()));
+                        if (productVariantRepository.findByVariantCodeAndIsDeletedFalse(varCode).isPresent()) {
+                            varCode = varCode + "-" + (System.currentTimeMillis() % 10000);
+                        }
+                        ProductVariant newVariant = ProductVariant.builder()
+                                .variantCode(varCode)
+                                .sku(sku)
+                                .barcode(product.getBarcode() != null ? product.getBarcode() : sku)
+                                .price(product.getBasePrice() != null ? product.getBasePrice() : poDetail.getUnitPrice())
+                                .status(org.example.storemanager.shared.enums.catalog.VariantStatus.ACTIVE)
+                                .isActive(true)
+                                .product(product)
+                                .build();
+                        newVariant.setIsDeleted(false);
+                        newVariant.setCreatedBy(username);
+                        return productVariantRepository.save(newVariant);
+                    });
 
             ImportReceiptDetail receiptDetail = ImportReceiptDetail.builder()
                     .receipt(savedReceipt)
@@ -729,7 +748,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         boolean valid = false;
         switch (currentStatus) {
             case "DRAFT":
-                if ("PENDING_APPROVAL".equals(targetStatus) || "CANCELLED".equals(targetStatus)) {
+                if ("PENDING_APPROVAL".equals(targetStatus) || "APPROVED".equals(targetStatus) || "CANCELLED".equals(targetStatus)) {
                     valid = true;
                 }
                 break;
@@ -748,7 +767,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             case "CONFIRMED":
                 if ("SENT_TO_SUPPLIER".equals(targetStatus) || "CONFIRMED".equals(targetStatus) 
                         || "DISPATCHED".equals(targetStatus) || "IN_TRANSIT".equals(targetStatus) 
-                        || "DELIVERED".equals(targetStatus) || "RECEIVED".equals(targetStatus) || "COMPLETED".equals(targetStatus)) {
+                        || "DELIVERED".equals(targetStatus) || "RECEIVED".equals(targetStatus) || "COMPLETED".equals(targetStatus)
+                        || "CANCELLED".equals(targetStatus)) {
                     valid = true;
                 }
                 break;
