@@ -15,4 +15,9 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, Lo
     Optional<StockTransfer> findByIdAndIsDeletedFalse(Long id);
 
     Optional<StockTransfer> findByTransferCodeAndIsDeletedFalse(String transferCode);
+
+    boolean existsByTransferCode(String transferCode);
+
+    @Query("SELECT COUNT(t) FROM StockTransfer t WHERE t.isDeleted = false")
+    long countActive();
 }

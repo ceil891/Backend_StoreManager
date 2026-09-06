@@ -1711,8 +1711,25 @@ public class InventoryServiceImpl implements InventoryService {
 
         String initialStatus = (dto.getStatus() != null && !dto.getStatus().isBlank()) ? dto.getStatus() : "READY_TO_SHIP";
 
+        // Auto-deduplicate transfer code to prevent unique constraint violation (409)
+        String transferCode = dto.getTransferCode();
+        if (transferCode == null || transferCode.isBlank()) {
+            long count = stockTransferRepository.countActive() + 1;
+            transferCode = "STX-" + java.time.LocalDate.now().getYear() + "-" + count;
+        }
+        // If code already exists, append a random suffix
+        if (stockTransferRepository.existsByTransferCode(transferCode)) {
+            String base = transferCode.replaceAll("-\\d{3,}$", ""); // strip trailing numeric suffix if any
+            long seq = stockTransferRepository.countActive() + 1;
+            transferCode = base + "-" + seq + "-" + (int)(Math.random() * 900 + 100);
+            // Final safety: keep generating until truly unique
+            while (stockTransferRepository.existsByTransferCode(transferCode)) {
+                transferCode = base + "-" + System.currentTimeMillis() % 100000;
+            }
+        }
+
         StockTransfer t = StockTransfer.builder()
-                .transferCode(dto.getTransferCode())
+                .transferCode(transferCode)
                 .transferDate(dto.getTransferDate() != null ? dto.getTransferDate() : LocalDateTime.now())
                 .status(initialStatus)
                 .fromBranch(fromB)
