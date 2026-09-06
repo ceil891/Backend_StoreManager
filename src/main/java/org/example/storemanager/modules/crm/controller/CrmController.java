@@ -195,6 +195,31 @@ public class CrmController {
         Integer balanceAfter = req.get("balanceAfter") != null ? Integer.valueOf(req.get("balanceAfter").toString()) : pointsChange;
         String notes = req.get("notes") != null ? req.get("notes").toString() : (req.get("description") != null ? req.get("description").toString() : "");
 
+        // Đồng bộ trực tiếp điểm, chi tiêu và hạng vào bảng customers
+        if (customer != null) {
+            int curPts = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
+            int newBalance = Math.max(0, curPts + pointsChange);
+            customer.setPoints((double) newBalance);
+
+            if (pointsChange > 0 && req.get("amount") != null) {
+                try {
+                    double amt = Double.parseDouble(req.get("amount").toString());
+                    double curSpend = customer.getTotalSpend() != null ? customer.getTotalSpend() : 0.0;
+                    customer.setTotalSpend(curSpend + amt);
+                } catch (Exception ignored) {}
+            }
+
+            double spendVal = customer.getTotalSpend() != null ? customer.getTotalSpend() : 0.0;
+            if (newBalance >= 6000 || spendVal >= 50000000.0) customer.setMembershipRank("DIAMOND");
+            else if (newBalance >= 3000 || spendVal >= 25000000.0) customer.setMembershipRank("ELITE_CLUB");
+            else if (newBalance >= 1500 || spendVal >= 10000000.0) customer.setMembershipRank("GOLD");
+            else if (newBalance >= 500  || spendVal >= 3000000.0)  customer.setMembershipRank("SILVER");
+            else customer.setMembershipRank("BRONZE");
+
+            customerRepository.save(customer);
+            balanceAfter = newBalance;
+        }
+
         LoyaltyPointHistory history = LoyaltyPointHistory.builder()
                 .customer(customer)
                 .pointsChange(pointsChange)
@@ -215,6 +240,45 @@ public class CrmController {
         resp.put("customerPhone", customer != null ? customer.getPhone() : "");
         resp.put("balanceAfter", saved.getCurrentPoints());
         return ResponseEntity.status(201).body(ApiResponse.created(resp));
+    }
+
+    @PostMapping("/customers/{id}/adjust-points")
+    @Transactional
+    public ResponseEntity<ApiResponse<Customer>> adjustCustomerPoints(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, Object> req) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new org.example.storemanager.shared.exception.ResourceNotFoundException("Customer", "id", id));
+
+        int pointsChange = req.get("pointsChange") != null ? Integer.parseInt(req.get("pointsChange").toString()) : 0;
+        String reason = req.get("reason") != null ? req.get("reason").toString() : "Điều chỉnh điểm thủ công";
+        String txType = pointsChange >= 0 ? "EARN" : "REDEEM";
+
+        int curPts = customer.getPoints() != null ? customer.getPoints().intValue() : 0;
+        int balanceAfter = Math.max(0, curPts + pointsChange);
+        customer.setPoints((double) balanceAfter);
+
+        double spendVal = customer.getTotalSpend() != null ? customer.getTotalSpend() : 0.0;
+        if (balanceAfter >= 6000 || spendVal >= 50000000.0) customer.setMembershipRank("DIAMOND");
+        else if (balanceAfter >= 3000 || spendVal >= 25000000.0) customer.setMembershipRank("ELITE_CLUB");
+        else if (balanceAfter >= 1500 || spendVal >= 10000000.0) customer.setMembershipRank("GOLD");
+        else if (balanceAfter >= 500  || spendVal >= 3000000.0)  customer.setMembershipRank("SILVER");
+        else customer.setMembershipRank("BRONZE");
+
+        Customer saved = customerRepository.save(customer);
+
+        LoyaltyPointHistory history = LoyaltyPointHistory.builder()
+                .customer(saved)
+                .pointsChange(pointsChange)
+                .transactionType(txType)
+                .refCode("ADJ-" + System.currentTimeMillis())
+                .currentPoints(balanceAfter)
+                .description(reason)
+                .build();
+        history.setIsDeleted(false);
+        loyaltyPointHistoryRepository.save(history);
+
+        return ResponseEntity.ok(ApiResponse.ok("Điều chỉnh điểm khách hàng thành công", saved));
     }
 
     @PutMapping("/loyalty-history/{id}")

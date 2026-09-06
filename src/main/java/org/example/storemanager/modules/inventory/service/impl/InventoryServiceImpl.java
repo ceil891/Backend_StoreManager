@@ -91,6 +91,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final org.example.storemanager.modules.sales.repository.PurchaseOrderDetailRepository purchaseOrderDetailRepository;
     private final StockOutRepository stockOutRepository;
     private final org.example.storemanager.modules.inventory.mapper.StockOutMapper stockOutMapper;
+    private final TransferShipmentRepository transferShipmentRepository;
 
     @Override
     public PageResponse<InventoryResponse> searchInventories(SearchInventoryRequest request, Pageable pageable) {
@@ -1711,8 +1712,25 @@ public class InventoryServiceImpl implements InventoryService {
 
         String initialStatus = (dto.getStatus() != null && !dto.getStatus().isBlank()) ? dto.getStatus() : "READY_TO_SHIP";
 
+        // Auto-deduplicate transfer code to prevent unique constraint violation (409)
+        String transferCode = dto.getTransferCode();
+        if (transferCode == null || transferCode.isBlank()) {
+            long count = stockTransferRepository.countActive() + 1;
+            transferCode = "STX-" + java.time.LocalDate.now().getYear() + "-" + count;
+        }
+        // If code already exists, append a random suffix
+        if (stockTransferRepository.existsByTransferCode(transferCode)) {
+            String base = transferCode.replaceAll("-\\d{3,}$", ""); // strip trailing numeric suffix if any
+            long seq = stockTransferRepository.countActive() + 1;
+            transferCode = base + "-" + seq + "-" + (int)(Math.random() * 900 + 100);
+            // Final safety: keep generating until truly unique
+            while (stockTransferRepository.existsByTransferCode(transferCode)) {
+                transferCode = base + "-" + System.currentTimeMillis() % 100000;
+            }
+        }
+
         StockTransfer t = StockTransfer.builder()
-                .transferCode(dto.getTransferCode())
+                .transferCode(transferCode)
                 .transferDate(dto.getTransferDate() != null ? dto.getTransferDate() : LocalDateTime.now())
                 .status(initialStatus)
                 .fromBranch(fromB)
@@ -1727,6 +1745,47 @@ public class InventoryServiceImpl implements InventoryService {
             t.setNote(dto.getNote());
         }
         StockTransfer saved = stockTransferRepository.save(t);
+
+        // 1. Backend Business Logic: Xử lý Mã Vận Đơn duy nhất (Unique Tracking Code) & Tạo bản ghi Vận đơn (TransferShipment)
+        String partner = dto.getLogisticsPartner() != null ? dto.getLogisticsPartner().trim() : "";
+        String trackingCode = dto.getTrackingRef() != null ? dto.getTrackingRef().trim() : "";
+        boolean isInternal = partner.isEmpty()
+                || partner.toUpperCase().contains("INTERNAL")
+                || partner.toLowerCase().contains("nội bộ")
+                || partner.toLowerCase().contains("đội xe");
+
+        String carrierType = isInternal ? "INTERNAL" : "EXTERNAL";
+        String carrierName = !partner.isEmpty() ? partner : "Nội bộ (Đội xe công ty)";
+
+        // Trường hợp 2: tracking_code bị để trống VÀ Đơn vị vận chuyển là Nội bộ -> Sinh mã TRK-YYYYMMDD-XXXX
+        if (trackingCode.isEmpty() && isInternal) {
+            String datePrefix = "TRK-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now()) + "-";
+            long countToday = transferShipmentRepository.countByTrackingCodePrefix(datePrefix);
+            long index = countToday + 1;
+            trackingCode = datePrefix + String.format("%04d", index);
+            while (transferShipmentRepository.existsByTrackingCode(trackingCode)) {
+                index++;
+                trackingCode = datePrefix + String.format("%04d", index);
+            }
+        }
+
+        if (!trackingCode.isEmpty()) {
+            saved.setTrackingRef(trackingCode);
+            saved.setLogisticsPartner(carrierName);
+            saved = stockTransferRepository.save(saved);
+
+            TransferShipment shipment = TransferShipment.builder()
+                    .trackingCode(trackingCode)
+                    .transfer(saved)
+                    .carrierName(carrierName)
+                    .carrierType(carrierType)
+                    .status("IN_TRANSIT")
+                    .shippedAt(LocalDateTime.now())
+                    .build();
+            shipment.setIsDeleted(false);
+            shipment.setCreatedBy(getCurrentUsername());
+            transferShipmentRepository.save(shipment);
+        }
 
         List<StockTransferDetailDTO> savedLines = new ArrayList<>();
         if (dto.getTransferLines() != null) {
@@ -3425,5 +3484,41 @@ public class InventoryServiceImpl implements InventoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("StockOut", "id", id));
         existing.setIsDeleted(true);
         stockOutRepository.save(existing);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransferShipmentDTO> getAllTransferShipments() {
+        return transferShipmentRepository.findAllWithTransferDetails().stream()
+                .map(this::toTransferShipmentDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public TransferShipmentDTO updateTransferShipmentStatus(Long id, String status) {
+        TransferShipment ts = transferShipmentRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("TransferShipment", "id", id));
+        ts.setStatus(status);
+        ts.setUpdatedBy(getCurrentUsername());
+        return toTransferShipmentDTO(transferShipmentRepository.save(ts));
+    }
+
+    private TransferShipmentDTO toTransferShipmentDTO(TransferShipment ts) {
+        StockTransfer t = ts.getTransfer();
+        return TransferShipmentDTO.builder()
+                .id(ts.getId())
+                .trackingCode(ts.getTrackingCode())
+                .transferId(t != null ? t.getId() : null)
+                .transferCode(t != null ? t.getTransferCode() : null)
+                .carrierName(ts.getCarrierName())
+                .carrierType(ts.getCarrierType())
+                .status(ts.getStatus())
+                .shippedAt(ts.getShippedAt())
+                .fromBranchName(t != null && t.getFromBranch() != null ? t.getFromBranch().getBranchName() : null)
+                .toBranchName(t != null && t.getToBranch() != null ? t.getToBranch().getBranchName() : null)
+                .logisticsPartner(t != null ? t.getLogisticsPartner() : null)
+                .createdAt(ts.getCreatedAt())
+                .build();
     }
 }

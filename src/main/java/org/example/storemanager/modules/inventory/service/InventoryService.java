@@ -118,4 +118,8 @@ public interface InventoryService {
     org.example.storemanager.modules.inventory.dto.StockOutDTO createStockOut(org.example.storemanager.modules.inventory.dto.StockOutDTO dto);
     org.example.storemanager.modules.inventory.dto.StockOutDTO updateStockOut(Long id, org.example.storemanager.modules.inventory.dto.StockOutDTO dto);
     void deleteStockOut(Long id);
+
+    // TransferShipment methods
+    List<org.example.storemanager.modules.inventory.dto.TransferShipmentDTO> getAllTransferShipments();
+    org.example.storemanager.modules.inventory.dto.TransferShipmentDTO updateTransferShipmentStatus(Long id, String status);
 }
