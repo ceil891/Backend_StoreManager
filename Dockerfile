@@ -23,4 +23,4 @@ COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 
 # Run Spring Boot application with optimized JVM flags for Render 512MB free tier
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms96m", "-Xmx240m", "-XX:MaxMetaspaceSize=112m", "-XX:ReservedCodeCacheSize=48m", "-Xss256k", "-XX:+UseSerialGC", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms64m", "-Xmx180m", "-XX:MetaspaceSize=128m", "-XX:MaxMetaspaceSize=192m", "-XX:ReservedCodeCacheSize=36m", "-Xss256k", "-XX:+UseSerialGC", "-jar", "app.jar"]
