@@ -28,5 +28,22 @@ public class Department extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User manager; // Trưởng phòng / Người quản lý phòng ban
+
+    public Long getManagerId() {
+        try {
+            if (manager != null) return manager.getId();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public String getManagerName() {
+        try {
+            if (manager != null && org.hibernate.Hibernate.isInitialized(manager)) {
+                return manager.getFullName();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
 }

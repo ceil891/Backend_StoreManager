@@ -12,4 +12,6 @@ public interface PaymentVoucherRepository extends JpaRepository<PaymentVoucher, 
     List<PaymentVoucher> findByIsDeletedFalse();
     List<PaymentVoucher> findByIsDeletedFalseOrderByIdDesc();
     List<PaymentVoucher> findByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    boolean existsByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    boolean existsByVoucherCodeAndIsDeletedFalse(String voucherCode);
 }

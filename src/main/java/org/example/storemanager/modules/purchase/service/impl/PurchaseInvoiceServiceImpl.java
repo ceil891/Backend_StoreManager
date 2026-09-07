@@ -1,6 +1,7 @@
 package org.example.storemanager.modules.purchase.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.storemanager.modules.purchase.dto.request.CreatePurchaseInvoiceRequest;
 import org.example.storemanager.modules.purchase.dto.request.UpdatePurchaseInvoiceRequest;
 import org.example.storemanager.modules.purchase.dto.response.PurchaseInvoiceResponse;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 import org.example.storemanager.modules.finance.entity.PaymentVoucher;
 import org.example.storemanager.modules.finance.repository.PaymentVoucherRepository;
 
+@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -37,6 +39,7 @@ public class PurchaseInvoiceServiceImpl implements PurchaseInvoiceService {
     private final SupplierRepository supplierRepository;
     private final BranchRepository branchRepository;
     private final PaymentVoucherRepository paymentVoucherRepository;
+    private final org.example.storemanager.shared.service.DocumentSequenceService documentSequenceService;
 
     @Override
     @Transactional(readOnly = true)
@@ -116,6 +119,7 @@ public class PurchaseInvoiceServiceImpl implements PurchaseInvoiceService {
         }
 
         PurchaseInvoice saved = purchaseInvoiceRepository.save(inv);
+        autoGeneratePaymentVoucherIfPaid(saved);
         return mapToResponse(saved);
     }
 
@@ -171,6 +175,7 @@ public class PurchaseInvoiceServiceImpl implements PurchaseInvoiceService {
 
         inv.setUpdatedBy(getCurrentUsername());
         PurchaseInvoice saved = purchaseInvoiceRepository.save(inv);
+        autoGeneratePaymentVoucherIfPaid(saved);
         return mapToResponse(saved);
     }
 
@@ -269,5 +274,69 @@ public class PurchaseInvoiceServiceImpl implements PurchaseInvoiceService {
             return authentication.getName();
         }
         return "system";
+    }
+
+    private void autoGeneratePaymentVoucherIfPaid(PurchaseInvoice saved) {
+        if (saved == null || saved.getStatus() == null) return;
+        if (!"DA_THANH_TOAN".equalsIgnoreCase(saved.getStatus()) && !"PAID".equalsIgnoreCase(saved.getStatus())) {
+            return;
+        }
+
+        try {
+            BigDecimal totalAmount = saved.getTotalAmount() != null ? saved.getTotalAmount() : BigDecimal.ZERO;
+            if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) return;
+
+            // Tính tổng các phiếu chi đã tạo cho hóa đơn này (hoặc đơn đặt hàng PO tương ứng nếu có)
+            List<PaymentVoucher> existingVouchers = paymentVoucherRepository.findByInvoiceCodeAndIsDeletedFalse(saved.getInvoiceCode());
+            BigDecimal alreadyPaid = existingVouchers.stream()
+                    .filter(v -> !"CANCELLED".equalsIgnoreCase(v.getStatus()))
+                    .map(PaymentVoucher::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (saved.getPoCode() != null && !saved.getPoCode().trim().isEmpty()) {
+                List<PaymentVoucher> poVouchers = paymentVoucherRepository.findByInvoiceCodeAndIsDeletedFalse(saved.getPoCode());
+                BigDecimal poPaid = poVouchers.stream()
+                        .filter(v -> !"CANCELLED".equalsIgnoreCase(v.getStatus()))
+                        .map(PaymentVoucher::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                alreadyPaid = alreadyPaid.add(poPaid);
+            }
+
+            BigDecimal amountToPay = totalAmount.subtract(alreadyPaid);
+            if (amountToPay.compareTo(BigDecimal.ZERO) <= 0) return;
+
+            // Sinh mã phiếu chi từ PostgreSQL Sequence để chống tranh chấp concurrency
+            String voucherCode = documentSequenceService.generatePaymentCode();
+            String receiver = saved.getSupplier() != null ? saved.getSupplier().getName() : "Nhà cung cấp";
+            String username = getCurrentUsername();
+
+            PaymentVoucher pv = PaymentVoucher.builder()
+                    .voucherCode(voucherCode)
+                    .voucherDate(saved.getInvoiceDate() != null ? saved.getInvoiceDate() : LocalDateTime.now())
+                    .amount(amountToPay)
+                    .receiverName(receiver)
+                    .status("COMPLETED")
+                    .invoiceCode(saved.getInvoiceCode())
+                    .paymentMethod("CHUYEN_KHOAN")
+                    .fundAccountName("Techcombank - 1902838392 (Công ty StoreManager)")
+                    .handler(username != null ? username : "Hệ thống")
+                    .notes("Thanh toán tự động hóa đơn mua hàng " + saved.getInvoiceCode() + " (Còn phải trả: " + amountToPay + ")")
+                    .branch(saved.getBranch())
+                    .build();
+            pv.setIsDeleted(false);
+            pv.setCreatedBy(username != null ? username : "System");
+
+            paymentVoucherRepository.save(pv);
+            log.info("Tự động tạo phiếu chi {} cho hóa đơn mua hàng {} với số tiền {}", voucherCode, saved.getInvoiceCode(), amountToPay);
+        } catch (Exception e) {
+            log.error("Lỗi khi tự động tạo phiếu chi cho hóa đơn mua hàng {}: {}", saved.getInvoiceCode(), e.getMessage(), e);
+            if (e instanceof org.springframework.web.server.ResponseStatusException) {
+                throw (org.springframework.web.server.ResponseStatusException) e;
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi tự động tạo phiếu chi cho hóa đơn mua hàng: " + e.getMessage(), e
+            );
+        }
     }
 }

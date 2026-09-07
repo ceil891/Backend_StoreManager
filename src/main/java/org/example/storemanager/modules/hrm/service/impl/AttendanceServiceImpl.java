@@ -51,13 +51,32 @@ public class AttendanceServiceImpl implements AttendanceService {
     @Override
     @LogActivity(actionType = "CREATE", entityName = "Attendance", entityClass = Attendance.class)
     public CreateAttendanceResponse create(CreateAttendanceRequest request) {
+        User user = resolveUser(request.getUserId());
+        LocalDate workDate = request.getWorkDate() != null ? request.getWorkDate() : LocalDate.now();
+
+        // Kiểm tra tránh trùng lặp bản ghi theo (user_id, work_date)
+        Attendance existing = attendanceRepository.findByUserIdAndWorkDate(user.getId(), workDate)
+                .orElse(null);
+
+        if (existing != null) {
+            // Cập nhật bản ghi hiện tại, tuyệt đối không tạo mới (tránh duplicate row)
+            if (request.getCheckInTime() != null) existing.setCheckInTime(request.getCheckInTime());
+            if (request.getCheckOutTime() != null) existing.setCheckOutTime(request.getCheckOutTime());
+            if (request.getGpsLocation() != null) existing.setGpsLocation(request.getGpsLocation());
+            if (request.getStatus() != null) existing.setStatus(request.getStatus());
+            if (request.getIsActive() != null) existing.setIsLocked(!request.getIsActive());
+            existing.setIsDeleted(false);
+            existing.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+            return mapToCreateResponse(attendanceRepository.save(existing));
+        }
+
         Attendance attendance = Attendance.builder()
-                .user(resolveUser(request.getUserId()))
-                .workDate(request.getWorkDate())
+                .user(user)
+                .workDate(workDate)
                 .checkInTime(request.getCheckInTime())
                 .checkOutTime(request.getCheckOutTime())
                 .gpsLocation(request.getGpsLocation())
-                .status(request.getStatus())
+                .status(request.getStatus() != null ? request.getStatus() : AttendanceStatus.PRESENT.name())
                 .build();
 
         attendance.setIsLocked(Boolean.FALSE.equals(request.getIsActive()));
@@ -160,15 +179,25 @@ public class AttendanceServiceImpl implements AttendanceService {
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
 
-        Attendance attendance = attendanceRepository.findByUserIdAndWorkDateAndIsDeletedFalse(user.getId(), today)
+        Attendance attendance = attendanceRepository.findByUserIdAndWorkDate(user.getId(), today)
                 .orElseGet(() -> Attendance.builder()
                         .user(user)
                         .workDate(today)
                         .status(AttendanceStatus.ABSENT.name())
                         .build());
 
+        // Nếu nhân viên đã check-in trong ngày: Cập nhật GPS/thiết bị nếu có và trả về bản ghi hiện tại, tuyệt đối không tạo mới (tránh duplicate row)
         if (attendance.getCheckInTime() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhân viên đã check-in hôm nay");
+            String gps = request.getGpsLocation();
+            if (request.getDeviceId() != null && !request.getDeviceId().isBlank()) {
+                gps = (gps != null ? gps + ";" : "") + "device:" + request.getDeviceId();
+            }
+            if (gps != null && !gps.isBlank()) {
+                attendance.setGpsLocation(gps);
+            }
+            attendance.setIsDeleted(false);
+            attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
+            return mapToResponse(attendanceRepository.save(attendance));
         }
 
         attendance.setCheckInTime(now);
@@ -185,6 +214,7 @@ public class AttendanceServiceImpl implements AttendanceService {
             attendance.setIsDeleted(false);
             attendance.setCreatedBy(HrmServiceSupport.getCurrentUsername());
         } else {
+            attendance.setIsDeleted(false);
             attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
         }
 
@@ -197,17 +227,16 @@ public class AttendanceServiceImpl implements AttendanceService {
         User user = resolveUser(request.getUserId());
         LocalDate today = LocalDate.now();
 
-        Attendance attendance = attendanceRepository.findByUserIdAndWorkDateAndIsDeletedFalse(user.getId(), today)
+        Attendance attendance = attendanceRepository.findByUserIdAndWorkDate(user.getId(), today)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chưa có bản ghi chấm công hôm nay"));
 
         if (attendance.getCheckInTime() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhân viên chưa check-in");
         }
-        if (attendance.getCheckOutTime() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhân viên đã check-out hôm nay");
-        }
 
+        // Cập nhật check-out time mới nhất
         attendance.setCheckOutTime(LocalDateTime.now());
+        attendance.setIsDeleted(false);
         attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
         return mapToResponse(attendanceRepository.save(attendance));
     }

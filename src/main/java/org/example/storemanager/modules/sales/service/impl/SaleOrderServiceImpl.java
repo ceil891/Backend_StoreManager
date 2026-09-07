@@ -18,6 +18,15 @@ import org.example.storemanager.modules.sales.repository.SaleOrderDetailReposito
 import org.example.storemanager.modules.partnerarea.repository.CustomerRepository;
 import org.example.storemanager.modules.system.repository.BranchRepository;
 import org.example.storemanager.modules.catalog.repository.ProductVariantRepository;
+import org.example.storemanager.modules.catalog.repository.ProductRepository;
+import org.example.storemanager.modules.sales.repository.ExportInvoiceRepository;
+import org.example.storemanager.modules.sales.repository.ExportInvoiceDetailRepository;
+import org.example.storemanager.modules.finance.repository.ReceiptVoucherRepository;
+import org.example.storemanager.modules.sales.entity.ExportInvoice;
+import org.example.storemanager.modules.sales.entity.ExportInvoiceDetail;
+import org.example.storemanager.modules.finance.entity.ReceiptVoucher;
+import org.example.storemanager.modules.finance.entity.DebtLedger;
+import org.example.storemanager.modules.catalog.entity.Product;
 import org.example.storemanager.modules.sales.service.SaleOrderService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -56,6 +65,13 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     private final org.example.storemanager.modules.catalog.repository.ComboRepository comboRepository;
     private final org.example.storemanager.modules.catalog.repository.ComboDetailRepository comboDetailRepository;
     private final org.example.storemanager.modules.system.repository.PosSessionRepository posSessionRepository;
+    private final ExportInvoiceRepository exportInvoiceRepository;
+    private final ExportInvoiceDetailRepository exportInvoiceDetailRepository;
+    private final ReceiptVoucherRepository receiptVoucherRepository;
+    private final ProductRepository productRepository;
+    private final org.example.storemanager.shared.service.DocumentSequenceService documentSequenceService;
+    private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
+    private final org.example.storemanager.modules.finance.repository.DebtLedgerRepository debtLedgerRepository;
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
@@ -276,6 +292,17 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         order.setLoyaltyPointsUsed(request.getLoyaltyPointsUsed());
         order.setVoucherCode(request.getVoucherCode());
         order.setFinalAmount(finalAmount);
+
+        BigDecimal paidAmount = request.getPaidAmount();
+        if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
+            paidAmount = finalAmount;
+        } else if (paidAmount == null || paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            paidAmount = BigDecimal.ZERO;
+        } else if (paidAmount.compareTo(finalAmount) > 0) {
+            paidAmount = finalAmount;
+        }
+        order.setPaidAmount(paidAmount);
+
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(details);
 
@@ -299,6 +326,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                     );
                 }
             }
+            // Tự động tạo hóa đơn xuất và phiếu thu khi đơn hàng tạo đã COMPLETED
+            autoGenerateInvoiceAndReceiptIfCompleted(savedOrder, details);
         }
 
         // Tự động xử lý trừ điểm (REDEEM) & tích điểm (EARN) cho khách hàng
@@ -449,8 +478,22 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         order.setTaxAmount(taxSum);
         order.setTotalAmount(totalAmount);
         order.setFinalAmount(totalAmount); // Keep final_amount in sync
+
+        if (request.getPaymentStatus() != null) {
+            order.setPaymentStatus(request.getPaymentStatus());
+        }
+        if (request.getPaidAmount() != null) {
+            order.setPaidAmount(request.getPaidAmount());
+        } else if ("PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+            order.setPaidAmount(totalAmount);
+        }
+
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(newDetails);
+
+        if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
+            autoGenerateInvoiceAndReceiptIfCompleted(savedOrder, newDetails);
+        }
 
         return mapToResponse(savedOrder, newDetails);
     }
@@ -467,6 +510,11 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
     @Override
     public SaleOrderResponse updateStatus(Long id, String status, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone) {
+        return updateStatus(id, status, null, branchId, carrier, trackingCode, shipperName, shipperPhone);
+    }
+
+    @Override
+    public SaleOrderResponse updateStatus(Long id, String status, String paymentStatus, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone) {
         SaleOrder order = saleOrderRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SaleOrder", "id", id));
 
@@ -475,6 +523,30 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         String normalizedStatus = normalizeOrderStatus(status);
         order.setStatus(normalizedStatus);
         String effectiveStatus = normalizedStatus; // used for delivery logic below
+
+        if (paymentStatus != null && !paymentStatus.trim().isEmpty()) {
+            order.setPaymentStatus(paymentStatus.trim().toUpperCase());
+        } else if ("COMPLETED".equalsIgnoreCase(normalizedStatus) && (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()))) {
+            order.setPaymentStatus("PAID");
+        }
+
+        // Rule: Khi khách chọn phương thức Chuyển khoản (CK) thì admin/quản lý phải duyệt đơn (PAID) trước khi duyệt kho đóng gói
+        if ("CONFIRMED".equalsIgnoreCase(effectiveStatus) || "PROCESSING".equalsIgnoreCase(effectiveStatus)) {
+            String pm = order.getPaymentMethodCode();
+            boolean isBankTransfer = pm != null && (
+                    pm.toUpperCase().contains("BANK") ||
+                    pm.toUpperCase().contains("TRANSFER") ||
+                    pm.toUpperCase().contains("CK") ||
+                    pm.toUpperCase().contains("CHUYEN_KHOAN") ||
+                    pm.toUpperCase().contains("VIETQR")
+            );
+            if (isBankTransfer && !"PAID".equalsIgnoreCase(order.getPaymentStatus())) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "Đơn hàng thanh toán chuyển khoản cần được Quản lý duyệt thanh toán (PAID) trước khi duyệt kho đóng gói!"
+                );
+            }
+        }
 
         if (branchId != null) {
             Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId).orElse(null);
@@ -615,6 +687,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             } catch (Exception e) {
                 System.err.println("Cảnh báo khi hoàn tồn kho đơn hàng bị hủy/trả: " + e.getMessage());
             }
+
+            // Xử lý hủy đơn / hoàn tiền khi đơn COMPLETED bị hủy
+            handleOrderCancellation(savedOrder, currentUser);
         }
 
         // Tự động tích điểm cho khách khi chuyển đơn sang COMPLETED
@@ -629,6 +704,11 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             } catch (Exception e) {
                 System.err.println("Cảnh báo khi tích điểm tự động khi chuyển trạng thái: " + e.getMessage());
             }
+        }
+
+        // Tự động tạo hóa đơn xuất và phiếu thu khi đơn hàng chuyển sang COMPLETED
+        if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+            autoGenerateInvoiceAndReceiptIfCompleted(savedOrder, details);
         }
 
         return mapToResponse(savedOrder, details);
@@ -690,6 +770,36 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             detail.setDeletedAt(LocalDateTime.now());
         }
         saleOrderDetailRepository.saveAll(details);
+    }
+
+    @Override
+    @Transactional
+    public SaleOrderResponse cancelOnlineOrder(Long id, String reason) {
+        SaleOrder order = saleOrderRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SaleOrder", "id", id));
+
+        String currentStatus = order.getStatus() != null ? order.getStatus().toUpperCase() : "PENDING";
+        String currentDelStatus = order.getDeliveryStatus() != null ? order.getDeliveryStatus().toUpperCase() : "UNASSIGNED";
+
+        // Nếu đơn đã giao cho ĐVVC hoặc đã hoàn tất thì không cho phép hủy
+        if ("SHIPPED".equals(currentStatus) || "DELIVERING".equals(currentStatus) || "IN_TRANSIT".equals(currentDelStatus) ||
+                "DELIVERED".equals(currentStatus) || "COMPLETED".equals(currentStatus)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Đơn hàng đã được giao cho đơn vị vận chuyển hoặc đã hoàn tất, không thể hủy!"
+            );
+        }
+
+        order.setStatus("CANCELLED");
+        order.setDeliveryStatus("CANCELLED");
+        String cancelNote = (reason != null && !reason.trim().isEmpty()) ? reason.trim() : "Khách hàng hủy trên Web Online";
+        order.setNote((order.getNote() != null ? order.getNote() + " | " : "") + "[Khách hủy đơn: " + cancelNote + "]");
+        order.setUpdatedBy("Khách hàng Online");
+        order.setUpdatedAt(LocalDateTime.now());
+
+        SaleOrder savedOrder = saleOrderRepository.save(order);
+        List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(savedOrder.getId());
+        return mapToResponse(savedOrder, details);
     }
 
     @Override
@@ -809,6 +919,13 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 })
                 .collect(Collectors.toList());
 
+        BigDecimal finalAmt = o.getFinalAmount() != null ? o.getFinalAmount() : (o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO);
+        BigDecimal paidAmt = o.getPaidAmount() != null ? o.getPaidAmount() : BigDecimal.ZERO;
+        if ("PAID".equalsIgnoreCase(o.getPaymentStatus())) {
+            paidAmt = finalAmt;
+        }
+        BigDecimal remDebt = finalAmt.subtract(paidAmt).max(BigDecimal.ZERO);
+
         return SaleOrderResponse.builder()
                 .id(o.getId())
                 .orderCode(o.getOrderCode())
@@ -817,7 +934,9 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .subTotal(o.getSubTotal() != null ? o.getSubTotal() : o.getTotalAmount())
                 .taxAmount(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(o.getTotalAmount())
-                .finalAmount(o.getFinalAmount() != null ? o.getFinalAmount() : o.getTotalAmount())
+                .finalAmount(finalAmt)
+                .paidAmount(paidAmt)
+                .remainingDebt(remDebt)
                 .status(o.getStatus())
                 .customerId(o.getCustomer() != null ? o.getCustomer().getId() : null)
                 .customerName(o.getCustomerName() != null ? o.getCustomerName() : (o.getCustomer() != null ? o.getCustomer().getName() : null))
@@ -842,8 +961,311 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 .assignedBy(o.getAssignedBy())
                 .paymentMethodId(o.getPaymentMethodId())
                 .paymentMethodCode(o.getPaymentMethodCode())
+                .paymentMethod(o.getPaymentMethodCode())
                 .details(detailsResponse)
                 .build();
+    }
+
+    /**
+     * Tự động tạo Hóa đơn xuất bán (ExportInvoice + ExportInvoiceDetail) và Phiếu thu (ReceiptVoucher)
+     * khi đơn hàng bán đạt trạng thái Hoàn thành (COMPLETED).
+     */
+    private void autoGenerateInvoiceAndReceiptIfCompleted(SaleOrder savedOrder, List<SaleOrderDetail> details) {
+        if (savedOrder == null || !"COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
+            return;
+        }
+
+        try {
+            // 1. Tự động sinh mã hóa đơn dựa trên mã đơn hàng
+            String orderCode = savedOrder.getOrderCode();
+            String invoiceCode = (orderCode != null && orderCode.startsWith("ORD-"))
+                    ? orderCode.replaceFirst("ORD-", "INV-")
+                    : documentSequenceService.generateExportInvoiceCode();
+
+            ExportInvoice savedInvoice = null;
+            if (!exportInvoiceRepository.existsByInvoiceCodeAndIsDeletedFalse(invoiceCode)) {
+                String creator = savedOrder.getCreatedBy();
+                if (creator == null || creator.trim().isEmpty()) {
+                    try {
+                        creator = getCurrentUsername();
+                    } catch (Exception ignored) {
+                        creator = "System";
+                    }
+                }
+
+                org.example.storemanager.modules.system.entity.PosSession posSession = null;
+                if (savedOrder.getPosSessionId() != null) {
+                    posSession = posSessionRepository.findByIdAndIsDeletedFalse(savedOrder.getPosSessionId()).orElse(null);
+                }
+
+                BigDecimal subTotal = savedOrder.getSubTotal() != null ? savedOrder.getSubTotal() : BigDecimal.ZERO;
+                BigDecimal discount = savedOrder.getVoucherDiscountAmount() != null ? savedOrder.getVoucherDiscountAmount() : BigDecimal.ZERO;
+                BigDecimal tax = savedOrder.getTaxAmount() != null ? savedOrder.getTaxAmount() : BigDecimal.ZERO;
+                BigDecimal totalAmount = savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount()
+                        : (savedOrder.getTotalAmount() != null ? savedOrder.getTotalAmount() : BigDecimal.ZERO);
+
+                String invStatus = "COMPLETED";
+                if ("UNPAID".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+                    invStatus = "UNPAID";
+                } else if ("PARTIAL".equalsIgnoreCase(savedOrder.getPaymentStatus())) {
+                    invStatus = "PARTIAL_PAID";
+                }
+
+                ExportInvoice invoice = ExportInvoice.builder()
+                        .invoiceCode(invoiceCode)
+                        .invoiceDate(savedOrder.getOrderDate() != null ? savedOrder.getOrderDate() : LocalDateTime.now())
+                        .subTotal(subTotal)
+                        .discount(discount)
+                        .tax(tax)
+                        .totalAmount(totalAmount)
+                        .status(invStatus)
+                        .customer(savedOrder.getCustomer())
+                        .branch(savedOrder.getBranch())
+                        .posSession(posSession)
+                        .note("Hóa đơn xuất tự động cho đơn hàng " + savedOrder.getOrderCode())
+                        .build();
+                invoice.setIsDeleted(false);
+                invoice.setCreatedBy(creator);
+
+                savedInvoice = exportInvoiceRepository.save(invoice);
+
+                // Tạo danh sách ExportInvoiceDetail
+                List<ExportInvoiceDetail> invDetails = new ArrayList<>();
+                if (details != null) {
+                    for (SaleOrderDetail d : details) {
+                        if (Boolean.TRUE.equals(d.getIsDeleted())) continue;
+
+                        Product product = null;
+                        if (d.getProductVariant() != null) {
+                            product = d.getProductVariant().getProduct();
+                            if (product == null && d.getProductVariant().getId() != null) {
+                                ProductVariant pv = productVariantRepository.findByIdAndIsDeletedFalse(d.getProductVariant().getId()).orElse(null);
+                                if (pv != null) product = pv.getProduct();
+                            }
+                        }
+                        if (product == null && d.getSkuSnapshot() != null) {
+                            ProductVariant pv = productVariantRepository.findBySkuAndIsDeletedFalse(d.getSkuSnapshot()).orElse(null);
+                            if (pv != null) product = pv.getProduct();
+                        }
+                        if (product == null) {
+                            product = productRepository.findAll().stream()
+                                    .filter(p -> !Boolean.TRUE.equals(p.getIsDeleted()))
+                                    .findFirst().orElse(null);
+                        }
+
+                        if (product != null) {
+                            BigDecimal qty = d.getQuantity() != null ? d.getQuantity() : BigDecimal.ONE;
+                            BigDecimal uPrice = d.getUnitPrice() != null ? d.getUnitPrice()
+                                    : (d.getUnitPriceSnapshot() != null ? d.getUnitPriceSnapshot() : BigDecimal.ZERO);
+                            BigDecimal dDiscount = d.getDiscountAmount() != null ? d.getDiscountAmount() : BigDecimal.ZERO;
+                            BigDecimal dSubTotal = d.getSubTotal() != null ? d.getSubTotal() : qty.multiply(uPrice).subtract(dDiscount);
+                            BigDecimal dTaxRate = d.getTaxRate() != null ? d.getTaxRate() : BigDecimal.ZERO;
+                            BigDecimal dTaxAmount = d.getTaxAmount() != null ? d.getTaxAmount() : BigDecimal.ZERO;
+                            BigDecimal dTotal = d.getTotalAmount() != null ? d.getTotalAmount() : dSubTotal.add(dTaxAmount);
+
+                            ExportInvoiceDetail invDetail = ExportInvoiceDetail.builder()
+                                    .invoice(savedInvoice)
+                                    .product(product)
+                                    .quantity(qty)
+                                    .unitPrice(uPrice)
+                                    .discount(dDiscount)
+                                    .subTotal(dSubTotal)
+                                    .taxRate(dTaxRate)
+                                    .taxAmount(dTaxAmount)
+                                    .totalAmount(dTotal)
+                                    .build();
+                            invDetail.setIsDeleted(false);
+                            invDetail.setCreatedBy(creator);
+                            invDetails.add(invDetail);
+                        }
+                    }
+                }
+                if (!invDetails.isEmpty()) {
+                    exportInvoiceDetailRepository.saveAll(invDetails);
+                }
+                log.info("Tự động tạo hóa đơn xuất bán {} thành công cho đơn hàng {}", invoiceCode, savedOrder.getOrderCode());
+            }
+
+            // 2. Tự động sinh Phiếu thu (ReceiptVoucher) và/hoặc Sổ nợ (DebtLedger) dựa trên thanh toán thực tế
+            BigDecimal finalAmount = savedOrder.getFinalAmount() != null ? savedOrder.getFinalAmount()
+                    : (savedOrder.getTotalAmount() != null ? savedOrder.getTotalAmount() : BigDecimal.ZERO);
+
+            String paymentStatus = savedOrder.getPaymentStatus() != null ? savedOrder.getPaymentStatus().toUpperCase() : "UNPAID";
+            BigDecimal paidAmount = savedOrder.getPaidAmount() != null ? savedOrder.getPaidAmount() : BigDecimal.ZERO;
+
+            if ("PAID".equalsIgnoreCase(paymentStatus)) {
+                paidAmount = finalAmount;
+            } else if ("UNPAID".equalsIgnoreCase(paymentStatus)) {
+                paidAmount = BigDecimal.ZERO;
+            } else if ("PARTIAL".equalsIgnoreCase(paymentStatus)) {
+                if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                    paidAmount = BigDecimal.ZERO;
+                } else if (paidAmount.compareTo(finalAmount) > 0) {
+                    paidAmount = finalAmount;
+                }
+            }
+
+            BigDecimal remainingDebt = finalAmount.subtract(paidAmount);
+            if (remainingDebt.compareTo(BigDecimal.ZERO) < 0) {
+                remainingDebt = BigDecimal.ZERO;
+            }
+
+            String payer = savedOrder.getCustomer() != null ? savedOrder.getCustomer().getName() :
+                    (savedOrder.getCustomerName() != null ? savedOrder.getCustomerName() : "Khách mua hàng");
+            String creator = savedOrder.getCreatedBy() != null ? savedOrder.getCreatedBy() : "System";
+            LocalDateTime vDate = savedOrder.getOrderDate() != null && !savedOrder.getOrderDate().isAfter(LocalDateTime.now())
+                    ? savedOrder.getOrderDate()
+                    : LocalDateTime.now();
+
+            // 2.1. Nếu có thực thu (paidAmount > 0), sinh Phiếu thu (ReceiptVoucher) với mã từ Sequence
+            boolean receiptExists = receiptVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(invoiceCode)
+                    || (orderCode != null && receiptVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(orderCode));
+
+            if (!receiptExists && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+                String vCode = documentSequenceService.generateReceiptCode();
+                String pm = savedOrder.getPaymentMethodCode() != null ? savedOrder.getPaymentMethodCode().toUpperCase() : "TIEN_MAT";
+                String fundAccount = (pm.contains("BANK") || pm.contains("TRANSFER") || pm.contains("CK") || pm.contains("VIETQR"))
+                        ? "Techcombank - 1902838392 (Công ty StoreManager)"
+                        : "Quỹ tiền mặt (Cash)";
+
+                ReceiptVoucher rv = ReceiptVoucher.builder()
+                        .voucherCode(vCode)
+                        .voucherDate(vDate)
+                        .amount(paidAmount)
+                        .payerName(payer)
+                        .status("COMPLETED")
+                        .paymentMethod(pm)
+                        .fundAccountName(fundAccount)
+                        .invoiceCode(invoiceCode)
+                        .handler(creator)
+                        .notes("Thu tiền tự động khi đơn hàng " + savedOrder.getOrderCode() + " hoàn tất thành công (" + paymentStatus + ")")
+                        .category("Bán hàng")
+                        .branch(savedOrder.getBranch())
+                        .build();
+                rv.setIsDeleted(false);
+                rv.setCreatedBy(creator);
+                receiptVoucherRepository.save(rv);
+                log.info("Tự động tạo phiếu thu {} thành công cho đơn hàng {} với số tiền {}", vCode, savedOrder.getOrderCode(), paidAmount);
+            }
+
+            // 2.2. Nếu còn dư nợ (remainingDebt > 0) và có thông tin khách hàng, ghi nhận vào Sổ nợ (DebtLedger)
+            if (remainingDebt.compareTo(BigDecimal.ZERO) > 0 && savedOrder.getCustomer() != null) {
+                List<DebtLedger> existingDebts = debtLedgerRepository.findByRefCodeAndIsDeletedFalse(invoiceCode);
+                if (existingDebts.isEmpty()) {
+                    DebtLedger debt = DebtLedger.builder()
+                            .transactionDate(vDate)
+                            .refCode(invoiceCode)
+                            .increase(remainingDebt)
+                            .decrease(BigDecimal.ZERO)
+                            .balance(remainingDebt)
+                            .partnerId(savedOrder.getCustomer().getId())
+                            .entityName(payer)
+                            .entityType("CUSTOMER")
+                            .status("NORMAL")
+                            .notes("Ghi nhận công nợ đơn hàng " + savedOrder.getOrderCode() + " (Còn nợ: " + remainingDebt + ")")
+                            .build();
+                    debt.setIsDeleted(false);
+                    debt.setCreatedBy(creator);
+                    debtLedgerRepository.save(debt);
+                    log.info("Tự động ghi nhận công nợ {} cho khách hàng {} của đơn hàng {}", remainingDebt, payer, savedOrder.getOrderCode());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi tự động tạo hóa đơn xuất / phiếu thu cho đơn hàng {}: {}", savedOrder.getOrderCode(), e.getMessage(), e);
+            if (e instanceof org.springframework.web.server.ResponseStatusException) {
+                throw (org.springframework.web.server.ResponseStatusException) e;
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi tự động tạo hóa đơn xuất / phiếu thu: " + e.getMessage(), e
+            );
+        }
+    }
+
+    /**
+     * Xử lý hủy đơn hàng hoàn tất (COMPLETED -> CANCELLED):
+     * - Hủy hóa đơn xuất (ExportInvoice.status = CANCELLED)
+     * - Hoàn tiền đã thu (sinh PaymentVoucher hoàn tiền tự động)
+     * - Tất toán công nợ trên Sổ nợ (DebtLedger.status = SETTLED, balance = 0)
+     */
+    private void handleOrderCancellation(SaleOrder savedOrder, String currentUser) {
+        if (savedOrder == null) return;
+        try {
+            String orderCode = savedOrder.getOrderCode();
+            String invoiceCode = (orderCode != null && orderCode.startsWith("ORD-"))
+                    ? orderCode.replaceFirst("ORD-", "INV-")
+                    : ("INV-" + (orderCode != null ? orderCode : ""));
+
+            // 1. Chuyển trạng thái hóa đơn xuất sang CANCELLED
+            exportInvoiceRepository.findByInvoiceCodeAndIsDeletedFalse(invoiceCode).ifPresent(inv -> {
+                inv.setStatus("CANCELLED");
+                inv.setUpdatedBy(currentUser);
+                exportInvoiceRepository.save(inv);
+                log.info("Hóa đơn {} đã được hủy tự động theo đơn hàng {}", invoiceCode, orderCode);
+            });
+
+            // 2. Tìm các phiếu thu đã lập cho đơn hàng này để hoàn tiền
+            List<ReceiptVoucher> receipts = receiptVoucherRepository.findAllByInvoiceCodeAndIsDeletedFalse(invoiceCode);
+            if (receipts.isEmpty() && orderCode != null) {
+                receipts = receiptVoucherRepository.findAllByInvoiceCodeAndIsDeletedFalse(orderCode);
+            }
+
+            BigDecimal totalCollected = receipts.stream()
+                    .filter(r -> "COMPLETED".equalsIgnoreCase(r.getStatus()))
+                    .map(ReceiptVoucher::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (totalCollected.compareTo(BigDecimal.ZERO) > 0) {
+                String refundVoucherCode = documentSequenceService.generatePaymentCode();
+                String receiver = savedOrder.getCustomer() != null ? savedOrder.getCustomer().getName()
+                        : (savedOrder.getCustomerName() != null ? savedOrder.getCustomerName() : "Khách hàng");
+                String pm = savedOrder.getPaymentMethodCode() != null ? savedOrder.getPaymentMethodCode().toUpperCase() : "TIEN_MAT";
+                String fundAccount = (pm.contains("BANK") || pm.contains("TRANSFER") || pm.contains("CK") || pm.contains("VIETQR"))
+                        ? "Techcombank - 1902838392 (Công ty StoreManager)"
+                        : "Quỹ tiền mặt (Cash)";
+
+                org.example.storemanager.modules.finance.entity.PaymentVoucher pv = org.example.storemanager.modules.finance.entity.PaymentVoucher.builder()
+                        .voucherCode(refundVoucherCode)
+                        .voucherDate(LocalDateTime.now())
+                        .amount(totalCollected)
+                        .receiverName(receiver)
+                        .status("COMPLETED")
+                        .invoiceCode(invoiceCode)
+                        .paymentMethod(pm)
+                        .fundAccountName(fundAccount)
+                        .handler(currentUser)
+                        .notes("Hoàn tiền tự động do hủy đơn hàng " + orderCode + " (Số tiền: " + totalCollected + ")")
+                        .branch(savedOrder.getBranch())
+                        .build();
+                pv.setIsDeleted(false);
+                pv.setCreatedBy(currentUser);
+                paymentVoucherRepository.save(pv);
+                log.info("Tự động sinh phiếu chi hoàn tiền {} cho đơn hàng bị hủy {}", refundVoucherCode, orderCode);
+            }
+
+            // 3. Điều chỉnh Sổ nợ (DebtLedger) nếu có ghi nhận nợ cho đơn hàng này
+            List<DebtLedger> debts = debtLedgerRepository.findByRefCodeAndIsDeletedFalse(invoiceCode);
+            if (debts.isEmpty() && orderCode != null) {
+                debts = debtLedgerRepository.findByRefCodeAndIsDeletedFalse(orderCode);
+            }
+            for (DebtLedger d : debts) {
+                d.setStatus("SETTLED");
+                d.setDecrease(d.getIncrease());
+                d.setBalance(BigDecimal.ZERO);
+                d.setNotes((d.getNotes() != null ? d.getNotes() + " | " : "") + "Đã hủy do đơn hàng bị hủy (" + currentUser + ")");
+                d.setUpdatedBy(currentUser);
+                debtLedgerRepository.save(d);
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi xử lý hủy đơn hàng hoàn tất {}: {}", savedOrder.getOrderCode(), e.getMessage(), e);
+            if (e instanceof org.springframework.web.server.ResponseStatusException) {
+                throw (org.springframework.web.server.ResponseStatusException) e;
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi xử lý hủy đơn hàng hoàn tất: " + e.getMessage(), e
+            );
+        }
     }
 
     private BigDecimal getTaxRateForProduct(org.example.storemanager.modules.catalog.entity.Product product) {

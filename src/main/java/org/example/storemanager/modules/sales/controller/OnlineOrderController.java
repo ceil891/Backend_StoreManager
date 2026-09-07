@@ -28,4 +28,12 @@ public class OnlineOrderController {
         SaleOrderResponse response = saleOrderService.createOrder(request);
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
+
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<SaleOrderResponse>> cancelOnlineOrder(
+            @PathVariable Long id,
+            @RequestParam(required = false) String reason) {
+        SaleOrderResponse response = saleOrderService.cancelOnlineOrder(id, reason);
+        return ResponseEntity.ok(ApiResponse.ok("Hủy đơn hàng thành công", response));
+    }
 }

@@ -50,18 +50,28 @@ public class KpiRecord extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "roles"})
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User user;
 
-    @Transient
+    @Column(name = "employee_name", length = 100)
     private String employeeName;
 
     @Transient
     @JsonAlias({"kpiMonth"})
     private String kpiMonth;
 
+    public Long getUserId() {
+        try {
+            if (user != null) return user.getId();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     public String getEmployeeName() {
-        if (user != null && user.getFullName() != null) return user.getFullName();
+        if (employeeName != null && !employeeName.isBlank()) return employeeName;
+        try {
+            if (user != null && org.hibernate.Hibernate.isInitialized(user) && user.getFullName() != null) return user.getFullName();
+        } catch (Exception ignored) {}
         return employeeName != null ? employeeName : "Nhân viên";
     }
 

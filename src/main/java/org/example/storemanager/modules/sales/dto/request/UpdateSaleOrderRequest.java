@@ -23,6 +23,10 @@ public class UpdateSaleOrderRequest {
     @NotBlank(message = "Trạng thái không được để trống")
     private String status;
 
+    private String paymentStatus;
+
+    private java.math.BigDecimal paidAmount;
+
     private String note;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")

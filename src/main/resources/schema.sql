@@ -282,6 +282,8 @@ ALTER TABLE IF EXISTS operating_costs ADD COLUMN IF NOT EXISTS category VARCHAR(
 ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS payroll_code VARCHAR(50);
 ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS kpi_bonus NUMERIC(18, 2) DEFAULT 0;
 ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS payment_date TIMESTAMP;
+ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS employee_name VARCHAR(150);
+ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS department VARCHAR(100);
 
 ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS category VARCHAR(100);
 
@@ -587,3 +589,27 @@ CREATE TABLE IF NOT EXISTS transfer_shipments (
 -- 59. Stock Out Order Ref and Destination Address
 ALTER TABLE IF EXISTS stock_outs ADD COLUMN IF NOT EXISTS order_ref_code VARCHAR(100);
 ALTER TABLE IF EXISTS stock_outs ADD COLUMN IF NOT EXISTS destination_address VARCHAR(255);
+
+-- 60. Timekeeping / Attendance Unique Constraint
+DELETE FROM attendances a USING attendances b
+WHERE a.id < b.id AND a.user_id = b.user_id AND a.work_date = b.work_date;
+
+ALTER TABLE IF EXISTS attendances DROP CONSTRAINT IF EXISTS uk_attendance_user_work_date;
+ALTER TABLE IF EXISTS attendances ADD CONSTRAINT uk_attendance_user_work_date UNIQUE (user_id, work_date);
+
+-- 61. HRM Denormalized Display Fields
+ALTER TABLE IF EXISTS leave_requests ADD COLUMN IF NOT EXISTS employee_name VARCHAR(100);
+ALTER TABLE IF EXISTS leave_requests ADD COLUMN IF NOT EXISTS total_days INTEGER;
+ALTER TABLE IF EXISTS employee_contracts ADD COLUMN IF NOT EXISTS employee_name VARCHAR(100);
+ALTER TABLE IF EXISTS employee_contracts ADD COLUMN IF NOT EXISTS employee_phone VARCHAR(30);
+ALTER TABLE IF EXISTS kpi_records ADD COLUMN IF NOT EXISTS employee_name VARCHAR(100);
+
+-- 62. Sequences for atomic, concurrency-safe voucher and invoice codes
+CREATE SEQUENCE IF NOT EXISTS receipt_voucher_code_seq START WITH 1001 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS payment_voucher_code_seq START WITH 1001 INCREMENT BY 1;
+CREATE SEQUENCE IF NOT EXISTS export_invoice_code_seq START WITH 1001 INCREMENT BY 1;
+
+-- 63. Add paid_amount to sale_orders for partial payment tracking
+ALTER TABLE IF EXISTS sale_orders ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(18, 2) DEFAULT 0;
+
+

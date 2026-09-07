@@ -13,6 +13,8 @@ public interface SaleOrderService {
     SaleOrderResponse updateStatus(Long id, String status);
     SaleOrderResponse updateStatus(Long id, String status, String carrier, String trackingCode, String shipperName, String shipperPhone);
     SaleOrderResponse updateStatus(Long id, String status, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone);
+    SaleOrderResponse updateStatus(Long id, String status, String paymentStatus, Long branchId, String carrier, String trackingCode, String shipperName, String shipperPhone);
+    SaleOrderResponse cancelOnlineOrder(Long id, String reason);
     void deleteOrder(Long id);
     SaleOrderResponse getOrderById(Long id);
     List<SaleOrderResponse> getAllOrders(String search, String status, Long branchId, String sort, boolean includeDeleted);

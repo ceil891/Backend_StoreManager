@@ -135,7 +135,6 @@ public class DataSeeder implements CommandLineRunner {
         seedMasterUnitsAndCategories();
         seedLoyaltyTiers();
         fixNullIsDeleted();
-        log.info("[DataSeeder] Hoàn tất kiểm tra phân quyền và dữ liệu khởi tạo trong Database.");
     }
 
     private void seedMasterUnitsAndCategories() {
@@ -460,7 +459,6 @@ public class DataSeeder implements CommandLineRunner {
                         .build();
                 user.setIsDeleted(false);
                 userRepository.saveAndFlush(user);
-                log.info("Đã tạo mới tài khoản SuperAdmin [{}] mật khẩu [123456]", email);
             } else {
                 user.setRole(superAdminRole);
                 user.setPassword(passwordEncoder.encode("123456"));
@@ -470,7 +468,6 @@ public class DataSeeder implements CommandLineRunner {
                     user.setBranch(defaultBranch);
                 }
                 userRepository.saveAndFlush(user);
-                log.info("Đã cập nhật tài khoản [{}] với vai trò SUPER_ADMIN và mật khẩu [123456]", email);
             }
         } catch (Exception e) {
             log.warn("[DataSeeder] Không thể seed tài khoản SuperAdmin (non-fatal): {}", e.getMessage());
