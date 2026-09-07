@@ -170,7 +170,7 @@ class AuthServiceTest {
             when(jwtUtil.generateAccessToken(sampleUser.getUsername())).thenReturn("access-token-123");
             when(jwtUtil.generateRefreshToken(sampleUser.getUsername())).thenReturn("refresh-token-123");
             when(jwtUtil.getRefreshTokenExpirationMs()).thenReturn(604800000L);
-            when(rolePermissionRepository.findByRoleId(sampleRole.getId())).thenReturn(Collections.emptyList());
+            when(rolePermissionRepository.findPermissionCodesByRoleId(sampleRole.getId())).thenReturn(Collections.emptySet());
 
             LoginResponse res = authService.login(req);
 

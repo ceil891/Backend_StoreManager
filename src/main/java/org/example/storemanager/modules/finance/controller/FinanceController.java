@@ -218,6 +218,12 @@ public class FinanceController {
         }
         if (req.getVoucherDate() == null) {
             req.setVoucherDate(LocalDateTime.now());
+        } else {
+            // Cơ chế chặn việc lập chứng từ sai thời gian thực tế (thời gian tương lai)
+            LocalDate today = LocalDate.now();
+            if (req.getVoucherDate().toLocalDate().isAfter(today)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được lập chứng từ phiếu thu ở thời gian tương lai so với thực tế");
+            }
         }
         ReceiptVoucher saved = receiptVoucherRepository.save(req);
         if ("COMPLETED".equalsIgnoreCase(saved.getStatus())) {
@@ -233,6 +239,15 @@ public class FinanceController {
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id));
         
         String oldStatus = existing.getStatus();
+        boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
+
+        if (wasDone) {
+            boolean statusChangeToCancelled = "CANCELLED".equalsIgnoreCase(req.getStatus());
+            if (!statusChangeToCancelled) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chứng từ đã duyệt ở trạng thái read-only và không thể chỉnh sửa");
+            }
+        }
+
         if (req.getPayerName() != null) existing.setPayerName(req.getPayerName());
         if (req.getAmount() != null) existing.setAmount(req.getAmount());
         if (req.getStatus() != null) existing.setStatus(req.getStatus());
@@ -240,7 +255,7 @@ public class FinanceController {
         if (req.getFundAccountName() != null) existing.setFundAccountName(req.getFundAccountName());
         if (req.getInvoiceCode() != null) existing.setInvoiceCode(req.getInvoiceCode());
         if (req.getNotes() != null) existing.setNotes(req.getNotes());
-        if (req.getVoucherDate() != null) existing.setVoucherDate(req.getVoucherDate());
+        // Nghiệp vụ: Không được thay đổi thời gian khi đã lập phiếu -> Giữ nguyên voucherDate ban đầu
         if (req.getCategory() != null) existing.setCategory(req.getCategory());
         
         ReceiptVoucher saved = receiptVoucherRepository.save(existing);
@@ -290,6 +305,12 @@ public class FinanceController {
         }
         if (req.getVoucherDate() == null) {
             req.setVoucherDate(LocalDateTime.now());
+        } else {
+            // Cơ chế chặn việc lập chứng từ sai thời gian thực tế (thời gian tương lai)
+            LocalDate today = LocalDate.now();
+            if (req.getVoucherDate().toLocalDate().isAfter(today)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được lập chứng từ phiếu chi ở thời gian tương lai so với thực tế");
+            }
         }
 
         // Validate PO / Invoice Status

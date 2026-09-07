@@ -25,14 +25,10 @@ public class DatabaseMigrationConfig {
             try {
                 ClassPathResource schemaResource = new ClassPathResource("schema.sql");
                 if (schemaResource.exists()) {
-                    log.info("[Migration] Executing database migration schema.sql...");
                     ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
                     populator.addScript(schemaResource);
                     populator.setContinueOnError(true);
                     populator.execute(dataSource);
-                    log.info("[Migration] Database migration scripts executed successfully.");
-                } else {
-                    log.info("[Migration] No schema.sql found, skipping migration.");
                 }
             } catch (Exception e) {
                 log.warn("[Migration] Database migration encountered an issue (non-fatal): {}", e.getMessage());

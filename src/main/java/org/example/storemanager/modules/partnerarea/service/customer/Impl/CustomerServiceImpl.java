@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +48,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final AreaRepository areaRepository;
     private final org.example.storemanager.modules.sales.repository.SaleOrderRepository saleOrderRepository;
     private final org.example.storemanager.modules.finance.repository.DebtLedgerRepository debtLedgerRepository;
+    private final org.example.storemanager.modules.sales.repository.ExportInvoiceRepository exportInvoiceRepository;
     private final org.example.storemanager.shared.service.EmailService emailService;
     private final org.example.storemanager.modules.system.repository.RefreshTokenRepository refreshTokenRepository;
 
@@ -56,22 +59,33 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public CreateCustomerResponse createCustomer(CreateCustomerRequest req) {
-        if (customerRepository.existsByPhone(req.getPhone()))
-            throw new DuplicateResourceException("Customer", "số điện thoại", req.getPhone());
+        String cleanPhone = req.getPhone() != null ? req.getPhone().trim().replaceAll("[\\s\\-\\.]", "") : "";
+        if (cleanPhone.isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Số điện thoại không được để trống");
+        }
 
-        if (req.getEmail() != null && customerRepository.existsByEmail(req.getEmail())) {
-            throw new DuplicateResourceException("Customer", "email", req.getEmail());
+        if (customerRepository.existsByPhoneAndIsDeletedFalse(cleanPhone)) {
+            throw new DuplicateResourceException("Customer", "số điện thoại", cleanPhone);
+        }
+
+        String cleanEmail = (req.getEmail() != null && !req.getEmail().trim().isEmpty()) ? req.getEmail().trim() : null;
+        if (cleanEmail != null && customerRepository.existsByEmailAndIsDeletedFalse(cleanEmail)) {
+            throw new DuplicateResourceException("Customer", "email", cleanEmail);
         }
 
         Customer c = new Customer();
         if (req.getCustomerCode() != null && !req.getCustomerCode().trim().isEmpty()) {
-            c.setCustomerCode(req.getCustomerCode().trim());
+            String code = req.getCustomerCode().trim();
+            if (customerRepository.existsByCustomerCodeAndIsDeletedFalse(code)) {
+                throw new DuplicateResourceException("Customer", "mã khách hàng", code);
+            }
+            c.setCustomerCode(code);
         } else {
             c.setCustomerCode("CUST-" + UUID.randomUUID().toString().substring(0, 5).toUpperCase());
         }
-        c.setName(req.getName());
-        c.setPhone(req.getPhone());
-        c.setEmail(req.getEmail());
+        c.setName(req.getName() != null ? req.getName().trim() : "");
+        c.setPhone(cleanPhone);
+        c.setEmail(cleanEmail);
         c.setAddress(req.getAddress());
         c.setIsActive(req.getIsActive() != null ? req.getIsActive() : true);
         c.setPoints(0.0);
@@ -105,8 +119,8 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         Customer saved = customerRepository.save(c);
-        // Lấy lại từ DB để chắc chắn có dữ liệu mới nhất
-        Customer refreshed = customerRepository.findById(saved.getId()).orElse(saved);
+        Long savedId = saved != null ? saved.getId() : null;
+        Customer refreshed = (savedId != null) ? customerRepository.findById(savedId).orElse(saved) : (saved != null ? saved : c);
 
         return CreateCustomerResponse.builder()
                 .id(refreshed.getId())
@@ -395,6 +409,18 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private CustomerListResponse mapToListResponse(Customer c) {
+        Double debtBal = 0.0;
+        try {
+            if (c.getId() != null) {
+                List<DebtResponse> debts = getCustomerDebts(c.getId());
+                if (debts != null && !debts.isEmpty()) {
+                    debtBal = debts.stream()
+                            .mapToDouble(d -> d.getAmount() != null ? d.getAmount().doubleValue() : 0.0)
+                            .sum();
+                }
+            }
+        } catch (Exception ignored) {}
+
         return CustomerListResponse.builder()
                 .id(c.getId())
                 .customerCode(c.getCustomerCode())
@@ -411,6 +437,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .gender(c.getGender())
                 .dob(c.getDob())
                 .debtLimit(c.getDebtLimit())
+                .debtBalance(debtBal)
                 .groupId(c.getGroup() != null ? c.getGroup().getId() : null)
                 .groupName(c.getGroup() != null ? c.getGroup().getGroupName() : null)
                 .areaId(c.getArea() != null ? c.getArea().getId() : null)
@@ -442,32 +469,64 @@ public class CustomerServiceImpl implements CustomerService {
         Customer c = customerRepository.findByIdAndIsDeletedFalse(id).orElse(null);
         if (c == null) return Collections.emptyList();
 
+        List<DebtResponse> result = new ArrayList<>();
+
         // 1. Check direct debt ledgers
         List<org.example.storemanager.modules.finance.entity.DebtLedger> ledgers =
                 debtLedgerRepository.findByPartnerIdAndEntityTypeAndIsDeletedFalseOrderByTransactionDateDesc(id, "CUSTOMER");
 
         if (!ledgers.isEmpty()) {
-            return ledgers.stream().map(dl -> DebtResponse.builder()
-                    .id(dl.getId())
-                    .amount(dl.getBalance() != null ? dl.getBalance() : dl.getIncrease())
-                    .transactionDate(dl.getTransactionDate())
-                    .description("Chứng từ: " + (dl.getRefCode() != null ? dl.getRefCode() : "") +
-                            (dl.getStatus() != null ? " - " + dl.getStatus() : ""))
+            for (var dl : ledgers) {
+                BigDecimal bal = dl.getBalance() != null ? dl.getBalance() : dl.getIncrease();
+                if (bal != null && bal.compareTo(BigDecimal.ZERO) > 0) {
+                    result.add(DebtResponse.builder()
+                            .id(dl.getId())
+                            .amount(bal)
+                            .transactionDate(dl.getTransactionDate())
+                            .description("Chứng từ: " + (dl.getRefCode() != null ? dl.getRefCode() : "") +
+                                    (dl.getStatus() != null ? " - " + dl.getStatus() : ""))
+                            .build());
+                }
+            }
+        }
+
+        // 2. Check unpaid export invoices
+        try {
+            List<org.example.storemanager.modules.sales.entity.ExportInvoice> invoices =
+                    exportInvoiceRepository.findByCustomerIdAndIsDeletedFalse(id);
+            for (var inv : invoices) {
+                if (!"PAID".equalsIgnoreCase(inv.getStatus()) && !"DA_THANH_TOAN".equalsIgnoreCase(inv.getStatus())) {
+                    BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
+                    if (total.compareTo(BigDecimal.ZERO) > 0) {
+                        boolean tracked = result.stream().anyMatch(r -> r.getDescription() != null && inv.getInvoiceCode() != null && r.getDescription().contains(inv.getInvoiceCode()));
+                        if (!tracked) {
+                            result.add(DebtResponse.builder()
+                                    .id(inv.getId())
+                                    .amount(total)
+                                    .transactionDate(inv.getInvoiceDate())
+                                    .description("Hóa đơn: " + inv.getInvoiceCode() + " (" + inv.getStatus() + ")")
+                                    .build());
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 3. If still empty, check unpaid or partial sale orders
+        if (result.isEmpty()) {
+            List<org.example.storemanager.modules.sales.entity.SaleOrder> unpaidOrders =
+                    saleOrderRepository.findByCustomerIdAndPaymentStatusNotAndIsDeletedFalseOrderByOrderDateDesc(id, "PAID");
+
+            return unpaidOrders.stream().map(so -> DebtResponse.builder()
+                    .id(so.getId())
+                    .amount(so.getFinalAmount() != null ? so.getFinalAmount() : so.getTotalAmount())
+                    .transactionDate(so.getOrderDate())
+                    .description("Đơn hàng: " + so.getOrderCode() + " (" + so.getPaymentStatus() + ")")
                     .build()
             ).collect(java.util.stream.Collectors.toList());
         }
 
-        // 2. If no ledgers, check unpaid or partial sale orders
-        List<org.example.storemanager.modules.sales.entity.SaleOrder> unpaidOrders =
-                saleOrderRepository.findByCustomerIdAndPaymentStatusNotAndIsDeletedFalseOrderByOrderDateDesc(id, "PAID");
-
-        return unpaidOrders.stream().map(so -> DebtResponse.builder()
-                .id(so.getId())
-                .amount(so.getFinalAmount() != null ? so.getFinalAmount() : so.getTotalAmount())
-                .transactionDate(so.getOrderDate())
-                .description("Đơn hàng: " + so.getOrderCode() + " (" + so.getPaymentStatus() + ")")
-                .build()
-        ).collect(java.util.stream.Collectors.toList());
+        return result;
     }
 
     @Override

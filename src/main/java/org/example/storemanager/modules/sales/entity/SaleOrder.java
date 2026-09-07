@@ -39,6 +39,10 @@ public class SaleOrder extends BaseEntity {
     @Column(name = "final_amount", nullable = false, precision = 18, scale = 2)
     private BigDecimal finalAmount;
 
+    @Builder.Default
+    @Column(name = "paid_amount", precision = 18, scale = 2)
+    private BigDecimal paidAmount = BigDecimal.ZERO;
+
     @Column(nullable = false, length = 30)
     private String status; // PENDING, CONFIRMED, DELIVERING, COMPLETED, CANCELLED
 
@@ -116,6 +120,9 @@ public class SaleOrder extends BaseEntity {
         }
         if (this.orderOrigin == null || this.orderOrigin.trim().isEmpty() || "ONLINE_STORE".equalsIgnoreCase(this.orderOrigin)) {
             this.orderOrigin = "ONLINE";
+        }
+        if (this.paidAmount == null) {
+            this.paidAmount = BigDecimal.ZERO;
         }
         if (this.isActive == null) {
             this.isActive = true;

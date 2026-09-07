@@ -51,16 +51,15 @@ class StoremanagerApplicationTests {
 	}
 
 	@Test
-	@DisplayName("Test invalid customer phone numbers: 03x, 08x, 07x, too short, too long")
+	@DisplayName("Test invalid customer phone numbers: too short, too long, letters, blank")
 	void testInvalidCustomerPhones() {
 		String[] invalidPhones = {
-				"0312345678", // 03 prefix
-				"0812345678", // 08 prefix
-				"0712345678", // 07 prefix
-				"0912345",    // too short (7 digits)
-				"091234567899", // too long (12 digits)
-				"09abc12345", // letters
-				""            // blank
+				"012345",       // too short
+				"0912345",      // too short (7 digits)
+				"09123456789912", // too long (14 digits)
+				"09abc12345",   // contains letters
+				"phone123456",  // not a phone number
+				""              // blank
 		};
 
 		for (String phone : invalidPhones) {

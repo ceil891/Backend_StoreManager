@@ -46,36 +46,70 @@ public class LeaveRequest extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "roles"})
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User user; // Người làm đơn
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by_user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "roles"})
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User approvedByUser; // Người duyệt đơn
 
-    @Transient
+    @Column(name = "employee_name", length = 100)
     private String employeeName;
 
-    @Transient
+    @Column(name = "total_days")
     private Integer totalDays;
 
     public String getRequestCode() {
         return requestCode != null ? requestCode : (getId() != null ? "NP-" + getId() : "NP-NEW");
     }
 
+    @Transient
+    @com.fasterxml.jackson.annotation.JsonProperty("userId")
+    private Long requestUserId;
+
+    public Long getUserId() {
+        if (requestUserId != null) return requestUserId;
+        try {
+            if (user != null) return user.getId();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public void setUserId(Long userId) {
+        this.requestUserId = userId;
+    }
+
+    public String getUserCode() {
+        try {
+            if (user != null && org.hibernate.Hibernate.isInitialized(user) && user.getUsername() != null) {
+                return user.getUsername();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     public String getEmployeeName() {
-        if (user != null && user.getFullName() != null) return user.getFullName();
+        if (employeeName != null && !employeeName.isBlank()) return employeeName;
+        try {
+            if (user != null && org.hibernate.Hibernate.isInitialized(user) && user.getFullName() != null) {
+                return user.getFullName();
+            }
+        } catch (Exception ignored) {}
         return employeeName != null ? employeeName : "Nhân viên";
     }
 
     public String getApprovedBy() {
         if (approverName != null && !approverName.isBlank()) return approverName;
-        if (approvedByUser != null && approvedByUser.getFullName() != null) return approvedByUser.getFullName();
+        try {
+            if (approvedByUser != null && org.hibernate.Hibernate.isInitialized(approvedByUser) && approvedByUser.getFullName() != null) {
+                return approvedByUser.getFullName();
+            }
+        } catch (Exception ignored) {}
         return null;
     }
 
-    public int getTotalDays() {
+    public Integer getTotalDays() {
         if (totalDays != null && totalDays > 0) return totalDays;
         if (startDate != null && endDate != null) {
             return (int) Math.max(1, ChronoUnit.DAYS.between(startDate, endDate) + 1);

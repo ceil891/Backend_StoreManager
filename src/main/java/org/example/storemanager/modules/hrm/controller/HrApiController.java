@@ -188,6 +188,14 @@ public class HrApiController {
                 userRepository.findAll().stream().filter(u -> !Boolean.TRUE.equals(u.getIsDeleted())).findFirst().ifPresent(req::setUser);
             }
         }
+        if (req.getUser() != null) {
+            if (req.getEmployeeName() == null || req.getEmployeeName().isBlank()) {
+                req.setEmployeeName(req.getUser().getFullName());
+            }
+            if (req.getEmployeePhone() == null || req.getEmployeePhone().isBlank()) {
+                req.setEmployeePhone(req.getUser().getPhone());
+            }
+        }
         if (req.getPosition() == null) {
             positionRepository.findByIsDeletedFalse().stream().findFirst().ifPresent(req::setPosition);
         }
@@ -206,6 +214,8 @@ public class HrApiController {
         if (req.getStatus() != null) existing.setStatus(req.getStatus());
         if (req.getBaseSalary() != null) existing.setBaseSalary(req.getBaseSalary());
         if (req.getNotes() != null) existing.setNotes(req.getNotes());
+        if (req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) existing.setEmployeeName(req.getEmployeeName());
+        if (req.getEmployeePhone() != null && !req.getEmployeePhone().isBlank()) existing.setEmployeePhone(req.getEmployeePhone());
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật hợp đồng thành công", employeeContractRepository.save(existing)));
     }
 
@@ -235,16 +245,18 @@ public class HrApiController {
         if (req.getStatus() == null || req.getStatus().isBlank()) req.setStatus("PENDING");
         if (req.getLeaveType() == null || req.getLeaveType().isBlank()) req.setLeaveType("ANNUAL");
 
-        if (req.getUser() == null) {
-            if (req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) {
-                userRepository.findAll().stream()
-                        .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()) && req.getEmployeeName().equalsIgnoreCase(u.getFullName()))
-                        .findFirst().ifPresent(req::setUser);
-            }
-            if (req.getUser() == null) {
-                userRepository.findAll().stream().filter(u -> !Boolean.TRUE.equals(u.getIsDeleted())).findFirst().ifPresent(req::setUser);
-            }
+        if (req.getUser() == null && req.getUserId() != null) {
+            userRepository.findById(req.getUserId()).ifPresent(req::setUser);
         }
+        if (req.getUser() == null && req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) {
+            userRepository.findAll().stream()
+                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()) && req.getEmployeeName().equalsIgnoreCase(u.getFullName()))
+                    .findFirst().ifPresent(req::setUser);
+        }
+        if (req.getUser() != null && (req.getEmployeeName() == null || req.getEmployeeName().isBlank())) {
+            req.setEmployeeName(req.getUser().getFullName());
+        }
+        req.setTotalDays(req.getTotalDays());
 
         return ResponseEntity.status(201).body(ApiResponse.created(leaveRequestRepository.save(req)));
     }
@@ -257,6 +269,8 @@ public class HrApiController {
         if (req.getLeaveType() != null) existing.setLeaveType(req.getLeaveType());
         if (req.getReason() != null) existing.setReason(req.getReason());
         if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) existing.setEmployeeName(req.getEmployeeName());
+        if (req.getTotalDays() != null && req.getTotalDays() > 0) existing.setTotalDays(req.getTotalDays());
         if (req.getApproverName() != null && !req.getApproverName().isBlank()) {
             existing.setApproverName(req.getApproverName());
         }
@@ -309,6 +323,9 @@ public class HrApiController {
                 userRepository.findAll().stream().filter(u -> !Boolean.TRUE.equals(u.getIsDeleted())).findFirst().ifPresent(req::setUser);
             }
         }
+        if (req.getUser() != null && (req.getEmployeeName() == null || req.getEmployeeName().isBlank())) {
+            req.setEmployeeName(req.getUser().getFullName());
+        }
 
         return ResponseEntity.status(201).body(ApiResponse.created(kpiRecordRepository.save(req)));
     }
@@ -332,6 +349,7 @@ public class HrApiController {
         if (req.getRatingGrade() != null) existing.setRatingGrade(req.getRatingGrade());
         if (req.getBonusAmount() != null) existing.setBonusAmount(req.getBonusAmount());
         if (req.getStatus() != null) existing.setStatus(req.getStatus());
+        if (req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) existing.setEmployeeName(req.getEmployeeName());
 
         return ResponseEntity.ok(ApiResponse.ok("Cập nhật đánh giá KPI thành công", kpiRecordRepository.save(existing)));
     }

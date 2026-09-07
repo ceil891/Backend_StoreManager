@@ -74,6 +74,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
     private final PurchaseInvoiceRepository purchaseInvoiceRepository;
     private final PlatformTransactionManager transactionManager;
+    private final org.example.storemanager.shared.service.DocumentSequenceService documentSequenceService;
     @Lazy
     private final InventoryService inventoryService;
 
@@ -142,28 +143,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         purchaseOrderDetailRepository.saveAll(details);
 
         // Auto create PaymentVoucher (Phiếu chi) under the same transaction block if PO is marked fully paid or partially paid on creation
-        if ("PAID".equals(request.getPaymentStatus()) || "PARTIAL_ADVANCE".equals(request.getPaymentStatus())) {
-            BigDecimal amount = "PAID".equals(request.getPaymentStatus()) ? totalAmount : (request.getAdvanceAmount() != null ? request.getAdvanceAmount() : totalAmount.divide(BigDecimal.valueOf(2)));
-            String dateStr = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now());
-            String voucherCode = "PAY-PUR-" + dateStr + "-" + String.format("%03d", (int)(Math.random() * 900 + 100));
-            
-            org.example.storemanager.modules.finance.entity.PaymentVoucher pv = org.example.storemanager.modules.finance.entity.PaymentVoucher.builder()
-                    .voucherCode(voucherCode)
-                    .voucherDate(LocalDateTime.now())
-                    .amount(amount)
-                    .receiverName(supplier.getName())
-                    .status("COMPLETED")
-                    .invoiceCode(savedPo.getPoCode())
-                    .paymentMethod("CHUYEN_KHOAN")
-                    .fundAccountName("Techcombank - 1902838392 (Công ty StoreManager)")
-                    .handler(username)
-                    .notes("Thanh toán tự động khi tạo Đơn mua hàng " + savedPo.getPoCode())
-                    .build();
-            pv.setIsDeleted(false);
-            pv.setCreatedBy(username);
-            
-            paymentVoucherRepository.save(pv);
-        }
+        autoGeneratePaymentVoucherIfPaid(savedPo, request.getPaymentStatus(), request.getAdvanceAmount(), username);
 
         return mapToResponse(savedPo, details);
     }
@@ -261,6 +241,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrder savedPo = purchaseOrderRepository.save(po);
         purchaseOrderDetailRepository.saveAll(newDetails);
 
+        // Auto create PaymentVoucher (Phiếu chi) if PO is marked fully paid or partially paid on update
+        autoGeneratePaymentVoucherIfPaid(savedPo, savedPo.getPaymentStatus(), savedPo.getAdvanceAmount(), username);
+
         return mapToResponse(savedPo, newDetails);
     }
 
@@ -275,6 +258,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrder savedPo = purchaseOrderRepository.save(po);
         List<PurchaseOrderDetail> details = purchaseOrderDetailRepository.findByPurchaseOrderIdAndIsDeletedFalse(id);
+
+        if ("COMPLETED".equalsIgnoreCase(status) && ("PAID".equalsIgnoreCase(savedPo.getPaymentStatus()) || "PARTIAL_ADVANCE".equalsIgnoreCase(savedPo.getPaymentStatus()))) {
+            autoGeneratePaymentVoucherIfPaid(savedPo, savedPo.getPaymentStatus(), savedPo.getAdvanceAmount(), getCurrentUsername());
+        }
+
         return mapToResponse(savedPo, details);
     }
 
@@ -846,5 +834,61 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .createdBy(r.getCreatedBy())
                 .receiptLines(lines)
                 .build();
+    }
+
+    private void autoGeneratePaymentVoucherIfPaid(PurchaseOrder savedPo, String paymentStatus, BigDecimal advanceAmount, String username) {
+        if (savedPo == null || paymentStatus == null) return;
+        if (!"PAID".equalsIgnoreCase(paymentStatus) && !"PARTIAL_ADVANCE".equalsIgnoreCase(paymentStatus) && !"PARTIAL".equalsIgnoreCase(paymentStatus)) return;
+
+        try {
+            BigDecimal targetPaid = "PAID".equalsIgnoreCase(paymentStatus)
+                    ? (savedPo.getTotalAmount() != null ? savedPo.getTotalAmount() : BigDecimal.ZERO)
+                    : (advanceAmount != null ? advanceAmount : (savedPo.getAdvanceAmount() != null ? savedPo.getAdvanceAmount() : BigDecimal.ZERO));
+
+            if (targetPaid.compareTo(BigDecimal.ZERO) <= 0) return;
+
+            // Tính tổng các phiếu chi đã tạo trước đó cho PO này (không tính phiếu đã hủy)
+            List<org.example.storemanager.modules.finance.entity.PaymentVoucher> existingVouchers =
+                    paymentVoucherRepository.findByInvoiceCodeAndIsDeletedFalse(savedPo.getPoCode());
+            BigDecimal alreadyPaid = existingVouchers.stream()
+                    .filter(v -> !"CANCELLED".equalsIgnoreCase(v.getStatus()))
+                    .map(org.example.storemanager.modules.finance.entity.PaymentVoucher::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal amountToPay = targetPaid.subtract(alreadyPaid);
+            if (amountToPay.compareTo(BigDecimal.ZERO) <= 0) return;
+
+            // Sinh mã phiếu chi từ PostgreSQL Sequence để đảm bảo tính tuần tự và không xung đột concurrency
+            String voucherCode = documentSequenceService.generatePaymentCode();
+
+            String receiver = savedPo.getSupplier() != null ? savedPo.getSupplier().getName() : "Nhà cung cấp";
+            org.example.storemanager.modules.finance.entity.PaymentVoucher pv = org.example.storemanager.modules.finance.entity.PaymentVoucher.builder()
+                    .voucherCode(voucherCode)
+                    .voucherDate(LocalDateTime.now())
+                    .amount(amountToPay)
+                    .receiverName(receiver)
+                    .status("COMPLETED")
+                    .invoiceCode(savedPo.getPoCode())
+                    .paymentMethod("CHUYEN_KHOAN")
+                    .fundAccountName("Techcombank - 1902838392 (Công ty StoreManager)")
+                    .handler(username != null ? username : "Hệ thống")
+                    .notes("Thanh toán tự động Đơn mua hàng " + savedPo.getPoCode() + " (" + paymentStatus + ", số tiền đợt này: " + amountToPay + ")")
+                    .branch(savedPo.getBranch())
+                    .build();
+            pv.setIsDeleted(false);
+            pv.setCreatedBy(username != null ? username : "System");
+
+            paymentVoucherRepository.save(pv);
+            log.info("Tự động tạo phiếu chi {} cho đơn mua hàng {} với số tiền {}", voucherCode, savedPo.getPoCode(), amountToPay);
+        } catch (Exception e) {
+            log.error("Lỗi khi tự động tạo phiếu chi cho đơn mua hàng {}: {}", savedPo.getPoCode(), e.getMessage(), e);
+            if (e instanceof org.springframework.web.server.ResponseStatusException) {
+                throw (org.springframework.web.server.ResponseStatusException) e;
+            }
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi tự động tạo phiếu chi cho đơn mua hàng: " + e.getMessage(), e
+            );
+        }
     }
 }

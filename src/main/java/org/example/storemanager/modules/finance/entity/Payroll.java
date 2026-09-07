@@ -57,8 +57,39 @@ public class Payroll extends BaseEntity {
     @Builder.Default
     private String status = "DRAFT"; // DRAFT, APPROVED, PAID
 
-    @Column(name = "payment_date", length = 30)
-    private String paymentDate;
+    @Column(name = "payment_date")
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd[['T'][ ]HH:mm:ss][.SSS][X]")
+    private java.time.LocalDateTime paymentDate;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("paymentDate")
+    public void setPaymentDate(Object dateObj) {
+        if (dateObj == null) {
+            this.paymentDate = null;
+            return;
+        }
+        if (dateObj instanceof java.time.LocalDateTime) {
+            this.paymentDate = (java.time.LocalDateTime) dateObj;
+            return;
+        }
+        String str = dateObj.toString().trim();
+        if (str.isEmpty()) {
+            this.paymentDate = null;
+            return;
+        }
+        try {
+            if (str.length() == 10) {
+                this.paymentDate = java.time.LocalDate.parse(str).atStartOfDay();
+            } else if (str.contains("T")) {
+                this.paymentDate = java.time.LocalDateTime.parse(str.split("\\+")[0].split("Z")[0]);
+            } else if (str.contains(" ")) {
+                this.paymentDate = java.time.LocalDateTime.parse(str.replace(" ", "T"));
+            } else {
+                this.paymentDate = java.time.LocalDateTime.parse(str);
+            }
+        } catch (Exception e) {
+            this.paymentDate = java.time.LocalDateTime.now();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
@@ -68,8 +99,11 @@ public class Payroll extends BaseEntity {
     @Transient
     private Long userId;
 
-    @Transient
+    @Column(name = "employee_name", length = 150)
     private String employeeName;
+
+    @Column(name = "department", length = 100)
+    private String department;
 
     @Transient
     @JsonAlias({"payrollMonth"})
@@ -80,7 +114,18 @@ public class Payroll extends BaseEntity {
     }
 
     public String getEmployeeName() {
-        return user != null ? user.getFullName() : (employeeName != null ? employeeName : "Nhân viên");
+        if (employeeName != null && !employeeName.isBlank()) {
+            return employeeName;
+        }
+        try {
+            return user != null ? user.getFullName() : "Nhân viên";
+        } catch (Exception e) {
+            return "Nhân viên";
+        }
+    }
+
+    public String getDepartment() {
+        return department != null && !department.isBlank() ? department : "Nhân sự / Kinh doanh";
     }
 
     public String getPayrollCode() {

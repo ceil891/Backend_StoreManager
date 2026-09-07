@@ -35,6 +35,8 @@ public class CreateSaleOrderRequest {
 
     private String paymentStatus;
 
+    private java.math.BigDecimal paidAmount;
+
     private String note;
 
     private String voucherCode;
@@ -46,6 +48,15 @@ public class CreateSaleOrderRequest {
     private Long paymentMethodId;
 
     private String paymentMethodCode;
+
+    private String paymentMethod;
+
+    public String getPaymentMethodCode() {
+        if (paymentMethodCode != null && !paymentMethodCode.trim().isEmpty()) {
+            return paymentMethodCode;
+        }
+        return paymentMethod;
+    }
 
     private Long posSessionId;
 

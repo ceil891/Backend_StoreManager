@@ -21,11 +21,13 @@ public class PayrollController {
     private final UserRepository userRepository;
 
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<ApiResponse<List<Payroll>>> getAllPayrolls() {
         return ResponseEntity.ok(ApiResponse.ok(payrollRepository.findByIsDeletedFalse()));
     }
 
     @PostMapping
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<Payroll>> createPayroll(@RequestBody Payroll req) {
         req.setIsDeleted(false);
         if (req.getStatus() == null || req.getStatus().isBlank()) {
@@ -47,17 +49,39 @@ public class PayrollController {
         if (req.getPeriodYear() == null) req.setPeriodYear(java.time.LocalDate.now().getYear());
         if (req.getPeriodMonth() == null) req.setPeriodMonth(java.time.LocalDate.now().getMonthValue());
 
-        // Resolve user
+        // Resolve user and persistent employee name
         if (req.getUser() == null && req.getUserId() != null) {
-            userRepository.findById(req.getUserId()).ifPresent(req::setUser);
+            userRepository.findById(req.getUserId()).ifPresent(u -> {
+                req.setUser(u);
+                if (req.getEmployeeName() == null || req.getEmployeeName().isBlank()) {
+                    req.setEmployeeName(u.getFullName() != null ? u.getFullName() : u.getUsername());
+                }
+            });
         }
         if (req.getUser() == null && req.getEmployeeName() != null && !req.getEmployeeName().isBlank()) {
             userRepository.findAll().stream()
-                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()) && req.getEmployeeName().equalsIgnoreCase(u.getFullName()))
-                    .findFirst().ifPresent(req::setUser);
+                    .filter(u -> !Boolean.TRUE.equals(u.getIsDeleted()) &&
+                            (req.getEmployeeName().equalsIgnoreCase(u.getFullName()) ||
+                             req.getEmployeeName().equalsIgnoreCase(u.getUsername()) ||
+                             req.getEmployeeName().equalsIgnoreCase(u.getEmail())))
+                    .findFirst().ifPresent(u -> {
+                        req.setUser(u);
+                        req.setEmployeeName(u.getFullName() != null ? u.getFullName() : req.getEmployeeName());
+                    });
         }
         if (req.getUser() == null) {
-            userRepository.findAll().stream().filter(u -> !Boolean.TRUE.equals(u.getIsDeleted())).findFirst().ifPresent(req::setUser);
+            userRepository.findAll().stream().filter(u -> !Boolean.TRUE.equals(u.getIsDeleted())).findFirst().ifPresent(u -> {
+                req.setUser(u);
+                if (req.getEmployeeName() == null || req.getEmployeeName().isBlank()) {
+                    req.setEmployeeName(u.getFullName() != null ? u.getFullName() : "Nhân viên");
+                }
+            });
+        }
+        if (req.getEmployeeName() == null || req.getEmployeeName().isBlank()) {
+            req.setEmployeeName("Nhân viên");
+        }
+        if (req.getDepartment() == null || req.getDepartment().isBlank()) {
+            req.setDepartment("Nhân sự / Kinh doanh");
         }
 
         BigDecimal base = req.getBaseSalary() != null ? req.getBaseSalary() : BigDecimal.ZERO;
@@ -73,6 +97,7 @@ public class PayrollController {
     }
 
     @PutMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<Payroll>> updatePayroll(@PathVariable Long id, @RequestBody Payroll req) {
         Payroll existing = payrollRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Payroll not found with id: " + id));
@@ -88,6 +113,8 @@ public class PayrollController {
             } catch (Exception ignored) {
             }
         }
+        if (req.getEmployeeName() != null) existing.setEmployeeName(req.getEmployeeName());
+        if (req.getDepartment() != null) existing.setDepartment(req.getDepartment());
         if (req.getBaseSalary() != null) existing.setBaseSalary(req.getBaseSalary());
         if (req.getAllowance() != null) existing.setAllowance(req.getAllowance());
         if (req.getKpiBonus() != null) existing.setKpiBonus(req.getKpiBonus());
@@ -100,6 +127,7 @@ public class PayrollController {
     }
 
     @DeleteMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<Void>> deletePayroll(@PathVariable Long id) {
         Payroll existing = payrollRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new RuntimeException("Payroll not found with id: " + id));

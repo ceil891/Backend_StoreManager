@@ -25,6 +25,7 @@ public class CustomerListResponse {
     private String gender;
     private java.time.LocalDate dob;
     private Double debtLimit;
+    private Double debtBalance;
     private Long groupId;
     private String groupName;
     private Long areaId;

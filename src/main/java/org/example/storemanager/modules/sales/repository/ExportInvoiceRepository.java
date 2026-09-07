@@ -13,8 +13,11 @@ import java.util.Optional;
 @Repository
 public interface ExportInvoiceRepository extends JpaRepository<ExportInvoice, Long> {
     Optional<ExportInvoice> findByIdAndIsDeletedFalse(Long id);
+    Optional<ExportInvoice> findByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    boolean existsByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
 
     java.util.List<ExportInvoice> findByPosSessionId(Long posSessionId);
+    java.util.List<ExportInvoice> findByCustomerIdAndIsDeletedFalse(Long customerId);
 
     @Query("SELECT i FROM ExportInvoice i WHERE " +
            "(:includeDeleted = true OR i.isDeleted = false) AND " +

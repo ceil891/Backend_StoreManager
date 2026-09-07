@@ -46,34 +46,63 @@ public class EmployeeContract extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "roles"})
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "position_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Position position;
 
     @Transient
     private String contractCode;
 
-    @Transient
+    @Column(name = "employee_name", length = 100)
     private String employeeName;
 
-    @Transient
+    @Column(name = "employee_phone", length = 30)
     private String employeePhone;
 
     public String getContractCode() {
         return contractNumber != null ? contractNumber : (contractCode != null ? contractCode : (getId() != null ? "HD-" + getId() : null));
     }
 
+    public Long getUserId() {
+        try {
+            if (user != null) return user.getId();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public Long getPositionId() {
+        try {
+            if (position != null) return position.getId();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public String getPositionName() {
+        try {
+            if (position != null && org.hibernate.Hibernate.isInitialized(position)) {
+                return position.getPositionName();
+            }
+        } catch (Exception ignored) {}
+        return "Nhân viên chính thức";
+    }
+
     public String getEmployeeName() {
-        if (user != null && user.getFullName() != null) return user.getFullName();
+        if (employeeName != null && !employeeName.isBlank()) return employeeName;
+        try {
+            if (user != null && org.hibernate.Hibernate.isInitialized(user) && user.getFullName() != null) return user.getFullName();
+        } catch (Exception ignored) {}
         return employeeName != null ? employeeName : "Nhân viên";
     }
 
     public String getEmployeePhone() {
-        if (user != null && user.getPhone() != null) return user.getPhone();
+        if (employeePhone != null && !employeePhone.isBlank()) return employeePhone;
+        try {
+            if (user != null && org.hibernate.Hibernate.isInitialized(user) && user.getPhone() != null) return user.getPhone();
+        } catch (Exception ignored) {}
         return employeePhone != null ? employeePhone : "";
     }
 }

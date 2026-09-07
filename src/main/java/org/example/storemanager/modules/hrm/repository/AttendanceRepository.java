@@ -19,6 +19,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     Optional<Attendance> findByUserIdAndWorkDateAndIsDeletedFalse(Long userId, LocalDate workDate);
 
+    Optional<Attendance> findByUserIdAndWorkDate(Long userId, LocalDate workDate);
+
     @Query("SELECT a FROM Attendance a WHERE " +
            "(:includeDeleted = true OR a.isDeleted = false) AND " +
            "(cast(:isActive as boolean) IS NULL OR (:isActive = true AND (a.isLocked IS NULL OR a.isLocked = false)) OR (:isActive = false AND a.isLocked = true)) AND " +

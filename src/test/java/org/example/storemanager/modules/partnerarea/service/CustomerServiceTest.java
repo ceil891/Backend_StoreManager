@@ -85,8 +85,8 @@ class CustomerServiceTest {
                     .email("khach@gmail.com")
                     .build();
 
-            when(customerRepository.existsByPhone("0912345678")).thenReturn(false);
-            when(customerRepository.existsByEmail("khach@gmail.com")).thenReturn(false);
+            when(customerRepository.existsByPhoneAndIsDeletedFalse("0912345678")).thenReturn(false);
+            when(customerRepository.existsByEmailAndIsDeletedFalse("khach@gmail.com")).thenReturn(false);
             when(customerRepository.save(any(Customer.class))).thenReturn(sampleCustomer);
             when(customerRepository.findById(10L)).thenReturn(Optional.of(sampleCustomer));
 
@@ -105,7 +105,7 @@ class CustomerServiceTest {
                     .phone("0912345678")
                     .build();
 
-            when(customerRepository.existsByPhone("0912345678")).thenReturn(true);
+            when(customerRepository.existsByPhoneAndIsDeletedFalse("0912345678")).thenReturn(true);
 
             assertThrows(DuplicateResourceException.class, () -> customerService.createCustomer(req));
             verify(customerRepository, never()).save(any());

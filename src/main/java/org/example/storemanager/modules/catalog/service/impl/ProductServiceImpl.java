@@ -86,6 +86,26 @@ public class ProductServiceImpl implements ProductService {
         this.eventPublisher = eventPublisher;
     }
 
+    public void setProductVariantRepository(ProductVariantRepository productVariantRepository) {
+        this.productVariantRepository = productVariantRepository;
+    }
+
+    public void setInventoryBalanceRepository(InventoryBalanceRepository inventoryBalanceRepository) {
+        this.inventoryBalanceRepository = inventoryBalanceRepository;
+    }
+
+    public void setBranchRepository(BranchRepository branchRepository) {
+        this.branchRepository = branchRepository;
+    }
+
+    public void setProductVariantService(org.example.storemanager.modules.catalog.service.ProductVariantService productVariantService) {
+        this.productVariantService = productVariantService;
+    }
+
+    public void setStockLedgerRepository(org.example.storemanager.modules.inventory.repository.StockLedgerRepository stockLedgerRepository) {
+        this.stockLedgerRepository = stockLedgerRepository;
+    }
+
     private String generateProductCode() {
         String dateStr = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
         for (int i = 0; i < 10; i++) {
@@ -490,17 +510,32 @@ public class ProductServiceImpl implements ProductService {
         }
 
         // Kiểm tra tồn kho của sản phẩm ở tất cả các chi nhánh
-        List<SizeInventory> stocks = sizeInventoryRepository.findByProductIdAndIsDeletedFalse(id);
-        BigDecimal totalStock = stocks.stream()
-                .map(SizeInventory::getQuantityPhysical)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalStock = BigDecimal.ZERO;
+        if (sizeInventoryRepository != null) {
+            List<SizeInventory> stocks = sizeInventoryRepository.findByProductIdAndIsDeletedFalse(id);
+            if (stocks != null) {
+                totalStock = stocks.stream()
+                        .map(s -> s.getQuantityPhysical() != null ? s.getQuantityPhysical() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+            }
+        }
 
-        List<ProductVariant> variants = productVariantRepository.findByProductIdAndIsDeletedFalse(id);
-        for (ProductVariant v : variants) {
-            List<InventoryBalance> balances = inventoryBalanceRepository.findByProductVariantIdAndIsDeletedFalse(v.getId());
-            for (InventoryBalance b : balances) {
-                if (b.getAvailableQuantity() != null && b.getAvailableQuantity().compareTo(BigDecimal.ZERO) > 0) {
-                    totalStock = totalStock.add(b.getAvailableQuantity());
+        List<ProductVariant> variants = Collections.emptyList();
+        if (productVariantRepository != null) {
+            List<ProductVariant> foundVariants = productVariantRepository.findByProductIdAndIsDeletedFalse(id);
+            if (foundVariants != null) {
+                variants = foundVariants;
+                for (ProductVariant v : variants) {
+                    if (inventoryBalanceRepository != null && v.getId() != null) {
+                        List<InventoryBalance> balances = inventoryBalanceRepository.findByProductVariantIdAndIsDeletedFalse(v.getId());
+                        if (balances != null) {
+                            for (InventoryBalance b : balances) {
+                                if (b.getAvailableQuantity() != null && b.getAvailableQuantity().compareTo(BigDecimal.ZERO) > 0) {
+                                    totalStock = totalStock.add(b.getAvailableQuantity());
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -537,21 +572,27 @@ public class ProductServiceImpl implements ProductService {
         Product deleted = productRepository.save(product);
 
         // Cũng soft delete các conversion units liên quan
-        List<ProductUnit> pUnits = productUnitRepository.findByProductIdAndIsDeletedFalse(id);
-        for (ProductUnit pu : pUnits) {
-            pu.setIsDeleted(true);
-            pu.setDeletedAt(LocalDateTime.now());
-            pu.setDeletedBy(username);
-            productUnitRepository.save(pu);
+        if (productUnitRepository != null) {
+            List<ProductUnit> pUnits = productUnitRepository.findByProductIdAndIsDeletedFalse(id);
+            if (pUnits != null) {
+                for (ProductUnit pu : pUnits) {
+                    pu.setIsDeleted(true);
+                    pu.setDeletedAt(LocalDateTime.now());
+                    pu.setDeletedBy(username);
+                    productUnitRepository.save(pu);
+                }
+            }
         }
 
         // Soft delete các variants liên quan
-        for (ProductVariant v : variants) {
-            v.setIsDeleted(true);
-            v.setIsActive(false);
-            v.setDeletedAt(LocalDateTime.now());
-            v.setDeletedBy(username);
-            productVariantRepository.save(v);
+        if (productVariantRepository != null && variants != null) {
+            for (ProductVariant v : variants) {
+                v.setIsDeleted(true);
+                v.setIsActive(false);
+                v.setDeletedAt(LocalDateTime.now());
+                v.setDeletedBy(username);
+                productVariantRepository.save(v);
+            }
         }
 
         return DeleteProductResponse.builder()

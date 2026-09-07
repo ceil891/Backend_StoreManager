@@ -32,6 +32,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.example.storemanager.modules.finance.entity.PaymentVoucher;
+import org.example.storemanager.modules.finance.repository.PaymentVoucherRepository;
+import org.example.storemanager.shared.service.DocumentSequenceService;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -54,6 +58,8 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
     private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
     private final org.example.storemanager.modules.inventory.service.InventoryService inventoryService;
     private final org.example.storemanager.modules.wms.service.WarehouseService warehouseService;
+    private final PaymentVoucherRepository paymentVoucherRepository;
+    private final DocumentSequenceService documentSequenceService;
 
     @Override
     public CustomerReturnResponse createReturn(CreateCustomerReturnRequest request) {
@@ -195,6 +201,9 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
             }
         }
 
+        // Tự động sinh phiếu chi hoàn tiền nếu phiếu trả hàng COMPLETED
+        autoGeneratePaymentVoucherIfCompleted(savedReturn);
+
         return mapToResponse(savedReturn, details);
     }
 
@@ -316,6 +325,11 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
                     System.err.println("Cảnh báo khi hoàn tồn kho hàng trả lại: " + e.getMessage());
                 }
             }
+        }
+
+        // Tự động sinh phiếu chi hoàn tiền nếu chuyển sang COMPLETED và trước đó chưa hoàn
+        if ("COMPLETED".equalsIgnoreCase(status) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+            autoGeneratePaymentVoucherIfCompleted(savedReturn);
         }
 
         return mapToResponse(savedReturn, details);
@@ -445,5 +459,59 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
                 .createdBy(r.getCreatedBy())
                 .details(detailsResponse)
                 .build();
+    }
+
+    /**
+     * Tự động tạo Phiếu chi hoàn tiền (PaymentVoucher) khi Phiếu trả hàng đạt trạng thái COMPLETED
+     */
+    private void autoGeneratePaymentVoucherIfCompleted(CustomerReturn savedReturn) {
+        if (savedReturn == null || !"COMPLETED".equalsIgnoreCase(savedReturn.getStatus())) {
+            return;
+        }
+
+        BigDecimal refundAmount = savedReturn.getTotalRefund();
+        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        try {
+            boolean exists = paymentVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(savedReturn.getReturnCode());
+            if (!exists) {
+                String voucherCode = documentSequenceService.generatePaymentCode();
+                String receiver = savedReturn.getCustomer() != null ? savedReturn.getCustomer().getName() : "Khách trả hàng";
+                String username = getCurrentUsername();
+
+                Branch branch = savedReturn.getBranch();
+                if (branch == null && savedReturn.getInvoice() != null) {
+                    branch = savedReturn.getInvoice().getBranch();
+                }
+
+                PaymentVoucher pv = PaymentVoucher.builder()
+                        .voucherCode(voucherCode)
+                        .voucherDate(LocalDateTime.now())
+                        .amount(refundAmount)
+                        .receiverName(receiver)
+                        .status("COMPLETED")
+                        .invoiceCode(savedReturn.getReturnCode())
+                        .paymentMethod("TIEN_MAT")
+                        .fundAccountName("Quỹ tiền mặt (Cash)")
+                        .handler(username != null ? username : "Hệ thống")
+                        .notes("Hoàn tiền tự động cho phiếu trả hàng " + savedReturn.getReturnCode())
+                        .branch(branch)
+                        .build();
+                pv.setIsDeleted(false);
+                pv.setCreatedBy(username != null ? username : "System");
+
+                paymentVoucherRepository.save(pv);
+            }
+        } catch (Exception e) {
+            if (e instanceof ResponseStatusException) {
+                throw (ResponseStatusException) e;
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Lỗi khi tự động tạo phiếu chi hoàn tiền: " + e.getMessage(), e
+            );
+        }
     }
 }

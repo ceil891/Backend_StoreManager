@@ -10,4 +10,8 @@ import java.util.List;
 public interface ReceiptVoucherRepository extends JpaRepository<ReceiptVoucher, Long> {
     Optional<ReceiptVoucher> findByIdAndIsDeletedFalse(Long id);
     List<ReceiptVoucher> findByIsDeletedFalse();
+    Optional<ReceiptVoucher> findByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    List<ReceiptVoucher> findAllByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    boolean existsByInvoiceCodeAndIsDeletedFalse(String invoiceCode);
+    boolean existsByVoucherCodeAndIsDeletedFalse(String voucherCode);
 }

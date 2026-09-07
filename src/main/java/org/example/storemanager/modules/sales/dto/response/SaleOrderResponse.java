@@ -28,6 +28,8 @@ public class SaleOrderResponse {
     private String shippingAddress;
     private String orderOrigin;
     private String paymentStatus;
+    private BigDecimal paidAmount;
+    private BigDecimal remainingDebt;
     private Long branchId;
     private String branchName;
     private String note;
@@ -45,5 +47,6 @@ public class SaleOrderResponse {
     private String assignedBy;
     private Long paymentMethodId;
     private String paymentMethodCode;
+    private String paymentMethod;
     private List<SaleOrderDetailResponse> details;
 }
