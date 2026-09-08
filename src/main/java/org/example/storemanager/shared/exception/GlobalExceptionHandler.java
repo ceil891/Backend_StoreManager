@@ -267,15 +267,10 @@ public class GlobalExceptionHandler {
     }
 
     // ==================== Optimistic Locking Failure ====================
-
-    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockingFailureException.class})
-    public ResponseEntity<ApiResponse<Void>> handleOptimisticLocking(
-            Exception ex, HttpServletRequest request) {
-
-        log.warn("OptimisticLockingFailure | Path: {} | Cause: {}", request.getRequestURI(), getRootCauseMessage(ex));
-
-        String message = "Dữ liệu đã được cập nhật bởi một thao tác khác. Vui lòng làm mới trang và thử lại.";
-        return buildResponse(ErrorCode.DATA_INTEGRITY_VIOLATION, message, request);
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Object>> handleOptimisticLocking(OptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("Dữ liệu đang được cập nhật bởi một thiết bị khác. Vui lòng thử lại."));
     }
 
     // ==================== 404 Endpoint Not Found ====================
