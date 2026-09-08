@@ -16,6 +16,10 @@ public class UpdateSupplierResponse {
     private String phone;
     private String email;
     private String address;
+    private String province;
+    private String district;
+    private String ward;
+    private String addressDetail;
     private String taxCode;
     private Integer paymentTerm;
     private BigDecimal creditLimit;

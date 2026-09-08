@@ -14,6 +14,10 @@ public class SupplierDetailResponse {
     private String phone;
     private String email;
     private String address;
+    private String province;
+    private String district;
+    private String ward;
+    private String addressDetail;
     private String taxCode;
 
     // Các trường tài chính/công nợ

@@ -36,6 +36,10 @@ public class SupplierServiceImpl implements SupplierService {
                 .phone(s.getPhone())
                 .email(s.getEmail())
                 .address(s.getAddress())
+                .province(s.getProvince())
+                .district(s.getDistrict())
+                .ward(s.getWard())
+                .addressDetail(s.getAddressDetail())
                 .taxCode(s.getTaxCode())
                 .groupId(s.getGroup() != null ? s.getGroup().getId() : null)
                 .areaId(s.getArea() != null ? s.getArea().getId() : null)
@@ -60,6 +64,10 @@ public class SupplierServiceImpl implements SupplierService {
                 .phone(s.getPhone())
                 .email(s.getEmail())
                 .address(s.getAddress())
+                .province(s.getProvince())
+                .district(s.getDistrict())
+                .ward(s.getWard())
+                .addressDetail(s.getAddressDetail())
                 .taxCode(s.getTaxCode())
                 .groupId(s.getGroup() != null ? s.getGroup().getId() : null)
                 .groupName(s.getGroup() != null ? s.getGroup().getGroupName() : null)
@@ -123,11 +131,15 @@ public class SupplierServiceImpl implements SupplierService {
         Supplier s = Supplier.builder()
                 .supplierCode(supplierCode)
                 .name(req.getName())
-                .category(req.getCategory() != null ? req.getCategory() : "GENERAL")
+                .category(req.getCategory() != null ? req.getCategory().trim() : "")
                 .contactPerson(req.getContactPerson())
                 .phone(phone)
                 .email(email)
                 .address(req.getAddress())
+                .province(req.getProvince())
+                .district(req.getDistrict())
+                .ward(req.getWard())
+                .addressDetail(req.getAddressDetail())
                 .taxCode(req.getTaxCode())
                 .paymentTerm(req.getPaymentTerm())
                 .creditLimit(req.getCreditLimit())
@@ -157,6 +169,10 @@ public class SupplierServiceImpl implements SupplierService {
                 .phone(saved.getPhone())
                 .email(saved.getEmail())
                 .address(saved.getAddress())
+                .province(saved.getProvince())
+                .district(saved.getDistrict())
+                .ward(saved.getWard())
+                .addressDetail(saved.getAddressDetail())
                 .taxCode(saved.getTaxCode())
                 .paymentTerm(saved.getPaymentTerm())
                 .creditLimit(saved.getCreditLimit())
@@ -197,6 +213,10 @@ public class SupplierServiceImpl implements SupplierService {
         s.setPhone(phone);
         s.setEmail(email);
         s.setAddress(req.getAddress());
+        s.setProvince(req.getProvince());
+        s.setDistrict(req.getDistrict());
+        s.setWard(req.getWard());
+        s.setAddressDetail(req.getAddressDetail());
         s.setTaxCode(req.getTaxCode());
         s.setPaymentTerm(req.getPaymentTerm());
         s.setCreditLimit(req.getCreditLimit());
@@ -232,6 +252,10 @@ public class SupplierServiceImpl implements SupplierService {
                 .phone(updated.getPhone())
                 .email(updated.getEmail())
                 .address(updated.getAddress())
+                .province(updated.getProvince())
+                .district(updated.getDistrict())
+                .ward(updated.getWard())
+                .addressDetail(updated.getAddressDetail())
                 .taxCode(updated.getTaxCode())
                 .paymentTerm(updated.getPaymentTerm())
                 .creditLimit(updated.getCreditLimit())

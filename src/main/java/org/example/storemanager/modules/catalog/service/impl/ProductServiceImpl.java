@@ -401,13 +401,13 @@ public class ProductServiceImpl implements ProductService {
 
         String oldGallery = product.getGalleryImages();
         String newGallery = request.getGalleryImages();
-        if (oldGallery != null && !oldGallery.trim().isEmpty()) {
-            List<String> oldUrls = Arrays.asList(oldGallery.split(","));
-            List<String> newUrls = newGallery != null ? Arrays.asList(newGallery.split(",")) : Collections.emptyList();
+        if (oldGallery != null && !oldGallery.trim().isEmpty() && newGallery != null) {
+            List<String> oldUrls = parseGalleryUrls(oldGallery);
+            List<String> newUrls = parseGalleryUrls(newGallery);
             List<String> urlsToDelete = new java.util.ArrayList<>();
             for (String oldUrl : oldUrls) {
-                if (!newUrls.contains(oldUrl.trim())) {
-                    urlsToDelete.add(oldUrl.trim());
+                if (!newUrls.contains(oldUrl)) {
+                    urlsToDelete.add(oldUrl);
                 }
             }
             if (!urlsToDelete.isEmpty()) {
@@ -428,7 +428,9 @@ public class ProductServiceImpl implements ProductService {
         product.setReorderPoint(request.getReorderPoint());
         product.setMinStock(request.getMinStock());
         product.setMaxStock(request.getMaxStock());
-        product.setGalleryImages(request.getGalleryImages());
+        if (request.getGalleryImages() != null) {
+            product.setGalleryImages(request.getGalleryImages());
+        }
         product.setVariants(request.getVariants());
         product.setCategory(category);
         product.setBaseUnit(baseUnit);
@@ -552,10 +554,7 @@ public class ProductServiceImpl implements ProductService {
             eventPublisher.publishEvent(new org.example.storemanager.shared.event.CloudinaryDeleteEvent(this, product.getMainImageUrl()));
         }
         if (product.getGalleryImages() != null && !product.getGalleryImages().trim().isEmpty()) {
-            List<String> galleryUrls = new java.util.ArrayList<>();
-            for (String url : product.getGalleryImages().split(",")) {
-                galleryUrls.add(url.trim());
-            }
+            List<String> galleryUrls = parseGalleryUrls(product.getGalleryImages());
             if (!galleryUrls.isEmpty()) {
                 eventPublisher.publishEvent(new org.example.storemanager.shared.event.CloudinaryDeleteEvent(this, galleryUrls));
             }
@@ -824,12 +823,24 @@ public class ProductServiceImpl implements ProductService {
                 .id(product.getId())
                 .productCode(product.getProductCode())
                 .name(product.getName())
+                .description(product.getDescription())
                 .basePrice(product.getBasePrice())
                 .costPrice(product.getCostPrice())
                 .brand(product.getBrand())
                 .mainImageUrl(product.getMainImageUrl())
                 .barcode(product.getBarcode())
                 .isActive(product.getIsActive())
+                .weight(product.getWeight())
+                .reorderPoint(product.getReorderPoint())
+                .minStock(product.getMinStock())
+                .maxStock(product.getMaxStock())
+                .dimensions(product.getDimensions())
+                .allowNegativeStock(product.getAllowNegativeStock())
+                .galleryImages(product.getGalleryImages())
+                .variants(product.getVariants())
+                .isSerialTracked(product.getIsSerialTracked())
+                .warrantyPeriodMonths(product.getWarrantyPeriodMonths())
+                .originCountry(product.getOriginCountry())
                 .createdAt(product.getCreatedAt())
                 .createdBy(product.getCreatedBy())
                 .updatedBy(product.getUpdatedBy())
@@ -887,6 +898,38 @@ public class ProductServiceImpl implements ProductService {
                 .createdProductIds(createdIds)
                 .errors(errors)
                 .build();
+    }
+
+    private List<String> parseGalleryUrls(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        String cleaned = raw.trim();
+        List<String> list = new java.util.ArrayList<>();
+        try {
+            if (objectMapper != null && cleaned.startsWith("[") && cleaned.endsWith("]")) {
+                List<String> parsed = objectMapper.readValue(cleaned, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+                if (parsed != null) {
+                    for (String s : parsed) {
+                        if (s != null && !s.trim().isEmpty() && (s.trim().startsWith("http://") || s.trim().startsWith("https://"))) {
+                            list.add(s.trim());
+                        }
+                    }
+                    return list;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1);
+        }
+        for (String part : cleaned.split(",")) {
+            String url = part.trim().replaceAll("^\"|\"$|^'|'$", "").replace("\\\"", "\"").replace("\\/", "/").trim();
+            if (!url.isEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
+                list.add(url);
+            }
+        }
+        return list;
     }
 }
 

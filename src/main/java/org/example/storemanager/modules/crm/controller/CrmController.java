@@ -18,6 +18,10 @@ import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 import org.example.storemanager.modules.partnerarea.repository.CustomerRepository;
 import org.example.storemanager.modules.partnerarea.entity.Customer;
+import org.example.storemanager.modules.system.entity.User;
+import org.example.storemanager.modules.system.repository.UserRepository;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @RestController
 @RequestMapping("/api/v1/crm")
@@ -40,6 +44,44 @@ public class CrmController {
     private final org.example.storemanager.modules.crm.service.LoyaltyService loyaltyService;
     private final org.example.storemanager.modules.catalog.repository.SerialNumberRepository serialNumberRepository;
     private final org.example.storemanager.modules.catalog.repository.ProductRepository productRepository;
+    private final UserRepository userRepository;
+
+    private static final String GUEST_NAME = "Khách hàng vãng lai";
+
+    private User resolveAuthenticatedCustomer() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equalsIgnoreCase(authentication.getName())) {
+            return null;
+        }
+        User user = userRepository.findByUsername(authentication.getName())
+                .or(() -> userRepository.findByEmail(authentication.getName()))
+                .orElse(null);
+        if (user == null || user.getRole() == null || user.getRole().getRoleName() == null) return null;
+        String role = user.getRole().getRoleName().trim().toUpperCase(java.util.Locale.ROOT);
+        return java.util.Set.of("CUSTOMER", "USER", "KHÁCH HÀNG", "KHACH HANG", "NGƯỜI DÙNG", "NGUOI DUNG").contains(role) ? user : null;
+    }
+
+    private String resolveGuestName(String suppliedName) {
+        if (suppliedName == null || suppliedName.isBlank()) return GUEST_NAME;
+        String name = suppliedName.trim();
+        return ("Khách hàng Online".equalsIgnoreCase(name) || "Khách hàng Web Online".equalsIgnoreCase(name)) ? GUEST_NAME : name;
+    }
+
+    private Customer findOrCreateCustomer(String name, String email, String phone) {
+        Customer customer = null;
+        if (email != null && !email.isBlank()) customer = customerRepository.findByEmailAndIsDeletedFalse(email.trim()).orElse(null);
+        if (customer == null && phone != null && !phone.isBlank()) customer = customerRepository.findByPhoneAndIsDeletedFalse(phone.trim()).orElse(null);
+        if (customer == null && name != null && !name.isBlank() && !GUEST_NAME.equalsIgnoreCase(name)) {
+            customer = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(name.trim()).orElse(null);
+        }
+        if (customer != null) return customer;
+        Customer created = Customer.builder()
+                .name(resolveGuestName(name)).phone(phone == null ? "" : phone.trim()).email(email == null ? "" : email.trim())
+                .address("Việt Nam").customerCode("KH-CHAT-" + (System.currentTimeMillis() % 100000000))
+                .membershipRank("BRONZE").points(0.0).totalSpend(0.0).isActive(true).build();
+        created.setIsDeleted(false);
+        return customerRepository.save(created);
+    }
 
     // --- LOYALTY CALCULATION & CUSTOMER HISTORY ---
     @PostMapping("/loyalty/calculate")
@@ -487,14 +529,14 @@ public class CrmController {
                 m.put("customerName", st.getCustomer().getName());
                 m.put("customerPhone", st.getCustomer().getPhone() != null ? st.getCustomer().getPhone() : "");
             } else {
-                String cName = "Khách hàng Web Online";
+                String cName = GUEST_NAME;
                 if (st.getTitle() != null && st.getTitle().contains(": ")) {
                     cName = st.getTitle().substring(st.getTitle().lastIndexOf(": ") + 2).trim();
                 } else if (st.getTitle() != null && st.getTitle().contains("] ")) {
                     cName = st.getTitle().substring(st.getTitle().lastIndexOf("] ") + 2).trim();
                 }
                 m.put("customerName", cName);
-                m.put("customerPhone", "0988123456");
+                m.put("customerPhone", "");
             }
             return m;
         }).collect(java.util.stream.Collectors.toList());
@@ -506,37 +548,23 @@ public class CrmController {
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createTicket(@RequestBody java.util.Map<String, Object> req) {
         String ticketCode = req.get("ticketCode") != null ? req.get("ticketCode").toString() :
                 (req.get("ticketNumber") != null ? req.get("ticketNumber").toString() : "ONLINE-" + (System.currentTimeMillis() % 100000));
-        String customerName = req.get("customerName") != null ? req.get("customerName").toString() : "";
-        String defaultTitle = !customerName.isBlank() ? "[Khách Web Online] " + customerName : "Yêu cầu hỗ trợ";
+        User authenticatedCustomer = resolveAuthenticatedCustomer();
+        String customerName = authenticatedCustomer != null ? authenticatedCustomer.getFullName()
+                : resolveGuestName(req.get("customerName") != null ? req.get("customerName").toString() : null);
+        String defaultTitle = !customerName.isBlank() ? "[Live Chat] " + customerName : "Yêu cầu hỗ trợ";
         String subject = req.get("subject") != null ? req.get("subject").toString() : (req.get("title") != null ? req.get("title").toString() : defaultTitle);
         String priority = req.get("priority") != null ? req.get("priority").toString() : "HIGH";
         String status = req.get("status") != null ? req.get("status").toString() : "OPEN";
-        String customerPhone = req.get("customerPhone") != null ? req.get("customerPhone").toString() : "";
-
-        Customer customer = null;
-        if (!customerPhone.isBlank()) {
-            customer = customerRepository.findByPhoneAndIsDeletedFalse(customerPhone.trim()).orElse(null);
-            if (customer == null) {
-                customer = customerRepository.findByPhone(customerPhone.trim()).orElse(null);
-            }
-        }
-        if (customer == null && !customerName.isBlank()) {
-            customer = customerRepository.findByNameIgnoreCaseAndIsDeletedFalse(customerName.trim()).orElse(null);
-        }
-        if (customer == null && !customerName.isBlank()) {
-            Customer newCust = Customer.builder()
-                    .name(customerName)
-                    .phone(!customerPhone.isBlank() ? customerPhone : "0988123456")
-                    .email("customer@store.vn")
-                    .address("Việt Nam")
-                    .customerCode("KH-ONLINE-" + (System.currentTimeMillis() % 100000))
-                    .membershipRank("BRONZE")
-                    .points(0.0)
-                    .totalSpend(0.0)
-                    .isActive(true)
-                    .build();
-            newCust.setIsDeleted(false);
-            customer = customerRepository.save(newCust);
+        String customerPhone = authenticatedCustomer != null ? authenticatedCustomer.getPhone()
+                : (req.get("customerPhone") != null ? req.get("customerPhone").toString() : "");
+        String customerEmail = authenticatedCustomer != null ? authenticatedCustomer.getEmail()
+                : (req.get("customerEmail") != null ? req.get("customerEmail").toString() : "");
+        Customer customer = findOrCreateCustomer(customerName, customerEmail, customerPhone);
+        if (authenticatedCustomer != null) {
+            customer.setName(customerName);
+            if (customerEmail != null && !customerEmail.isBlank()) customer.setEmail(customerEmail);
+            if (customerPhone != null && !customerPhone.isBlank()) customer.setPhone(customerPhone);
+            customer = customerRepository.save(customer);
         }
 
         SupportTicket ticket = SupportTicket.builder()
@@ -591,12 +619,18 @@ public class CrmController {
     @GetMapping({"/ticket-messages", "/support-tickets/{ticketId}/messages"})
     @Transactional
     public ResponseEntity<ApiResponse<List<java.util.Map<String, Object>>>> getAllTicketMessages(
-            @PathVariable(required = false) Long ticketId,
-            @RequestParam(value = "ticketId", required = false) Long queryTicketId) {
-        Long effectiveTicketId = ticketId != null ? ticketId : queryTicketId;
+            @PathVariable(required = false) String ticketId,
+            @RequestParam(value = "ticketId", required = false) String queryTicketId) {
+        String rawTicketId = ticketId != null ? ticketId : queryTicketId;
         List<TicketMessage> list = ticketMessageRepository.findByIsDeletedFalse();
-        if (effectiveTicketId != null) {
-            list = list.stream().filter(tm -> tm.getTicket() != null && effectiveTicketId.equals(tm.getTicket().getId())).collect(java.util.stream.Collectors.toList());
+        if (rawTicketId != null && !rawTicketId.isBlank()) {
+            final String filterId = rawTicketId.trim();
+            list = list.stream().filter(tm -> {
+                if (tm.getTicket() == null) return false;
+                String tId = tm.getTicket().getId() != null ? tm.getTicket().getId().toString() : "";
+                String tCode = tm.getTicket().getTicketCode() != null ? tm.getTicket().getTicketCode() : "";
+                return tId.equalsIgnoreCase(filterId) || tCode.equalsIgnoreCase(filterId);
+            }).collect(java.util.stream.Collectors.toList());
         }
         // Sort chronologically ascending
         list.sort((a, b) -> Long.compare(a.getId() != null ? a.getId() : 0L, b.getId() != null ? b.getId() : 0L));
@@ -606,10 +640,11 @@ public class CrmController {
         List<java.util.Map<String, Object>> res = list.stream().map(tm -> {
             java.util.Map<String, Object> m = new java.util.HashMap<>();
             m.put("id", tm.getId().toString());
-            m.put("ticketId", tm.getTicket() != null ? tm.getTicket().getId().toString() : (effectiveTicketId != null ? effectiveTicketId.toString() : "1"));
+            m.put("ticketId", tm.getTicket() != null ? tm.getTicket().getId().toString() : (rawTicketId != null ? rawTicketId : "1"));
+            m.put("ticketCode", tm.getTicket() != null ? tm.getTicket().getTicketCode() : "");
             m.put("message", tm.getMessage() != null ? tm.getMessage() : "");
             m.put("isStaff", tm.getIsFromCustomer() != null ? !tm.getIsFromCustomer() : true);
-            String custName = "Khách hàng Web Online";
+            String custName = GUEST_NAME;
             if (tm.getTicket() != null && tm.getTicket().getCustomer() != null && tm.getTicket().getCustomer().getName() != null) {
                 custName = tm.getTicket().getCustomer().getName();
             } else if (tm.getTicket() != null && tm.getTicket().getTitle() != null && tm.getTicket().getTitle().contains(": ")) {
@@ -628,43 +663,75 @@ public class CrmController {
     @PostMapping({"/ticket-messages", "/support-tickets/{ticketId}/messages"})
     @Transactional
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> createTicketMessage(
-            @PathVariable(required = false) Long ticketId,
-            @RequestParam(value = "ticketId", required = false) Long queryTicketId,
+            @PathVariable(required = false) String ticketId,
+            @RequestParam(value = "ticketId", required = false) String queryTicketId,
             @RequestBody java.util.Map<String, Object> req) {
-        Long targetTicketId = ticketId != null ? ticketId : queryTicketId;
-        if (targetTicketId == null && req.get("ticketId") != null) {
-            try { targetTicketId = Long.valueOf(req.get("ticketId").toString()); } catch (Exception ignored) {}
+        String rawTicketId = ticketId != null ? ticketId : queryTicketId;
+        if (rawTicketId == null && req.get("ticketId") != null) {
+            rawTicketId = req.get("ticketId").toString();
         }
 
         String msgText = req.get("message") != null ? req.get("message").toString() : "";
         Boolean isStaff = req.get("isStaff") != null ? Boolean.valueOf(req.get("isStaff").toString()) : true;
-        String senderName = req.get("senderName") != null ? req.get("senderName").toString() : (isStaff ? "Nhân viên CSKH" : "Khách hàng Web Online");
+        User authenticatedCustomer = !isStaff ? resolveAuthenticatedCustomer() : null;
+        String senderName = isStaff ? (req.get("senderName") != null ? req.get("senderName").toString() : "Nhân viên CSKH")
+                : (authenticatedCustomer != null ? authenticatedCustomer.getFullName()
+                : resolveGuestName(req.get("senderName") != null ? req.get("senderName").toString() : null));
 
         SupportTicket ticket = null;
-        if (targetTicketId != null) {
-            ticket = supportTicketRepository.findById(targetTicketId).orElse(null);
+        if (rawTicketId != null && !rawTicketId.isBlank()) {
+            String trimmed = rawTicketId.trim();
+            if (trimmed.matches("\\d+")) {
+                try {
+                    ticket = supportTicketRepository.findByIdAndIsDeletedFalse(Long.parseLong(trimmed)).orElse(null);
+                } catch (Exception ignored) {}
+            }
+            if (ticket == null) {
+                ticket = supportTicketRepository.findByTicketCodeAndIsDeletedFalse(trimmed).orElse(null);
+            }
+            if (ticket == null) {
+                ticket = supportTicketRepository.findByTicketCode(trimmed).orElse(null);
+            }
+            if (ticket == null) {
+                List<SupportTicket> allTickets = supportTicketRepository.findByIsDeletedFalse();
+                ticket = allTickets.stream()
+                        .filter(t -> (t.getTicketCode() != null && t.getTicketCode().equalsIgnoreCase(trimmed))
+                                || (t.getId() != null && t.getId().toString().equals(trimmed)))
+                        .findFirst().orElse(null);
+            }
         }
         if (ticket == null) {
-            List<SupportTicket> all = supportTicketRepository.findByIsDeletedFalse();
-            if (!all.isEmpty()) {
-                ticket = all.get(0);
-            } else {
-                String code = "ONLINE-" + (System.currentTimeMillis() % 100000);
-                SupportTicket newTicket = SupportTicket.builder()
-                        .ticketCode(code)
-                        .title("[Khách Web Online] " + senderName)
-                        .priority("HIGH")
-                        .status("OPEN")
-                        .build();
-                newTicket.setIsDeleted(false);
-                ticket = supportTicketRepository.save(newTicket);
-            }
+            String senderEmail = authenticatedCustomer != null ? authenticatedCustomer.getEmail()
+                    : (req.get("senderEmail") != null ? req.get("senderEmail").toString() : "");
+            String senderPhone = authenticatedCustomer != null ? authenticatedCustomer.getPhone()
+                    : (req.get("senderPhone") != null ? req.get("senderPhone").toString() : "");
+            Customer fallbackCust = findOrCreateCustomer(senderName, senderEmail, senderPhone);
+            String code = "ONLINE-" + (System.currentTimeMillis() % 100000);
+            SupportTicket newTicket = SupportTicket.builder()
+                    .ticketCode(code)
+                    .title("[Live Chat] " + senderName)
+                    .priority("HIGH")
+                    .status("OPEN")
+                    .customer(fallbackCust)
+                    .build();
+            newTicket.setIsDeleted(false);
+            ticket = supportTicketRepository.save(newTicket);
+        }
+
+        if (!isStaff && authenticatedCustomer != null) {
+            Customer customer = findOrCreateCustomer(authenticatedCustomer.getFullName(), authenticatedCustomer.getEmail(), authenticatedCustomer.getPhone());
+            customer.setName(authenticatedCustomer.getFullName());
+            if (authenticatedCustomer.getEmail() != null && !authenticatedCustomer.getEmail().isBlank()) customer.setEmail(authenticatedCustomer.getEmail());
+            if (authenticatedCustomer.getPhone() != null && !authenticatedCustomer.getPhone().isBlank()) customer.setPhone(authenticatedCustomer.getPhone());
+            ticket.setCustomer(customerRepository.save(customer));
+            ticket = supportTicketRepository.save(ticket);
         }
 
         TicketMessage tm = TicketMessage.builder()
                 .ticket(ticket)
                 .message(msgText)
                 .isFromCustomer(!isStaff)
+                .sender(authenticatedCustomer)
                 .sentAt(java.time.LocalDateTime.now())
                 .messageType("TEXT")
                 .build();
@@ -677,6 +744,7 @@ public class CrmController {
         java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
         resp.put("id", saved.getId().toString());
         resp.put("ticketId", ticket != null ? ticket.getId().toString() : "1");
+        resp.put("ticketCode", ticket != null ? ticket.getTicketCode() : "");
         resp.put("message", saved.getMessage());
         resp.put("isStaff", isStaff);
         resp.put("senderName", senderName);

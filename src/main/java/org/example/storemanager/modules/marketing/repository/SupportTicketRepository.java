@@ -10,4 +10,6 @@ import java.util.List;
 public interface SupportTicketRepository extends JpaRepository<SupportTicket, Long> {
     Optional<SupportTicket> findByIdAndIsDeletedFalse(Long id);
     List<SupportTicket> findByIsDeletedFalse();
+    Optional<SupportTicket> findByTicketCodeAndIsDeletedFalse(String ticketCode);
+    Optional<SupportTicket> findByTicketCode(String ticketCode);
 }

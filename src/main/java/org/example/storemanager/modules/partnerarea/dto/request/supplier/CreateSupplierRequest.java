@@ -35,6 +35,10 @@ public class CreateSupplierRequest {
 
     @NotBlank(message = "Địa chỉ nhà cung cấp không được để trống")
     private String address;
+    private String province;
+    private String district;
+    private String ward;
+    private String addressDetail;
     private String taxCode;
 
     // Validate tài chính
