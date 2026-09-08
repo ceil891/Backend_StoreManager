@@ -30,6 +30,18 @@ public class Supplier extends BaseEntity {
     @Column(length = 255)
     private String address;
 
+    @Column(length = 100)
+    private String province;
+
+    @Column(length = 100)
+    private String district;
+
+    @Column(length = 100)
+    private String ward;
+
+    @Column(name = "address_detail", length = 255)
+    private String addressDetail;
+
     @Column(name = "tax_code", length = 50)
     private String taxCode;
 

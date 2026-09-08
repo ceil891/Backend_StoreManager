@@ -228,9 +228,13 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         String input = request.getUsername() != null ? request.getUsername().trim() : "";
+        String normalizedPhone = input.replaceAll("[\\s.-]", "");
+        String internationalPhone = normalizedPhone.startsWith("0")
+                ? "+84" + normalizedPhone.substring(1) : normalizedPhone;
         User user = userRepository.findByUsernameIgnoreCase(input)
                 .or(() -> userRepository.findByEmailIgnoreCase(input))
-                .or(() -> userRepository.findByPhone(input))
+                .or(() -> userRepository.findByPhone(normalizedPhone))
+                .or(() -> userRepository.findByPhone(internationalPhone))
                 .or(() -> userRepository.findByUsername(input))
                 .or(() -> userRepository.findByEmail(input))
                 .orElse(null);

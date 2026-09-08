@@ -171,6 +171,23 @@ public class PaymentMethodController {
                         paymentMethodRepository.save(pm);
                     });
         } catch (Exception ignored) {}
+
+        // Các cấu hình được sinh trong môi trường demo không được phép xuất hiện
+        // ở WebOnline như một cổng thanh toán thật.
+        paymentMethodRepository.findByIsDeletedFalse().stream()
+                .filter(this::isLegacyDemoPaymentMethod)
+                .forEach(pm -> {
+                    pm.setStatus("DISABLED");
+                    pm.setAllowOnline(false);
+                    paymentMethodRepository.save(pm);
+                });
+    }
+
+    private boolean isLegacyDemoPaymentMethod(PaymentMethod pm) {
+        return "0388123456789".equals(pm.getBankAccount())
+                || "CONG TY TNHH SMART RETAIL".equalsIgnoreCase(pm.getBankAccountName())
+                || "MOMO_MERCHANT_01".equals(pm.getMerchantId())
+                || "VNPAY_MERCHANT_01".equals(pm.getMerchantId());
     }
 
     // GET /api/v1/payment-methods
