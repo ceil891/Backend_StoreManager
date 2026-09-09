@@ -10,6 +10,8 @@ public class CheckOutRequest {
     @NotNull
     private Long userId;
 
+    private String gpsLocation;
+
     @AssertTrue(message = "Phải xác thực khuôn mặt đã đăng ký trước khi tan ca")
     private Boolean faceVerified;
 }

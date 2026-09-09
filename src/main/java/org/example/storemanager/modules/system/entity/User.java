@@ -63,4 +63,7 @@ public class User extends BaseEntity {
 
     @Column(name = "avatar", columnDefinition = "TEXT")
     private String avatar;
+
+    @Column(name = "face_descriptor", columnDefinition = "TEXT")
+    private String faceDescriptor;
 }

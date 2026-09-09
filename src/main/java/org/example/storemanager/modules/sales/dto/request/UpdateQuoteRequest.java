@@ -49,5 +49,5 @@ public class UpdateQuoteRequest {
     private String attachments;
 
     @NotEmpty(message = "Chi tiết báo giá không được để trống")
-    private List<QuoteDetailRequest> details;
+    private List<@jakarta.validation.Valid QuoteDetailRequest> details;
 }

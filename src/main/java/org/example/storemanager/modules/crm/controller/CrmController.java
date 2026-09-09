@@ -1330,6 +1330,7 @@ public class CrmController {
                 .voucherDate(java.time.LocalDateTime.now()).amount(claim.getRepairCost()).payerName(payer)
                 .status("COMPLETED").paymentMethod("TIEN_MAT").fundAccountName("Quỹ tiền mặt (Cash)")
                 .invoiceCode(reference).handler("Hệ thống").category("Bảo hành")
+                .creationSource("AUTO").sourceDocumentType("WARRANTY_CLAIM").sourceDocumentCode(claim.getClaimCode()).sourceDocumentId(claim.getId())
                 .notes("Thu phí sửa chữa/bảo hành " + claim.getClaimCode()).build();
         voucher.setIsDeleted(false);
         voucher.setCreatedBy("System");

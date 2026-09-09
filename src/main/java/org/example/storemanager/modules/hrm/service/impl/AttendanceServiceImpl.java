@@ -64,6 +64,7 @@ public class AttendanceServiceImpl implements AttendanceService {
             if (request.getCheckOutTime() != null) existing.setCheckOutTime(request.getCheckOutTime());
             if (request.getGpsLocation() != null) existing.setGpsLocation(request.getGpsLocation());
             if (request.getStatus() != null) existing.setStatus(request.getStatus());
+            if (existing.getBranch() == null) existing.setBranch(user.getBranch());
             if (request.getIsActive() != null) existing.setIsLocked(!request.getIsActive());
             existing.setIsDeleted(false);
             existing.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
@@ -72,6 +73,7 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         Attendance attendance = Attendance.builder()
                 .user(user)
+                .branch(user.getBranch())
                 .workDate(workDate)
                 .checkInTime(request.getCheckInTime())
                 .checkOutTime(request.getCheckOutTime())
@@ -93,6 +95,7 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attendance", "id", id));
 
         attendance.setUser(resolveUser(request.getUserId()));
+        attendance.setBranch(attendance.getUser().getBranch());
         attendance.setWorkDate(request.getWorkDate());
         attendance.setCheckInTime(request.getCheckInTime());
         attendance.setCheckOutTime(request.getCheckOutTime());
@@ -181,10 +184,12 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         Attendance attendance = attendanceRepository.findByUserIdAndWorkDate(user.getId(), today)
                 .orElseGet(() -> Attendance.builder()
-                        .user(user)
+                .user(user)
+                        .branch(user.getBranch())
                         .workDate(today)
                         .status(AttendanceStatus.ABSENT.name())
                         .build());
+        if (attendance.getBranch() == null) attendance.setBranch(user.getBranch());
 
         // Nếu nhân viên đã check-in trong ngày: Cập nhật GPS/thiết bị nếu có và trả về bản ghi hiện tại, tuyệt đối không tạo mới (tránh duplicate row)
         if (attendance.getCheckInTime() != null) {
@@ -236,6 +241,9 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         // Cập nhật check-out time mới nhất
         attendance.setCheckOutTime(LocalDateTime.now());
+        if (request.getGpsLocation() != null && !request.getGpsLocation().isBlank()) {
+            attendance.setGpsLocation(request.getGpsLocation());
+        }
         attendance.setIsDeleted(false);
         attendance.setUpdatedBy(HrmServiceSupport.getCurrentUsername());
         return mapToResponse(attendanceRepository.save(attendance));
@@ -306,6 +314,8 @@ public class AttendanceServiceImpl implements AttendanceService {
         return AttendanceResponse.builder()
                 .id(attendance.getId())
                 .userId(attendance.getUser().getId())
+                .branchId(attendance.getBranch() != null ? attendance.getBranch().getId() : null)
+                .branchName(attendance.getBranch() != null ? attendance.getBranch().getBranchName() : null)
                 .userName(attendance.getUser().getFullName())
                 .workDate(attendance.getWorkDate())
                 .checkInTime(attendance.getCheckInTime())
@@ -324,6 +334,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         return CreateAttendanceResponse.builder()
                 .id(attendance.getId())
                 .userId(attendance.getUser().getId())
+                .branchId(attendance.getBranch() != null ? attendance.getBranch().getId() : null)
                 .workDate(attendance.getWorkDate())
                 .checkInTime(attendance.getCheckInTime())
                 .checkOutTime(attendance.getCheckOutTime())
@@ -339,6 +350,7 @@ public class AttendanceServiceImpl implements AttendanceService {
         return UpdateAttendanceResponse.builder()
                 .id(attendance.getId())
                 .userId(attendance.getUser().getId())
+                .branchId(attendance.getBranch() != null ? attendance.getBranch().getId() : null)
                 .workDate(attendance.getWorkDate())
                 .checkInTime(attendance.getCheckInTime())
                 .checkOutTime(attendance.getCheckOutTime())

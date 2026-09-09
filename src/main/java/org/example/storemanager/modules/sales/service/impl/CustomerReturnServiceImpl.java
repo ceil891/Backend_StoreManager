@@ -60,6 +60,8 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
     private final org.example.storemanager.modules.wms.service.WarehouseService warehouseService;
     private final PaymentVoucherRepository paymentVoucherRepository;
     private final DocumentSequenceService documentSequenceService;
+    private final org.example.storemanager.modules.finance.repository.FundBalanceRepository fundBalanceRepository;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Override
     public CustomerReturnResponse createReturn(CreateCustomerReturnRequest request) {
@@ -286,6 +288,9 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
                 .orElseThrow(() -> new ResourceNotFoundException("CustomerReturn", "id", id));
 
         String oldStatus = customerReturn.getStatus();
+        if (isRefunded(oldStatus) && !isRefunded(status)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phiếu đã hoàn tiền không được chuyển ngược trạng thái");
+        }
         customerReturn.setStatus(status);
         customerReturn.setUpdatedBy(getCurrentUsername());
 
@@ -328,7 +333,7 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         }
 
         // Tự động sinh phiếu chi hoàn tiền nếu chuyển sang COMPLETED và trước đó chưa hoàn
-        if ("COMPLETED".equalsIgnoreCase(status) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+        if (isRefunded(status)) {
             autoGeneratePaymentVoucherIfCompleted(savedReturn);
         }
 
@@ -464,8 +469,12 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
     /**
      * Tự động tạo Phiếu chi hoàn tiền (PaymentVoucher) khi Phiếu trả hàng đạt trạng thái COMPLETED
      */
+    private static boolean isRefunded(String status) {
+        return "COMPLETED".equalsIgnoreCase(status) || "REFUNDED".equalsIgnoreCase(status);
+    }
+
     private void autoGeneratePaymentVoucherIfCompleted(CustomerReturn savedReturn) {
-        if (savedReturn == null || !"COMPLETED".equalsIgnoreCase(savedReturn.getStatus())) {
+        if (savedReturn == null || !isRefunded(savedReturn.getStatus())) {
             return;
         }
 
@@ -475,6 +484,7 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
         }
 
         try {
+            entityManager.lock(savedReturn, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
             boolean exists = paymentVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(savedReturn.getReturnCode());
             if (!exists) {
                 String voucherCode = documentSequenceService.generatePaymentCode();
@@ -485,6 +495,18 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
                 if (branch == null && savedReturn.getInvoice() != null) {
                     branch = savedReturn.getInvoice().getBranch();
                 }
+                if (branch == null && savedReturn.getOrder() != null) branch = savedReturn.getOrder().getBranch();
+                if (branch == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chưa xác định chi nhánh chi hoàn tiền");
+                Long branchId = branch.getId();
+                var funds = fundBalanceRepository.findByIsDeletedFalse().stream()
+                        .filter(f -> f.getBranch() != null && java.util.Objects.equals(f.getBranch().getId(), branchId)).toList();
+                if (funds.size() != 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần cấu hình một quỹ tiền mặt cho chi nhánh hoàn tiền");
+                var fund = funds.get(0);
+                entityManager.refresh(fund, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+                BigDecimal balance = fund.getCashBalance() == null ? BigDecimal.ZERO : fund.getCashBalance();
+                if (balance.compareTo(refundAmount) < 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quỹ tiền mặt không đủ số dư hoàn tiền");
+                fund.setCashBalance(balance.subtract(refundAmount));
+                fundBalanceRepository.save(fund);
 
                 PaymentVoucher pv = PaymentVoucher.builder()
                         .voucherCode(voucherCode)
@@ -493,7 +515,11 @@ public class CustomerReturnServiceImpl implements CustomerReturnService {
                         .receiverName(receiver)
                         .status("COMPLETED")
                         .invoiceCode(savedReturn.getReturnCode())
-                        .paymentMethod("TIEN_MAT")
+                        .creationSource("AUTO")
+                        .sourceDocumentType("CUSTOMER_RETURN")
+                        .sourceDocumentCode(savedReturn.getReturnCode())
+                        .sourceDocumentId(savedReturn.getId())
+                        .paymentMethod("CASH")
                         .fundAccountName("Quỹ tiền mặt (Cash)")
                         .handler(username != null ? username : "Hệ thống")
                         .notes("Hoàn tiền tự động cho phiếu trả hàng " + savedReturn.getReturnCode())

@@ -35,5 +35,5 @@ public class CreateCustomerReturnRequest {
     private String note;
 
     @NotEmpty(message = "Chi tiết trả hàng không được để trống")
-    private List<CustomerReturnDetailRequest> details;
+    private List<@jakarta.validation.Valid CustomerReturnDetailRequest> details;
 }

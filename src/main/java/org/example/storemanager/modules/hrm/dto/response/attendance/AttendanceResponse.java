@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 public class AttendanceResponse {
     private Long id;
     private Long userId;
+    private Long branchId;
+    private String branchName;
     private String userName;
     private LocalDate workDate;
     private LocalDateTime checkInTime;

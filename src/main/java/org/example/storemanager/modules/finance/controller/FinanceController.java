@@ -6,6 +6,7 @@ import org.example.storemanager.modules.finance.entity.*;
 import org.example.storemanager.modules.finance.repository.*;
 import org.example.storemanager.modules.sales.repository.ExportInvoiceRepository;
 import org.example.storemanager.shared.exception.ResourceNotFoundException;
+import org.example.storemanager.shared.config.LogActivity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -199,6 +200,7 @@ public class FinanceController {
 
     // --- RECEIPT VOUCHERS ---
     @GetMapping({"/receipt-vouchers", "/receipts"})
+    @LogActivity(actionType = "VIEW", entityName = "ReceiptVoucher", entityClass = ReceiptVoucher.class)
     public ResponseEntity<ApiResponse<List<ReceiptVoucher>>> getAllReceipts() {
         return ResponseEntity.ok(ApiResponse.ok(receiptVoucherRepository.findByIsDeletedFalse()));
     }
@@ -210,9 +212,12 @@ public class FinanceController {
     }
 
     @PostMapping({"/receipt-vouchers", "/receipts"})
+    @LogActivity(actionType = "CREATE", entityName = "ReceiptVoucher", entityClass = ReceiptVoucher.class)
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<ReceiptVoucher>> createReceipt(@RequestBody ReceiptVoucher req) {
         req.setIsDeleted(false);
+        // Public endpoint is manual-only; automatic vouchers are created by source workflows.
+        req.setCreationSource("MANUAL");
         if (req.getVoucherCode() == null || req.getVoucherCode().trim().isEmpty()) {
             req.setVoucherCode("PC-REC-" + System.currentTimeMillis());
         }
@@ -226,7 +231,7 @@ public class FinanceController {
             }
         }
         ReceiptVoucher saved = receiptVoucherRepository.save(req);
-        if ("COMPLETED".equalsIgnoreCase(saved.getStatus())) {
+        if ("COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) {
             createJournalEntryForReceipt(saved);
             increaseFundBalance(saved);
         }
@@ -234,9 +239,13 @@ public class FinanceController {
     }
 
     @PutMapping({"/receipt-vouchers/{id}", "/receipts/{id}"})
+    @LogActivity(actionType = "UPDATE", entityName = "ReceiptVoucher", entityClass = ReceiptVoucher.class)
     public ResponseEntity<ApiResponse<ReceiptVoucher>> updateReceipt(@PathVariable Long id, @RequestBody ReceiptVoucher req) {
         ReceiptVoucher existing = receiptVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id));
+        if ("AUTO".equalsIgnoreCase(existing.getCreationSource())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phiếu tạo tự động không thể chỉnh sửa. Hãy xử lý tại chứng từ nguồn.");
+        }
         
         String oldStatus = existing.getStatus();
         boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
@@ -260,7 +269,7 @@ public class FinanceController {
         
         ReceiptVoucher saved = receiptVoucherRepository.save(existing);
         
-        if ("COMPLETED".equalsIgnoreCase(saved.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
+        if (("COMPLETED".equalsIgnoreCase(saved.getStatus()) || "APPROVED".equalsIgnoreCase(saved.getStatus())) && !("COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus))) {
             createJournalEntryForReceipt(saved);
             increaseFundBalance(saved);
         } else if ("CANCELLED".equalsIgnoreCase(saved.getStatus()) && !"CANCELLED".equalsIgnoreCase(oldStatus)) {
@@ -271,9 +280,13 @@ public class FinanceController {
     }
 
     @DeleteMapping({"/receipt-vouchers/{id}", "/receipts/{id}"})
+    @LogActivity(actionType = "DELETE", entityName = "ReceiptVoucher", entityClass = ReceiptVoucher.class)
     public ResponseEntity<ApiResponse<Void>> deleteReceipt(@PathVariable Long id) {
         ReceiptVoucher existing = receiptVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ReceiptVoucher", "id", id));
+        if ("AUTO".equalsIgnoreCase(existing.getCreationSource())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phiếu tạo tự động không thể xóa. Hãy hủy hoặc điều chỉnh chứng từ nguồn.");
+        }
         if ("COMPLETED".equalsIgnoreCase(existing.getStatus()) || "APPROVED".equalsIgnoreCase(existing.getStatus())) {
             existing.setStatus("CANCELLED");
             createStornoEntry(existing.getVoucherCode());
@@ -285,6 +298,7 @@ public class FinanceController {
 
     // --- PAYMENT VOUCHERS ---
     @GetMapping({"/payment-vouchers", "/payments"})
+    @LogActivity(actionType = "VIEW", entityName = "PaymentVoucher", entityClass = PaymentVoucher.class)
     public ResponseEntity<ApiResponse<List<PaymentVoucher>>> getAllPayments() {
         return ResponseEntity.ok(ApiResponse.ok(paymentVoucherRepository.findByIsDeletedFalse()));
     }
@@ -296,9 +310,12 @@ public class FinanceController {
     }
 
     @PostMapping({"/payment-vouchers", "/payments"})
+    @LogActivity(actionType = "CREATE", entityName = "PaymentVoucher", entityClass = PaymentVoucher.class)
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<PaymentVoucher>> createPayment(@RequestBody PaymentVoucher req) {
         req.setIsDeleted(false);
+        // Public endpoint is manual-only; automatic vouchers are created by source workflows.
+        req.setCreationSource("MANUAL");
         if (req.getVoucherCode() == null || req.getVoucherCode().trim().isEmpty()) {
             String dateStr = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd").format(java.time.LocalDate.now());
             req.setVoucherCode("PAY-PUR-" + dateStr + "-" + String.format("%03d", (int)(Math.random() * 900 + 100)));
@@ -344,10 +361,14 @@ public class FinanceController {
     }
 
     @PutMapping({"/payment-vouchers/{id}", "/payments/{id}"})
+    @LogActivity(actionType = "UPDATE", entityName = "PaymentVoucher", entityClass = PaymentVoucher.class)
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<ApiResponse<PaymentVoucher>> updatePayment(@PathVariable Long id, @RequestBody PaymentVoucher req) {
         PaymentVoucher existing = paymentVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id));
+        if ("AUTO".equalsIgnoreCase(existing.getCreationSource())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phiếu tạo tự động không thể chỉnh sửa. Hãy xử lý tại chứng từ nguồn.");
+        }
         
         String oldStatus = existing.getStatus();
         boolean wasDone = "COMPLETED".equalsIgnoreCase(oldStatus) || "APPROVED".equalsIgnoreCase(oldStatus);
@@ -672,9 +693,13 @@ public class FinanceController {
     }
 
     @DeleteMapping({"/payment-vouchers/{id}", "/payments/{id}"})
+    @LogActivity(actionType = "DELETE", entityName = "PaymentVoucher", entityClass = PaymentVoucher.class)
     public ResponseEntity<ApiResponse<Void>> deletePayment(@PathVariable Long id) {
         PaymentVoucher existing = paymentVoucherRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PaymentVoucher", "id", id));
+        if ("AUTO".equalsIgnoreCase(existing.getCreationSource())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phiếu tạo tự động không thể xóa. Hãy hủy hoặc điều chỉnh chứng từ nguồn.");
+        }
         if ("COMPLETED".equalsIgnoreCase(existing.getStatus()) || "APPROVED".equalsIgnoreCase(existing.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được phép xóa vật lý chứng từ đã duyệt. Vui lòng chuyển trạng thái sang CANCELLED.");
         }
@@ -685,6 +710,7 @@ public class FinanceController {
 
     // --- DEBT LEDGERS ---
     @GetMapping({"/debt-ledgers", "/debts"})
+    @LogActivity(actionType = "VIEW", entityName = "DebtLedger", entityClass = DebtLedger.class)
     public ResponseEntity<ApiResponse<List<DebtLedger>>> getAllDebts() {
         syncSystemDebts();
         return ResponseEntity.ok(ApiResponse.ok(debtLedgerRepository.findByIsDeletedFalse()));
@@ -748,6 +774,7 @@ public class FinanceController {
     }
 
     @PostMapping({"/debt-ledgers", "/debts"})
+    @LogActivity(actionType = "CREATE", entityName = "DebtLedger", entityClass = DebtLedger.class)
     public ResponseEntity<ApiResponse<DebtLedger>> createDebt(@RequestBody DebtLedger req) {
         // Validate: Ngày đến hạn phải >= ngày hiện tại
         if (req.getDueDate() != null && req.getDueDate().isBefore(LocalDateTime.now())) {
@@ -789,6 +816,7 @@ public class FinanceController {
     }
 
     @PutMapping({"/debt-ledgers/{id}", "/debts/{id}"})
+    @LogActivity(actionType = "UPDATE", entityName = "DebtLedger", entityClass = DebtLedger.class)
     public ResponseEntity<ApiResponse<DebtLedger>> updateDebt(@PathVariable Long id, @RequestBody DebtLedger req) {
         DebtLedger existing = debtLedgerRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("DebtLedger", "id", id));
@@ -818,6 +846,7 @@ public class FinanceController {
     }
 
     @DeleteMapping({"/debt-ledgers/{id}", "/debts/{id}"})
+    @LogActivity(actionType = "DELETE", entityName = "DebtLedger", entityClass = DebtLedger.class)
     public ResponseEntity<ApiResponse<Void>> deleteDebt(@PathVariable Long id) {
         DebtLedger existing = debtLedgerRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException("DebtLedger", "id", id));
@@ -1315,6 +1344,10 @@ public class FinanceController {
                         .voucherCode("PT-INV-" + inv.getId() + "-" + (System.currentTimeMillis() % 10000))
                         .voucherDate(LocalDateTime.now())
                         .invoiceCode(inv.getInvoiceCode())
+                        .creationSource("AUTO")
+                        .sourceDocumentType("EXPORT_INVOICE_PAYMENT")
+                        .sourceDocumentCode(inv.getInvoiceCode())
+                        .sourceDocumentId(inv.getId())
                         .amount(amountPaid)
                         .status("COMPLETED")
                         .payerName(inv.getCustomer() != null ? inv.getCustomer().getName() : "Khách hàng thanh toán hóa đơn")
@@ -1599,6 +1632,9 @@ public class FinanceController {
                 fundBalanceRepository.save(fb);
             }
         }
+        if ("BANK_TRANSFER".equalsIgnoreCase(method) || "BANK".equalsIgnoreCase(method)) {
+            adjustBankAccountBalance(pv.getFundAccountName(), checkAmount.negate());
+        }
     }
 
     private void increaseFundBalance(ReceiptVoucher rv) {
@@ -1622,5 +1658,21 @@ public class FinanceController {
                 fundBalanceRepository.save(fb);
             }
         }
+        if ("BANK_TRANSFER".equalsIgnoreCase(method) || "BANK".equalsIgnoreCase(method)) {
+            adjustBankAccountBalance(rv.getFundAccountName(), amount);
+        }
+    }
+
+    /** Keeps the account shown on the bank page in sync with approved vouchers. */
+    private void adjustBankAccountBalance(String accountReference, BigDecimal delta) {
+        if (accountReference == null || accountReference.isBlank() || delta == null) return;
+        bankAccountRepository.findByIsDeletedFalse().stream()
+                .filter(account -> account.getAccountNumber() != null && accountReference.contains(account.getAccountNumber()))
+                .findFirst()
+                .ifPresent(account -> {
+                    BigDecimal current = account.getCurrentBalance() != null ? account.getCurrentBalance() : BigDecimal.ZERO;
+                    account.setCurrentBalance(current.add(delta));
+                    bankAccountRepository.save(account);
+                });
     }
 }

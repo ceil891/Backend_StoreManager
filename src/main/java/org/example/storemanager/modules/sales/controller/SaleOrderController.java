@@ -25,12 +25,14 @@ public class SaleOrderController {
     private final SaleOrderService saleOrderService;
 
     @PostMapping
+    @PreAuthorize("@securityEvaluator.hasPermission('sales:order:create')")
     public ResponseEntity<ApiResponse<SaleOrderResponse>> createOrder(@Valid @RequestBody CreateSaleOrderRequest request) {
         SaleOrderResponse response = saleOrderService.createOrder(request);
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@securityEvaluator.hasPermission('sales:order:update')")
     public ResponseEntity<ApiResponse<SaleOrderResponse>> updateOrder(
             @PathVariable Long id,
             @Valid @RequestBody UpdateSaleOrderRequest request) {
@@ -39,6 +41,7 @@ public class SaleOrderController {
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("@securityEvaluator.hasPermission('sales:order:update')")
     public ResponseEntity<ApiResponse<SaleOrderResponse>> updateStatus(
             @PathVariable Long id,
             @RequestParam String status,

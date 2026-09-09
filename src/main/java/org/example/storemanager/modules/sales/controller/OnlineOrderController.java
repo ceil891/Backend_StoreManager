@@ -24,7 +24,11 @@ public class OnlineOrderController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<SaleOrderResponse>> createOnlineOrder(@Valid @RequestBody CreateSaleOrderRequest request) {
-        // The service already sets createdBy to "ONLINE_STORE" when username is null.
+        // A checkout request is not proof that funds have been received.
+        request.setPaymentStatus("UNPAID");
+        request.setPaidAmount(java.math.BigDecimal.ZERO);
+        request.setStatus("PENDING");
+        request.setOrderOrigin("ONLINE");
         SaleOrderResponse response = saleOrderService.createOrder(request);
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }

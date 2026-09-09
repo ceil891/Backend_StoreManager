@@ -33,7 +33,12 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
             cleanPhone = null;
         }
 
-        List<CustomerAddress> list = addressRepository.findByCustomerIdOrPhone(customerId, cleanPhone);
+        // Prefer the immutable customer id.  Falling back to a phone number is
+        // only for legacy customers that do not yet have an id; never union both
+        // identities because that can expose another customer's address book.
+        List<CustomerAddress> list = customerId != null
+                ? addressRepository.findByCustomerIdAndIsDeletedFalseOrderByIdDesc(customerId)
+                : (cleanPhone != null ? addressRepository.findByCustomerPhoneAndIsDeletedFalseOrderByIdDesc(cleanPhone) : new ArrayList<>());
 
         if (list == null) {
             list = new ArrayList<>();
@@ -58,11 +63,11 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
         }
 
         // If this is set as default or first address, reset other addresses
-        List<CustomerAddress> existing = addressRepository.findByCustomerIdOrPhone(request.getCustomerId(), cleanPhone);
+        List<CustomerAddress> existing = getAddressEntities(request.getCustomerId(), cleanPhone);
         boolean shouldBeDefault = Boolean.TRUE.equals(request.getIsDefault()) || existing.isEmpty();
 
         if (shouldBeDefault) {
-            addressRepository.resetDefaultFlagForCustomer(request.getCustomerId(), cleanPhone);
+            resetDefaultFlag(request.getCustomerId(), cleanPhone);
         }
 
         CustomerAddress address = CustomerAddress.builder()
@@ -95,7 +100,7 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
         Long custId = request.getCustomerId() != null ? request.getCustomerId() : address.getCustomerId();
 
         if (Boolean.TRUE.equals(request.getIsDefault())) {
-            addressRepository.resetDefaultFlagForCustomer(custId, cleanPhone);
+            resetDefaultFlag(custId, cleanPhone);
             address.setIsDefault(true);
         } else if (request.getIsDefault() != null) {
             address.setIsDefault(request.getIsDefault());
@@ -133,9 +138,24 @@ public class CustomerAddressServiceImpl implements CustomerAddressService {
         String cleanPhone = phone != null ? phone.replace(" ", "").trim() : address.getCustomerPhone();
         Long targetCustId = customerId != null ? customerId : address.getCustomerId();
 
-        addressRepository.resetDefaultFlagForCustomer(targetCustId, cleanPhone);
+        resetDefaultFlag(targetCustId, cleanPhone);
         address.setIsDefault(true);
         CustomerAddress saved = addressRepository.save(address);
         return CustomerAddressResponse.fromEntity(saved);
+    }
+
+    private List<CustomerAddress> getAddressEntities(Long customerId, String phone) {
+        if (customerId != null) return addressRepository.findByCustomerIdAndIsDeletedFalseOrderByIdDesc(customerId);
+        return phone != null && !phone.isBlank()
+                ? addressRepository.findByCustomerPhoneAndIsDeletedFalseOrderByIdDesc(phone)
+                : new ArrayList<>();
+    }
+
+    private void resetDefaultFlag(Long customerId, String phone) {
+        if (customerId != null) {
+            addressRepository.resetDefaultFlagForCustomerId(customerId);
+        } else if (phone != null && !phone.isBlank()) {
+            addressRepository.resetDefaultFlagForCustomerPhone(phone);
+        }
     }
 }

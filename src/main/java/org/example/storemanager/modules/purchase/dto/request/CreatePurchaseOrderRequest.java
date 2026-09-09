@@ -3,6 +3,7 @@ package org.example.storemanager.modules.purchase.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,5 +38,5 @@ public class CreatePurchaseOrderRequest {
     private java.math.BigDecimal discountAmount;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
-    private List<PurchaseOrderDetailRequest> details;
+    private List<@Valid PurchaseOrderDetailRequest> details;
 }

@@ -18,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,7 +36,6 @@ public class PayrollController {
     private final PaymentVoucherRepository paymentVoucherRepository;
     private final DocumentSequenceService documentSequenceService;
 
-    private static final BigDecimal STANDARD_WORK_DAYS = BigDecimal.valueOf(26);
     private static final BigDecimal SHIFT_COVER_ALLOWANCE = BigDecimal.valueOf(200_000);
 
     @GetMapping
@@ -184,10 +182,8 @@ public class PayrollController {
                 .filter(s -> payroll.getEmployeeName().equalsIgnoreCase(s.getTargetUserName()))
                 .map(s -> SHIFT_COVER_ALLOWANCE).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // FIX: Nếu baseSalary < 1.000.000 thì hiểu đó là "Lương theo ngày công", không chia cho 26
-        BigDecimal dailySalary = base.compareTo(new BigDecimal("1000000")) < 0
-                ? base
-                : base.divide(STANDARD_WORK_DAYS, 2, RoundingMode.HALF_UP);
+        // baseSalary được chuẩn hóa là lương theo ngày công.
+        BigDecimal dailySalary = base;
 
         BigDecimal attendanceSalary = dailySalary.multiply(workDays);
         BigDecimal unpaidDeduction = dailySalary.multiply(unpaidLeaveDays);
@@ -226,6 +222,7 @@ public class PayrollController {
         PaymentVoucher voucher = PaymentVoucher.builder()
                 .voucherCode(documentSequenceService.generatePaymentCode()).voucherDate(payroll.getPaymentDate() != null ? payroll.getPaymentDate() : LocalDateTime.now())
                 .amount(payroll.getNetSalary()).receiverName(payroll.getEmployeeName()).invoiceCode(reference).status("COMPLETED")
+                .creationSource("AUTO").sourceDocumentType("PAYROLL").sourceDocumentCode(reference).sourceDocumentId(payroll.getId())
                 .paymentMethod("CHUYEN_KHOAN").fundAccountName("Tài khoản chi lương").handler("Hệ thống")
                 .notes("Chi lương " + payroll.getPayrollMonth() + " cho " + payroll.getEmployeeName()).build();
         voucher.setIsDeleted(false);

@@ -30,6 +30,7 @@ public class UserResponse {
     private String departmentId;
     private String positionId;
     private String avatar;
+    private String faceDescriptor;
 
     private LocalDateTime createdAt;
     private String createdBy;

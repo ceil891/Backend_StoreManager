@@ -3,6 +3,7 @@ package org.example.storemanager.modules.sales.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -61,5 +62,5 @@ public class CreateSaleOrderRequest {
     private Long posSessionId;
 
     @NotEmpty(message = "Chi tiết đơn hàng không được để trống")
-    private List<SaleOrderDetailRequest> details;
+    private List<@Valid SaleOrderDetailRequest> details;
 }

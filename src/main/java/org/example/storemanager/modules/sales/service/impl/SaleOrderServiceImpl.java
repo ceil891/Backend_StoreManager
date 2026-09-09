@@ -26,6 +26,7 @@ import org.example.storemanager.modules.sales.entity.ExportInvoice;
 import org.example.storemanager.modules.sales.entity.ExportInvoiceDetail;
 import org.example.storemanager.modules.finance.entity.ReceiptVoucher;
 import org.example.storemanager.modules.finance.entity.DebtLedger;
+import org.example.storemanager.modules.inventory.repository.InventoryBalanceRepository;
 import org.example.storemanager.modules.catalog.entity.Product;
 import org.example.storemanager.modules.sales.service.SaleOrderService;
 import org.springframework.data.domain.Page;
@@ -72,6 +73,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
     private final org.example.storemanager.shared.service.DocumentSequenceService documentSequenceService;
     private final org.example.storemanager.modules.finance.repository.PaymentVoucherRepository paymentVoucherRepository;
     private final org.example.storemanager.modules.finance.repository.DebtLedgerRepository debtLedgerRepository;
+    private final InventoryBalanceRepository inventoryBalanceRepository;
+    private final org.example.storemanager.modules.finance.service.OnlineReceiptService onlineReceiptService;
 
     @Override
     public SaleOrderResponse createOrder(CreateSaleOrderRequest request) {
@@ -322,6 +325,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(details);
 
+        onlineReceiptService.collect(savedOrder);
+
         // Tự động trừ tồn kho thực tế nếu đơn hàng đã hoàn tất (COMPLETED)
         if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
             org.example.storemanager.modules.wms.entity.WarehouseZone defaultZone = 
@@ -507,6 +512,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         SaleOrder savedOrder = saleOrderRepository.save(order);
         saleOrderDetailRepository.saveAll(newDetails);
 
+        onlineReceiptService.collect(savedOrder);
+
         if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus())) {
             autoGenerateInvoiceAndReceiptIfCompleted(savedOrder, newDetails);
         }
@@ -542,7 +549,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
 
         if (paymentStatus != null && !paymentStatus.trim().isEmpty()) {
             order.setPaymentStatus(paymentStatus.trim().toUpperCase());
-        } else if ("COMPLETED".equalsIgnoreCase(normalizedStatus) && (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()))) {
+        } else if (!onlineReceiptService.isOnline(order) && "COMPLETED".equalsIgnoreCase(normalizedStatus) && (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()))) {
             order.setPaymentStatus("PAID");
         }
 
@@ -567,6 +574,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         if (branchId != null) {
             Branch branch = branchRepository.findByIdAndIsDeletedFalse(branchId).orElse(null);
             if (branch != null) {
+                validateBranchStock(order, branch.getId());
                 order.setBranch(branch);
             }
         }
@@ -599,7 +607,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         } else if ("COMPLETED".equalsIgnoreCase(effectiveStatus) || "DELIVERED".equalsIgnoreCase(effectiveStatus)) {
             delStatus = "DELIVERED";
             // Đơn giao thành công hoặc hoàn tất: tự động cập nhật đã thanh toán cho đơn COD / chưa thanh toán
-            if (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()) || "PENDING".equalsIgnoreCase(order.getPaymentStatus())) {
+            if (!onlineReceiptService.isOnline(order) && (order.getPaymentStatus() == null || "UNPAID".equalsIgnoreCase(order.getPaymentStatus()) || "PENDING".equalsIgnoreCase(order.getPaymentStatus()))) {
                 String pm = order.getPaymentMethodCode();
                 if (pm == null || pm.toLowerCase().contains("cod") || pm.toLowerCase().contains("tiền mặt") || "COMPLETED".equalsIgnoreCase(effectiveStatus)) {
                     order.setPaymentStatus("PAID");
@@ -648,7 +656,8 @@ public class SaleOrderServiceImpl implements SaleOrderService {
         }
 
         List<SaleOrderDetail> details = saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(id);
-        
+        onlineReceiptService.collect(savedOrder);
+
         // Tự động trừ tồn kho thực tế nếu chuyển sang COMPLETED và trước đó không phải COMPLETED
         if ("COMPLETED".equalsIgnoreCase(savedOrder.getStatus()) && !"COMPLETED".equalsIgnoreCase(oldStatus)) {
             try {
@@ -761,6 +770,23 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                 return "CONFIRMED";
             default:
                 return status.toUpperCase().trim();
+        }
+    }
+
+    private void validateBranchStock(SaleOrder order, Long branchId) {
+        if (order.getId() == null) return;
+        for (SaleOrderDetail detail : saleOrderDetailRepository.findByOrderIdAndIsDeletedFalse(order.getId())) {
+            if (detail.getProductVariant() == null || detail.getQuantity() == null) continue;
+            BigDecimal available = inventoryBalanceRepository
+                    .findByProductVariantIdAndBranchId(detail.getProductVariant().getId(), branchId)
+                    .map(b -> b.getAvailableQuantity() != null ? b.getAvailableQuantity() : BigDecimal.ZERO)
+                    .orElse(BigDecimal.ZERO);
+            if (available.compareTo(detail.getQuantity()) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Chi nhánh không đủ tồn kho cho sản phẩm trong đơn hàng. Còn "
+                                + available.stripTrailingZeros().toPlainString() + ", cần "
+                                + detail.getQuantity().stripTrailingZeros().toPlainString());
+            }
         }
     }
 
@@ -1137,7 +1163,7 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             boolean receiptExists = receiptVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(invoiceCode)
                     || (orderCode != null && receiptVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(orderCode));
 
-            if (!receiptExists && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (!onlineReceiptService.isOnline(savedOrder) && !receiptExists && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
                 String vCode = documentSequenceService.generateReceiptCode();
                 String pm = savedOrder.getPaymentMethodCode() != null ? savedOrder.getPaymentMethodCode().toUpperCase() : "TIEN_MAT";
                 String fundAccount = (pm.contains("BANK") || pm.contains("TRANSFER") || pm.contains("CK") || pm.contains("VIETQR"))
@@ -1153,6 +1179,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                         .paymentMethod(pm)
                         .fundAccountName(fundAccount)
                         .invoiceCode(invoiceCode)
+                        .creationSource("AUTO")
+                        .sourceDocumentType("SALE_ORDER")
+                        .sourceDocumentCode(savedOrder.getOrderCode())
+                        .sourceDocumentId(savedOrder.getId())
                         .handler(creator)
                         .notes("Thu tiền tự động khi đơn hàng " + savedOrder.getOrderCode() + " hoàn tất thành công (" + paymentStatus + ")")
                         .category("Bán hàng")
@@ -1247,6 +1277,10 @@ public class SaleOrderServiceImpl implements SaleOrderService {
                         .receiverName(receiver)
                         .status("COMPLETED")
                         .invoiceCode(invoiceCode)
+                        .creationSource("AUTO")
+                        .sourceDocumentType("SALE_ORDER_CANCELLATION")
+                        .sourceDocumentCode(orderCode)
+                        .sourceDocumentId(savedOrder.getId())
                         .paymentMethod(pm)
                         .fundAccountName(fundAccount)
                         .handler(currentUser)

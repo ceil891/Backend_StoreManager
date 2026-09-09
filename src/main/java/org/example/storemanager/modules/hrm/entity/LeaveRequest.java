@@ -65,9 +65,12 @@ public class LeaveRequest extends BaseEntity {
     }
 
     @Transient
-    @com.fasterxml.jackson.annotation.JsonProperty("userId")
+    @lombok.Getter(lombok.AccessLevel.NONE)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Long requestUserId;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("userId")
+    @com.fasterxml.jackson.annotation.JsonGetter("userId")
     public Long getUserId() {
         if (requestUserId != null) return requestUserId;
         try {

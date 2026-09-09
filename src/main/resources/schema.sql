@@ -2,6 +2,10 @@
 -- SCHEMA MIGRATIONS (Safe for clean and existing databases)
 -- ====================================================================
 
+-- Customer returns can reference either an invoice or a sale order (online/POS).
+-- Retain the invoice foreign key and existing values; only remove NOT NULL.
+ALTER TABLE IF EXISTS customer_returns ALTER COLUMN invoice_id DROP NOT NULL;
+
 -- 1. Sale Orders
 ALTER TABLE IF EXISTS sale_orders ADD COLUMN IF NOT EXISTS customer_name VARCHAR(200);
 ALTER TABLE IF EXISTS sale_orders ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(30);
@@ -292,6 +296,14 @@ ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS employee_name VARCHAR(15
 ALTER TABLE IF EXISTS payrolls ADD COLUMN IF NOT EXISTS department VARCHAR(100);
 
 ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS creation_source VARCHAR(10) NOT NULL DEFAULT 'MANUAL';
+ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS source_document_type VARCHAR(50);
+ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS source_document_code VARCHAR(100);
+ALTER TABLE IF EXISTS receipt_vouchers ADD COLUMN IF NOT EXISTS source_document_id BIGINT;
+ALTER TABLE IF EXISTS payment_vouchers ADD COLUMN IF NOT EXISTS creation_source VARCHAR(10) NOT NULL DEFAULT 'MANUAL';
+ALTER TABLE IF EXISTS payment_vouchers ADD COLUMN IF NOT EXISTS source_document_type VARCHAR(50);
+ALTER TABLE IF EXISTS payment_vouchers ADD COLUMN IF NOT EXISTS source_document_code VARCHAR(100);
+ALTER TABLE IF EXISTS payment_vouchers ADD COLUMN IF NOT EXISTS source_document_id BIGINT;
 
 ALTER TABLE IF EXISTS employee_contracts ADD COLUMN IF NOT EXISTS base_salary NUMERIC(18, 2) DEFAULT 0;
 ALTER TABLE IF EXISTS employee_contracts ADD COLUMN IF NOT EXISTS notes TEXT;
@@ -602,6 +614,9 @@ WHERE a.id < b.id AND a.user_id = b.user_id AND a.work_date = b.work_date;
 
 ALTER TABLE IF EXISTS attendances DROP CONSTRAINT IF EXISTS uk_attendance_user_work_date;
 ALTER TABLE IF EXISTS attendances ADD CONSTRAINT uk_attendance_user_work_date UNIQUE (user_id, work_date);
+ALTER TABLE IF EXISTS attendances ADD COLUMN IF NOT EXISTS branch_id BIGINT;
+CREATE INDEX IF NOT EXISTS idx_attendance_branch_id ON attendances(branch_id);
+ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS face_descriptor TEXT;
 
 -- 61. HRM Denormalized Display Fields
 ALTER TABLE IF EXISTS leave_requests ADD COLUMN IF NOT EXISTS employee_name VARCHAR(100);

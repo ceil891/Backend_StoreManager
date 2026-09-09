@@ -28,5 +28,5 @@ public class UpdateExportInvoiceRequest {
     private java.math.BigDecimal tax;
 
     @NotEmpty(message = "Chi tiết hóa đơn không được để trống")
-    private List<ExportInvoiceDetailRequest> details;
+    private List<@jakarta.validation.Valid ExportInvoiceDetailRequest> details;
 }

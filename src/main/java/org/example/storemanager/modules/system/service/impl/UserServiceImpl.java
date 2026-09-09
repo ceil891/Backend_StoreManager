@@ -164,6 +164,9 @@ public class UserServiceImpl implements UserService {
         if (request.getAvatar() != null) {
             user.setAvatar(request.getAvatar());
         }
+        if (request.getFaceDescriptor() != null) {
+            user.setFaceDescriptor(request.getFaceDescriptor().isBlank() ? null : request.getFaceDescriptor());
+        }
         user.setUpdatedBy(getCurrentUsername());
 
         User updatedUser = userRepository.save(user);
@@ -448,6 +451,7 @@ public class UserServiceImpl implements UserService {
                 .departmentId(user.getDepartmentId())
                 .positionId(user.getPositionId())
                 .avatar(user.getAvatar())
+                .faceDescriptor(user.getFaceDescriptor())
                 .createdAt(user.getCreatedAt())
                 .createdBy(user.getCreatedBy())
                 .updatedAt(user.getUpdatedAt())

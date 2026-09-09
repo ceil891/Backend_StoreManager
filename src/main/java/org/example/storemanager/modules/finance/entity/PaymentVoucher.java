@@ -69,6 +69,20 @@ public class PaymentVoucher extends BaseEntity {
     @Column(name = "invoice_code", length = 50)
     private String invoiceCode;
 
+    /** AUTO is created by a source business event; MANUAL is entered by a user. */
+    @Column(name = "creation_source", nullable = false, length = 10)
+    @Builder.Default
+    private String creationSource = "MANUAL";
+
+    @Column(name = "source_document_type", length = 50)
+    private String sourceDocumentType;
+
+    @Column(name = "source_document_code", length = 100)
+    private String sourceDocumentCode;
+
+    @Column(name = "source_document_id")
+    private Long sourceDocumentId;
+
     @Column(name = "payment_method", length = 30)
     private String paymentMethod;
 

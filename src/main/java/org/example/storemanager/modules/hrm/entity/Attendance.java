@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.example.storemanager.shared.base.BaseEntity;
 import org.example.storemanager.modules.system.entity.User;
+import org.example.storemanager.modules.system.entity.Branch;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -40,4 +41,9 @@ public class Attendance extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    /** Chi nhánh thực tế dùng để ghi nhận ca làm việc. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
 }

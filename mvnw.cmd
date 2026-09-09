@@ -32,6 +32,7 @@
 @SET __MVNW_ERROR__=
 @SET __MVNW_PSMODULEP_SAVE=%PSModulePath%
 @SET PSModulePath=
+@IF "%MAVEN_OPTS%"=="" SET "MAVEN_OPTS=-Duser.home=%USERPROFILE%"
 @FOR /F "usebackq tokens=1* delims==" %%A IN (`powershell -noprofile "& {$scriptDir='%~dp0'; $script='%__MVNW_ARG0_NAME__%'; icm -ScriptBlock ([Scriptblock]::Create((Get-Content -Raw '%~f0'))) -NoNewScope}"`) DO @(
   IF "%%A"=="MVN_CMD" (set __MVNW_CMD__=%%B) ELSE IF "%%B"=="" (echo %%A) ELSE (echo %%A=%%B)
 )
@@ -79,9 +80,14 @@ if ($env:MVNW_REPOURL) {
 $distributionUrlName = $distributionUrl -replace '^.*/',''
 $distributionUrlNameMain = $distributionUrlName -replace '\.[^.]*$','' -replace '-bin$',''
 
-$MAVEN_M2_PATH = "$HOME/.m2"
+$MAVEN_M2_PATH = if ($env:MAVEN_USER_HOME) { $env:MAVEN_USER_HOME } elseif ($env:USERPROFILE) { "$env:USERPROFILE/.m2" } else { "$HOME/.m2" }
 if ($env:MAVEN_USER_HOME) {
   $MAVEN_M2_PATH = "$env:MAVEN_USER_HOME"
+}
+# Some managed Windows shells expose Java user.home as C:\, which makes Maven
+# try to create C:\.m2. Keep Maven's Java home aligned with the Windows profile.
+if ($env:USERPROFILE -and ($env:MAVEN_OPTS -notmatch '-Duser\.home=')) {
+  $env:MAVEN_OPTS = "$env:MAVEN_OPTS -Duser.home=$env:USERPROFILE"
 }
 
 if (-not (Test-Path -Path $MAVEN_M2_PATH)) {
@@ -89,10 +95,11 @@ if (-not (Test-Path -Path $MAVEN_M2_PATH)) {
 }
 
 $MAVEN_WRAPPER_DISTS = $null
-if ((Get-Item $MAVEN_M2_PATH).Target[0] -eq $null) {
+$mavenM2Item = Get-Item $MAVEN_M2_PATH
+if (-not $mavenM2Item.Target -or $mavenM2Item.Target.Count -eq 0 -or $mavenM2Item.Target[0] -eq $null) {
   $MAVEN_WRAPPER_DISTS = "$MAVEN_M2_PATH/wrapper/dists"
 } else {
-  $MAVEN_WRAPPER_DISTS = (Get-Item $MAVEN_M2_PATH).Target[0] + "/wrapper/dists"
+  $MAVEN_WRAPPER_DISTS = $mavenM2Item.Target[0] + "/wrapper/dists"
 }
 
 $MAVEN_HOME_PARENT = "$MAVEN_WRAPPER_DISTS/$distributionUrlNameMain"

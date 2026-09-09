@@ -19,15 +19,11 @@ public interface CustomerAddressRepository extends JpaRepository<CustomerAddress
 
     List<CustomerAddress> findByCustomerPhoneAndIsDeletedFalseOrderByIdDesc(String customerPhone);
 
-    @Query("SELECT a FROM CustomerAddress a WHERE a.isDeleted = false AND " +
-           "((:customerId IS NOT NULL AND a.customerId = :customerId) OR " +
-           " (:phone IS NOT NULL AND (a.customerPhone = :phone OR a.phoneNumber = :phone))) " +
-           "ORDER BY a.isDefault DESC, a.id DESC")
-    List<CustomerAddress> findByCustomerIdOrPhone(@Param("customerId") Long customerId, @Param("phone") String phone);
+    @Modifying
+    @Query("UPDATE CustomerAddress a SET a.isDefault = false WHERE a.isDeleted = false AND a.customerId = :customerId")
+    void resetDefaultFlagForCustomerId(@Param("customerId") Long customerId);
 
     @Modifying
-    @Query("UPDATE CustomerAddress a SET a.isDefault = false WHERE a.isDeleted = false AND " +
-           "((:customerId IS NOT NULL AND a.customerId = :customerId) OR " +
-           " (:phone IS NOT NULL AND (a.customerPhone = :phone OR a.phoneNumber = :phone)))")
-    void resetDefaultFlagForCustomer(@Param("customerId") Long customerId, @Param("phone") String phone);
+    @Query("UPDATE CustomerAddress a SET a.isDefault = false WHERE a.isDeleted = false AND a.customerPhone = :phone")
+    void resetDefaultFlagForCustomerPhone(@Param("phone") String phone);
 }

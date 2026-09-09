@@ -23,5 +23,5 @@ public class UpdatePurchaseRequest {
     private String note;
 
     @NotEmpty(message = "Chi tiết yêu cầu không được để trống")
-    private List<PurchaseRequestDetailRequest> details;
+    private List<@jakarta.validation.Valid PurchaseRequestDetailRequest> details;
 }
