@@ -20,6 +20,9 @@ import org.example.storemanager.modules.partnerarea.repository.CustomerRepositor
 import org.example.storemanager.modules.partnerarea.entity.Customer;
 import org.example.storemanager.modules.system.entity.User;
 import org.example.storemanager.modules.system.repository.UserRepository;
+import org.example.storemanager.modules.finance.entity.ReceiptVoucher;
+import org.example.storemanager.modules.finance.repository.ReceiptVoucherRepository;
+import org.example.storemanager.shared.service.DocumentSequenceService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -45,6 +48,8 @@ public class CrmController {
     private final org.example.storemanager.modules.catalog.repository.SerialNumberRepository serialNumberRepository;
     private final org.example.storemanager.modules.catalog.repository.ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final ReceiptVoucherRepository receiptVoucherRepository;
+    private final DocumentSequenceService documentSequenceService;
 
     private static final String GUEST_NAME = "Khách hàng vãng lai";
 
@@ -1271,6 +1276,7 @@ public class CrmController {
                 .build();
         wc.setIsDeleted(false);
         WarrantyClaim saved = warrantyClaimRepository.save(wc);
+        createWarrantyReceiptIfChargeable(saved);
 
         java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
         resp.put("id", saved.getId().toString());
@@ -1303,12 +1309,31 @@ public class CrmController {
         if (req.get("repairCost") != null) {
             try { existing.setRepairCost(new java.math.BigDecimal(req.get("repairCost").toString())); } catch (Exception ignored) {}
         }
-        warrantyClaimRepository.save(existing);
+        WarrantyClaim saved = warrantyClaimRepository.save(existing);
+        createWarrantyReceiptIfChargeable(saved);
 
         java.util.Map<String, Object> resp = new java.util.HashMap<>(req);
         resp.put("id", existing.getId().toString());
         resp.put("claimCode", existing.getClaimCode());
         return ResponseEntity.ok(ApiResponse.ok(resp));
+    }
+
+    /** Ghi nhận một phiếu thu duy nhất khi yêu cầu bảo hành phát sinh chi phí. */
+    private void createWarrantyReceiptIfChargeable(WarrantyClaim claim) {
+        if (claim == null || claim.getId() == null || claim.getRepairCost() == null || claim.getRepairCost().signum() <= 0) return;
+        String reference = "WARRANTY-" + claim.getId();
+        if (receiptVoucherRepository.existsByInvoiceCodeAndIsDeletedFalse(reference)) return;
+        ProductWarranty warranty = claim.getWarranty();
+        String payer = warranty != null && warranty.getCustomer() != null ? warranty.getCustomer().getName() : "Khách bảo hành";
+        ReceiptVoucher voucher = ReceiptVoucher.builder()
+                .voucherCode(documentSequenceService.generateReceiptCode())
+                .voucherDate(java.time.LocalDateTime.now()).amount(claim.getRepairCost()).payerName(payer)
+                .status("COMPLETED").paymentMethod("TIEN_MAT").fundAccountName("Quỹ tiền mặt (Cash)")
+                .invoiceCode(reference).handler("Hệ thống").category("Bảo hành")
+                .notes("Thu phí sửa chữa/bảo hành " + claim.getClaimCode()).build();
+        voucher.setIsDeleted(false);
+        voucher.setCreatedBy("System");
+        receiptVoucherRepository.save(voucher);
     }
 
     @DeleteMapping("/warranty-claims/{id}")

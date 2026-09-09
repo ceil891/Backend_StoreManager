@@ -104,6 +104,22 @@ public class SaleOrderServiceImpl implements SaleOrderService {
             origin = "ONLINE";
         }
 
+        // Khách web lần đầu vẫn phải có hồ sơ để tích điểm và theo dõi lịch sử mua hàng.
+        if (customer == null && "ONLINE".equalsIgnoreCase(origin)
+                && request.getCustomerPhone() != null && !request.getCustomerPhone().trim().isEmpty()) {
+            String customerCode = "KH-WEB-" + System.currentTimeMillis();
+            customer = Customer.builder()
+                    .customerCode(customerCode)
+                    .name(request.getCustomerName() != null && !request.getCustomerName().trim().isEmpty()
+                            ? request.getCustomerName().trim() : "Khách hàng Online")
+                    .phone(request.getCustomerPhone().trim())
+                    .address(request.getShippingAddress())
+                    .membershipRank("Đồng").points(0.0).totalSpend(0.0).isActive(true)
+                    .build();
+            customer.setIsDeleted(false);
+            customer = customerRepository.save(customer);
+        }
+
         Long posSessionId = request.getPosSessionId();
         if (posSessionId == null && ("POS".equalsIgnoreCase(origin) || (request.getOrderCode() != null && request.getOrderCode().startsWith("ORD-POS-")))) {
             if (posSessionRepository != null) {

@@ -109,6 +109,12 @@ public class Payroll extends BaseEntity {
     @JsonAlias({"payrollMonth"})
     private String payrollMonth;
 
+    @Transient
+    private BigDecimal workingDays = BigDecimal.ZERO;
+
+    @Transient
+    private BigDecimal leaveDays = BigDecimal.ZERO;
+
     public Long getUserId() {
         return user != null ? user.getId() : userId;
     }
